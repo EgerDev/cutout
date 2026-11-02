@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Cutout does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems go to a [private advisory](https://github.com/EgerDev/cutout/security/advisories/new), not here.
+        Please do not attach photos you would not want public; a description or a similar test image is enough.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Drop a … file (format, size, dimensions)
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 140, Firefox 143, Safari 18.6 …
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and operating system
+      placeholder: Windows 11 laptop, iPhone 15 (iOS 18), Pixel 8 …
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where you ran Cutout
+      description: The public site, a self-hosted deployment (which version or commit), or a local checkout.
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Any errors from the browser's developer console (lines starting with [cutout] help most).
+      render: text

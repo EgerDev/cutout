@@ -1,0 +1,30 @@
+--- a/build-emscripten.sh
++++ b/build-emscripten.sh
+@@ -53,17 +53,20 @@
+         -L \
+         -o libde265-${LIBDE265_VERSION}.tar.gz \
+         https://github.com/strukturag/libde265/releases/download/v${LIBDE265_VERSION}/libde265-${LIBDE265_VERSION}.tar.gz
+-    if [ ! -s "libde265-${LIBDE265_VERSION}/libde265/.libs/libde265.a" ]; then
++    if [ ! -s "libde265-${LIBDE265_VERSION}/install/lib/libde265.a" ]; then
+         tar xf libde265-${LIBDE265_VERSION}.tar.gz
+         cd libde265-${LIBDE265_VERSION}
+-        [ -x configure ] || ./autogen.sh
+-        CXXFLAGS=-O3 emconfigure ./configure --enable-static --disable-shared --disable-sse --disable-dec265 --disable-sherlock265
+-        emmake make -j${CORES}
++        # libde265 >= 1.1 builds with CMake only (no configure script).
++        emcmake cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
++            -DENABLE_SDL=OFF -DENABLE_SIMD=OFF -DENABLE_DECODER=OFF -DENABLE_ENCODER=OFF \
++            -DCMAKE_INSTALL_PREFIX="$(pwd)/install" -DCMAKE_INSTALL_LIBDIR=lib
++        emmake cmake --build build -j${CORES}
++        cmake --install build
+         cd ..
+     fi
+-    LIBDE265_DIR="$(pwd)/libde265-${LIBDE265_VERSION}"
+-    CONFIGURE_ARGS_LIBDE265="-DLIBDE265_INCLUDE_DIR=${LIBDE265_DIR} -DLIBDE265_LIBRARY=-L${LIBDE265_DIR}/libde265/.libs"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${LIBDE265_DIR}/libde265/.libs -lde265"
++    LIBDE265_DIR="$(pwd)/libde265-${LIBDE265_VERSION}/install"
++    CONFIGURE_ARGS_LIBDE265="-DLIBDE265_INCLUDE_DIR=${LIBDE265_DIR}/include -DLIBDE265_LIBRARY=${LIBDE265_DIR}/lib/libde265.a"
++    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${LIBDE265_DIR}/lib -lde265"
+ fi
+ 
+ CONFIGURE_ARGS_AOM=""

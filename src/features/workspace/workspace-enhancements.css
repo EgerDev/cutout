@@ -1,0 +1,1502 @@
+.image-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+  padding: 0.5rem 1.5rem;
+  min-width: 0;
+  font-size: 13px;
+}
+/* A batch's line always has room for its Stop or Resume, so the stage never moves when the
+   button comes and goes. */
+.image-summary[data-batch] {
+  min-height: 2.75rem;
+  padding-block: 0;
+}
+.summary-action {
+  margin-inline-start: -0.25rem;
+  padding-inline: 0.625rem;
+  font-size: 13px;
+}
+/* Image actions dock. Desktop: one labelled pill whose radius wraps its 12px buttons.
+   Compact: a single row, icon over label, so every action is named and the canvas keeps
+   the height a second row would take. */
+.toolbar-dock {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border-radius: calc(var(--radius-md) + 0.375rem);
+}
+.dock-tool svg,
+.download-split svg {
+  width: 1rem;
+  height: 1rem;
+}
+.dock-tool.is-flash {
+  background: var(--color-ok);
+  color: var(--color-accent-fg);
+}
+.download-split {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+.download-split > button {
+  border-radius: 0;
+}
+.download-main {
+  padding-inline: 0.75rem 0.625rem;
+  border-start-start-radius: var(--radius-md);
+  border-end-start-radius: var(--radius-md);
+}
+.download-more {
+  padding-inline: 0.5rem;
+  border-inline-start: 1px solid color-mix(in oklab, var(--color-accent-fg) 22%, transparent);
+  border-start-end-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+}
+.download-format {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.toolbar-dock[data-compact] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto repeat(2, minmax(0, 1fr));
+  gap: 0.125rem;
+  width: 100%;
+  max-width: 30rem;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius-md) + 0.25rem);
+}
+.dock-tool[data-compact],
+.download-split[data-compact] .download-main {
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0.25rem;
+  font-size: 12px;
+  line-height: 1.1;
+}
+.download-split[data-compact] .download-main {
+  min-width: 4.75rem;
+}
+.download-split[data-compact] .download-format {
+  display: none;
+}
+.download-split[data-compact] .download-more {
+  min-width: 2.25rem;
+  padding-inline: 0.25rem;
+}
+.download-options-label {
+  padding: 0.5rem 0.75rem 0.25rem;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+@media (max-width: 359px) {
+  .dock-tool[data-compact] > span,
+  .editor-actionbar[data-compact] button > span:not(.tool-count) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* Batch thumbnails: the ring is an overlay so the 48px buttons never change size; the
+   active one gets a thicker accent ring as well as aria-pressed. */
+.batch-thumb {
+  border-radius: var(--radius-sm);
+  background: var(--color-elevated);
+}
+.batch-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  pointer-events: none;
+}
+.batch-thumb.is-active::after {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+.batch-thumb[data-status="queued"] img,
+.batch-thumb[data-status="working"] img,
+.batch-thumb[data-status="stopped"] img {
+  opacity: 0.7;
+}
+.batch-status {
+  position: absolute;
+  inset-inline-end: 0.1875rem;
+  bottom: 0.1875rem;
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: var(--color-float);
+  color: var(--color-fg);
+  box-shadow: 0 0 0 1px var(--color-line);
+}
+.batch-status svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.batch-status .batch-stop {
+  width: 0.5rem;
+  height: 0.5rem;
+  fill: currentColor;
+}
+/* Menus grow from their trigger; the modal dialogs below stay centred. */
+.download-options {
+  z-index: 60;
+  min-width: 15rem;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-float);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-float);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+  animation: menu-in var(--motion-quick) var(--ease-out);
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.download-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  cursor: pointer;
+}
+.download-option[data-highlighted] {
+  background: var(--color-subtle);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.shortcut-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: color-mix(in oklab, var(--color-fg) 25%, transparent);
+  animation: fade-in var(--motion-quick) var(--ease-out);
+}
+.shortcut-dialog {
+  position: fixed;
+  z-index: 71;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 1.5rem;
+  border-radius: var(--radius-xl);
+  background: var(--color-float);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-float);
+  animation: controls-in var(--motion-fast) var(--ease-out);
+}
+.dialog-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+}
+.dialog-description {
+  margin-top: 0.25rem;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-muted);
+  text-wrap: pretty;
+}
+.shortcut-groups {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+@keyframes controls-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+/* Full labels by default; the compact block below swaps in the short ones. */
+.app-header .header-label-short,
+.brush-dialog .label-short {
+  display: none;
+}
+
+/* A keyboard-shortcut reference is noise on a touch-only device. */
+@media (hover: none) and (pointer: coarse) {
+  .app-header .header-shortcuts {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .image-summary {
+    gap: 0.5rem;
+    padding-inline: 1rem;
+    font-size: 12px;
+  }
+  .workspace-frame .workspace-batch {
+    scroll-padding-inline: 0.75rem;
+  }
+  .shortcut-dialog {
+    padding: 1.25rem;
+  }
+}
+@container workspace (max-width: 720px) {
+  .workspace-frame .workspace-batch {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-height: 4rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-dialog,
+  .download-options {
+    animation: fade-in var(--motion-quick) var(--ease-out);
+  }
+}
+/* Editing tools: labelled at every size. Compact screens get one row of six equal columns,
+   icon over label, matching the dock. */
+.editor-actionbar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: calc(100% - 1.5rem);
+  margin-inline: auto;
+  margin-bottom: 0.35rem;
+  padding: 0.25rem;
+}
+.editor-actionbar svg {
+  width: 1rem;
+  height: 1rem;
+}
+.editor-actionbar-rule {
+  width: 1px;
+  height: 1.25rem;
+  margin-inline: 0.25rem;
+  background: var(--color-line);
+  flex-shrink: 0;
+}
+.editor-actionbar button {
+  position: relative;
+}
+.tool-count {
+  min-width: 1.125rem;
+  padding: 0 0.3125rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-fg) 10%, transparent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.125rem;
+  text-align: center;
+}
+.editor-actionbar[data-compact] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto repeat(4, minmax(0, 1fr));
+  gap: 0.125rem;
+  width: 100%;
+  max-width: 30rem;
+  margin-bottom: 0.125rem;
+  padding: 0 0.5rem;
+}
+.editor-actionbar[data-compact] button {
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0.25rem;
+  font-size: 12px;
+  line-height: 1.1;
+}
+.editor-actionbar[data-compact] .editor-actionbar-rule {
+  height: 1.75rem;
+  margin-inline: 0.125rem;
+}
+.editor-actionbar[data-compact] .tool-count {
+  position: absolute;
+  top: 0.125rem;
+  inset-inline-end: calc(50% - 1.5rem);
+  min-width: 1.125rem;
+  padding: 0 0.25rem;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  font-size: 12px;
+  line-height: 1.0625rem;
+}
+.editor-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.editor-dialog button,
+.editor-actionbar button {
+  min-height: 44px;
+}
+.editor-dialog button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+.editor-dialog {
+  overscroll-behavior: contain;
+}
+.brush-dialog {
+  width: min(60rem, calc(100vw - 2rem));
+}
+.brush-viewport {
+  overflow: auto;
+  max-height: min(62dvh, calc(100dvh - 14rem));
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  overscroll-behavior: contain;
+}
+.brush-surface {
+  --brush-fit-height: min(62dvh, calc(100dvh - 14rem));
+  margin-inline: auto;
+  position: relative;
+  background: repeating-conic-gradient(var(--color-checker-a) 0% 25%, var(--color-checker-b) 0% 50%)
+    50% / 20px 20px;
+}
+.brush-surface canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.brush-cursor-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.75),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 25;
+  display: none;
+  will-change: transform;
+}
+.brush-cursor-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.brush-cursor-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 1px #000000;
+  pointer-events: none;
+}
+.brush-cursor-dot.erase,
+.brush-cursor-dot.remove {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 1px #ffffff;
+}
+.brush-cursor-dot.restore,
+.brush-cursor-dot.keep {
+  background-color: #22c55e;
+  box-shadow: 0 0 0 1px #ffffff;
+}
+.editor-tools {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 14px;
+  background: var(--color-elevated);
+}
+.editor-spacer {
+  flex: 1;
+}
+.editor-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+  accent-color: var(--color-accent);
+}
+.editor-meta > p {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+.canvas-stage {
+  position: relative;
+  --stage-height: min(56dvh, calc(100dvh - 25rem));
+}
+/* Room for the toolbar rows and the Apply footer: the brush sizing leaves none. */
+/* A fixed height (plus its border), so zooming never resizes it and moves the dialog;
+   the photo sits centred in it and scrolls from the top-left once it is bigger. */
+.brush-dialog .brush-viewport.stage-viewport {
+  display: flex;
+  height: calc(var(--stage-height) + 2px);
+  max-height: none;
+}
+.brush-surface.stage-surface {
+  --brush-fit-height: var(--stage-height);
+  flex: none;
+  margin: auto;
+}
+.stage-busy {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 0.875rem;
+  border-radius: 999px;
+  background: var(--color-elevated);
+  color: var(--color-fg);
+  font-size: 0.8125rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 2rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brush-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  accent-color: var(--color-accent);
+}
+.brush-tip {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  outline: 1px solid var(--color-line);
+  outline-offset: 3px;
+  flex-shrink: 0;
+}
+.brush-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 12rem;
+  font-size: 0.8125rem;
+}
+.brush-slider > span {
+  display: flex;
+  justify-content: space-between;
+}
+.brush-slider output {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+.brush-surface canvas {
+  position: relative;
+}
+.brush-surface .brush-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity var(--motion-quick, 150ms) ease-out;
+}
+.zoom-pill {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  border-radius: 999px;
+  background: var(--color-float);
+  box-shadow: var(--shadow-float);
+}
+.editor-dialog .zoom-pill button {
+  min-height: 36px;
+}
+.zoom-pill [data-slot],
+.zoom-pill > button:not(.zoom-value) {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+.zoom-value {
+  min-width: 3.5rem;
+  padding-inline: 0.25rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) and (pointer: fine) {
+  .zoom-value:hover {
+    background: color-mix(in oklab, var(--color-fg) 8%, transparent);
+  }
+}
+.stage-viewport.space-pan canvas {
+  cursor: grab !important;
+}
+.stage-viewport.is-panning,
+.stage-viewport.is-panning canvas {
+  cursor: grabbing !important;
+}
+.editor-guide {
+  /* The CSS reset drops the popover's own centring. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 4rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-xl);
+  background: var(--color-float);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-float);
+}
+.editor-guide::backdrop {
+  background: rgb(0 0 0 / 0.25);
+}
+.editor-guide dt {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.editor-guide div:first-child > dt {
+  margin-top: 0;
+}
+.editor-guide dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+.editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.editor-footer > p {
+  flex: 1;
+  min-width: 0;
+}
+.brush-original {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+.batch-list {
+  max-height: 36dvh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.batch-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+  padding-block: 0.5rem;
+}
+/* The name keeps at least 5rem; when the row can't also fit its actions (Retry, Skip ZIP,
+   Remove on a phone), they move together to a second line, aligned to the end. */
+.batch-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+.batch-list input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+.batch-name {
+  display: flex;
+  flex: 1 1 5rem;
+  min-width: 0;
+  flex-direction: column;
+  text-align: start;
+  font-size: 13px;
+  padding: 0.25rem;
+}
+.batch-name span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.batch-name[aria-current="true"] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+/* Sheets (Adjust, Info): a head, one scrolling body and, on wider screens, a pinned foot. */
+.sheet-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.5rem 0.25rem 1.25rem;
+}
+.sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sheet-body {
+  padding: 0 1.25rem 1.25rem;
+}
+.sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sheet-foot {
+  flex-shrink: 0;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid var(--color-line);
+}
+.sheet-section {
+  padding-block: 0.75rem;
+}
+.sheet-section ~ .sheet-section,
+.sheet-section ~ .edit-sections,
+.edit-sections ~ .sheet-section {
+  border-top: 1px solid var(--color-line);
+}
+.sheet-section-title {
+  margin: 0 0 0.625rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+/* Info: flat sections of term/value pairs, no nested cards. */
+.info-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem 1rem;
+  margin: 0;
+}
+.info-fields dt {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.info-fields dd {
+  margin: 0.125rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--color-fg);
+}
+.info-block {
+  margin-top: 0.75rem;
+}
+.info-block-text {
+  max-height: 7.5rem;
+  margin: 0.25rem 0 0;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-md);
+  background: var(--color-subtle);
+  font-size: 13px;
+  line-height: 1.5;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+.info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: from-font;
+}
+.info-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+}
+.info-disclosure svg {
+  transition: rotate var(--motion-quick) var(--ease-out);
+}
+.info-filter {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.75rem 0.375rem 2.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-elevated);
+  font-size: 13px;
+  color: var(--color-fg);
+}
+.info-filter::placeholder {
+  color: var(--color-muted);
+}
+.info-chip {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: 999px;
+  background: var(--color-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+.info-chip[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.info-tags {
+  max-height: 16rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+.info-tags li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--color-line);
+}
+.info-namespace {
+  margin-inline-start: 0.25rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+@media (pointer: coarse) {
+  .sheet .info-tags button,
+  .sheet .info-chip {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Export format: a segmented radio group. The checked segment is raised (shape and weight,
+   not colour alone), leaving the accent fill to the Download action below it. */
+.export-size {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.size-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding-inline: 0.625rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-elevated);
+  font-size: 12px;
+  color: var(--color-muted);
+  cursor: text;
+}
+.size-field:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.size-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+  text-align: end;
+}
+.size-field input:focus-visible {
+  outline: none;
+}
+.size-field input::-webkit-inner-spin-button,
+.size-field input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.size-field input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+@media (pointer: fine) {
+  .export-strip {
+    min-height: 2.25rem;
+    margin-top: 0.25rem;
+  }
+}
+.format-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(2.375rem, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: calc(var(--radius-md) + 3px);
+  background: var(--color-subtle);
+}
+.format-option {
+  min-height: 2.25rem;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted);
+  transition:
+    background-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out);
+}
+.format-option[aria-checked="true"] {
+  background: var(--color-float);
+  color: var(--color-fg);
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 0 1px var(--color-line),
+    0 1px 2px color-mix(in oklab, var(--color-fg) 10%, transparent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .format-option[aria-checked="false"]:hover {
+    color: var(--color-fg);
+  }
+}
+.format-option:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Background swatches: the face shows the result, the label names it, the active one gets
+   an offset ring (state is also exposed through aria-pressed). */
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+  gap: 0.75rem 0.5rem;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+  min-width: 0;
+  text-align: start;
+  cursor: pointer;
+}
+.swatch-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 2.75rem;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  transition: scale var(--motion-quick) var(--ease-out);
+}
+.swatch[data-active] .swatch-face {
+  box-shadow:
+    inset 0 0 0 1px var(--color-line),
+    0 0 0 2px var(--color-float),
+    0 0 0 4px var(--color-accent);
+}
+.swatch:active .swatch-face {
+  scale: 0.97;
+}
+.swatch:focus-visible {
+  outline: none;
+}
+.swatch:focus-visible .swatch-face,
+.swatch-face:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 5px;
+}
+.swatch-label {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--color-muted);
+}
+.swatch[data-active] .swatch-label {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+.swatch-icon {
+  box-sizing: content-box;
+  width: 0.875rem;
+  height: 0.875rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--color-float);
+  color: var(--color-fg);
+  pointer-events: none;
+}
+.swatch-blur {
+  background:
+    radial-gradient(
+      circle at 30% 38%,
+      color-mix(in oklab, var(--color-accent) 42%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      circle at 72% 66%,
+      color-mix(in oklab, var(--color-ok) 34%, transparent),
+      transparent 55%
+    ),
+    var(--color-subtle);
+}
+
+/* Disclosures for the rarer tools. */
+.edit-sections {
+  margin-top: 0.25rem;
+}
+.edit-section {
+  border-top: 1px solid var(--color-line);
+}
+.edit-section:last-child {
+  border-bottom: 1px solid var(--color-line);
+}
+.edit-section[open] {
+  padding-bottom: 0.75rem;
+}
+.edit-section > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.edit-section > summary::-webkit-details-marker {
+  display: none;
+}
+.edit-section > summary::after {
+  content: "";
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin-inline-end: 0.375rem;
+  border-right: 1.5px solid var(--color-muted);
+  border-bottom: 1.5px solid var(--color-muted);
+  rotate: 45deg;
+  translate: 0 -2px;
+  transition:
+    rotate var(--motion-quick) var(--ease-out),
+    translate var(--motion-quick) var(--ease-out);
+}
+.edit-section[open] > summary::after {
+  rotate: 225deg;
+  translate: 0 2px;
+}
+.edit-section > summary:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* One field vocabulary for every tool. */
+.edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-block: 0.75rem;
+  font-size: 13px;
+}
+.edit-label > span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.edit-label select,
+.edit-label input {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-elevated);
+  color: var(--color-fg);
+}
+.edit-label input[type="color"] {
+  padding: 0.25rem;
+  cursor: pointer;
+}
+.edit-slider {
+  display: block;
+  margin-block: 0.875rem;
+  font-size: 13px;
+}
+.edit-slider > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.edit-slider output {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+.edit-slider input {
+  width: 100%;
+  min-height: 32px;
+  accent-color: var(--color-accent);
+}
+.edit-check {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 44px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.edit-check input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+.edit-check-note {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.edit-note {
+  margin: 0.5rem 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+.export-estimate-image {
+  max-height: 200px;
+  width: 100%;
+  object-fit: contain;
+  margin-top: 0.75rem;
+  background: var(--color-subtle);
+  border-radius: var(--radius-sm);
+}
+.preview-busy {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  background: var(--color-float);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-muted);
+}
+@media (max-width: 720px) {
+  .editor-dialog {
+    padding: 1rem;
+  }
+  .batch-list {
+    max-height: 30dvh;
+  }
+  .app-header nav {
+    gap: 0;
+  }
+  .app-header nav > button,
+  .app-header nav > a {
+    padding-inline: 0.5rem;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  /* Short labels on narrow screens: the full ones wrapped to two lines at 375px. */
+  .app-header .header-label-full {
+    display: none;
+  }
+  .app-header .header-label-short {
+    display: inline;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Phone-first sheet: the canvas is the point, so it comes first and takes the
+     height; the title stays above it for the close button, the description goes,
+     and tools and sliders stack underneath with short labels. */
+  .brush-dialog {
+    display: flex;
+    flex-direction: column;
+  }
+  .brush-dialog .editor-head {
+    order: -2;
+    margin-bottom: 0.5rem;
+  }
+  .brush-dialog .editor-description {
+    display: none;
+  }
+  .brush-dialog .brush-viewport {
+    order: -1;
+    max-height: min(58dvh, calc(100dvh - 13rem));
+  }
+  .brush-dialog .editor-actions {
+    margin-block: 0.6rem 0.4rem;
+    gap: 0.35rem;
+  }
+  .brush-dialog .editor-actions button {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding-inline: 0.6rem;
+    font-size: 13px;
+  }
+  .brush-dialog .label-full {
+    display: none;
+  }
+  .brush-dialog .label-short {
+    display: inline;
+  }
+  .brush-surface {
+    --brush-fit-height: min(58dvh, calc(100dvh - 13rem));
+  }
+}
+
+.stage-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background:
+    linear-gradient(
+      to right,
+      transparent calc(33.333% - 0.5px),
+      color-mix(in oklab, var(--color-fg) 28%, transparent) 0,
+      color-mix(in oklab, var(--color-fg) 28%, transparent) calc(33.333% + 0.5px),
+      transparent 0
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      color-mix(in oklab, var(--color-accent) 45%, transparent) 0,
+      color-mix(in oklab, var(--color-accent) 45%, transparent) calc(50% + 0.5px),
+      transparent 0
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(66.666% - 0.5px),
+      color-mix(in oklab, var(--color-fg) 28%, transparent) 0,
+      color-mix(in oklab, var(--color-fg) 28%, transparent) calc(66.666% + 0.5px),
+      transparent 0
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(33.333% - 0.5px),
+      color-mix(in oklab, var(--color-fg) 28%, transparent) 0,
+      color-mix(in oklab, var(--color-fg) 28%, transparent) calc(33.333% + 0.5px),
+      transparent 0
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 0.5px),
+      color-mix(in oklab, var(--color-accent) 45%, transparent) 0,
+      color-mix(in oklab, var(--color-accent) 45%, transparent) calc(50% + 0.5px),
+      transparent 0
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(66.666% - 0.5px),
+      color-mix(in oklab, var(--color-fg) 28%, transparent) 0,
+      color-mix(in oklab, var(--color-fg) 28%, transparent) calc(66.666% + 0.5px),
+      transparent 0
+    );
+}
+.quality-report {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+.quality-report h3 {
+  margin: 0 0 0.375rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+.quality-report ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quality-report li {
+  position: relative;
+  padding: 0.3rem 0 0.3rem 1rem;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-fg);
+}
+.quality-report li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0.125rem;
+  top: 0.82rem;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--color-muted);
+}
+.quality-report li[data-severity="high"] {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+.batch-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.shortcut-dialog {
+  max-width: calc(100vw - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right));
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  margin-left: calc((env(safe-area-inset-left) - env(safe-area-inset-right)) / 2);
+  margin-top: calc((env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);
+}
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .sheet button,
+  .sheet input:not([type="checkbox"]):not([type="radio"]),
+  .sheet select,
+  .sheet summary {
+    min-height: 44px;
+  }
+  .sheet label:has(input[type="checkbox"]),
+  .edit-check {
+    min-height: 44px;
+  }
+}
+
+.color-swatches {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+.color-swatches li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.color-swatches input[type="color"] {
+  width: 2.25rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.color-swatch {
+  display: inline-block;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-fg) 20%, transparent);
+}
+
+.stage-check-box {
+  position: absolute;
+  border: 2px solid var(--color-accent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-bg) 70%, transparent);
+}
+.stage-check-box[data-kind="speck"] {
+  border-color: #e0a020;
+}
+.stage-check-box[data-kind="hole"] {
+  border-color: #3b8bd9;
+  border-style: dashed;
+}
+.stage-check-box[data-label="below"] span {
+  top: auto;
+  bottom: -1.35rem;
+}
+.stage-check-box span {
+  position: absolute;
+  top: -1.35rem;
+  left: -2px;
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.2rem;
+  color: var(--color-bg);
+  background: var(--color-fg);
+  white-space: nowrap;
+}
+.stage-check-empty {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-bg);
+  background: var(--color-fg);
+}
+.history-list {
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+.history-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+}
+.history-time {
+  font-size: 11px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.models-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.375rem;
+}
+.models-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content 5.25rem;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  padding-block: 0.375rem;
+  font-size: 13px;
+}
+.models-list li + li {
+  border-top: 1px solid var(--color-line);
+}
+.models-list li > button {
+  justify-self: stretch;
+}
+/* A download that didn't finish but left files: Retry over Clear, in the action column. */
+.models-actions {
+  display: grid;
+  gap: 0.25rem;
+}
+.models-name {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  line-height: 1.25;
+}
+.models-name > span {
+  font-weight: 500;
+}
+.models-name small {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.models-size {
+  justify-self: end;
+  font-size: 12px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.models-progress {
+  grid-column: 1 / -1;
+  display: block;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-fg) 12%, transparent);
+}
+.models-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: left;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+[dir="rtl"] .models-progress > span {
+  transform-origin: right;
+}
+.models-note {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-subtle);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  /* Same phone sheet as the brush: canvas first, tools under it, Apply always in reach. */
+  .brush-dialog .canvas-stage {
+    order: -1;
+  }
+  .canvas-stage {
+    --stage-height: min(48dvh, calc(100dvh - 25rem));
+  }
+  .editor-spacer {
+    display: none;
+  }
+  .editor-meta {
+    margin-block: 0.25rem 0;
+  }
+}

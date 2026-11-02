@@ -1,0 +1,49 @@
+# Watches the public deployment named by the UPTIME_URL repository variable: the server
+# answers, the model files still resolve, and the certificate is not about to expire. A
+# failed run emails the repository's watchers; nothing is collected from visitors.
+# Does nothing until UPTIME_URL is set (docs/github-settings.md).
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: ${{ vars.UPTIME_URL != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SITE_URL: ${{ vars.UPTIME_URL }}
+      # The model host that deployment is built with (Hugging Face unless it uses a mirror).
+      MODEL_HOST: ${{ vars.UPTIME_MODEL_HOST || 'https://huggingface.co/' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The site and its health check answer
+        run: |
+          curl --fail --silent --show-error --max-time 20 "$SITE_URL/healthz"
+          curl --fail --silent --show-error --max-time 20 "$SITE_URL/version.json"
+          curl --fail --silent --show-error --max-time 20 --output /dev/null "$SITE_URL/"
+      - name: Every pinned model still resolves
+        run: |
+          host="${MODEL_HOST%/}"
+          # id and revision pairs from the one list the app and notices use.
+          grep -oE 'id: "[^"]+"|revision: "[0-9a-f]{40}"' src/lib/model-notices.ts |
+            sed -E 's/^(id|revision): "(.*)"$/\2/' | paste - - |
+            while read -r id revision; do
+              curl --fail --silent --show-error --head --location --max-time 20 \
+                --output /dev/null "$host/$id/resolve/$revision/config.json" ||
+                { echo "::error::$id@$revision is not reachable at $host"; exit 1; }
+            done
+      - name: The certificate is valid for 14 more days
+        run: |
+          domain="${SITE_URL#https://}"
+          domain="${domain%%/*}"
+          echo | openssl s_client -servername "$domain" -connect "$domain:443" 2>/dev/null |
+            openssl x509 -noout -checkend $((14 * 24 * 3600))

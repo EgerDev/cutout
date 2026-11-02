@@ -1,0 +1,223 @@
+# Every suite, against a server built from this exact commit. CUTOUT_REQUIRE_E2E turns a
+# suite that cannot find its server or browser into a failure instead of a skip, and
+# CUTOUT_EXPECT_COMMIT makes the suites check /version.json, so a run that tested nothing
+# (or tested some other build) is never green.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # onnxruntime-node's install script is skipped anyway (--ignore-scripts); belt and braces.
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies (no install scripts; only our own patch runs)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/patch-dependencies.mjs
+      - name: Install wabt 1.0.37 (wat2wasm for the WASM byte check)
+        run: |
+          bash scripts/install-wabt.sh "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/wabt-1.0.37/bin" >> "$GITHUB_PATH"
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Unit tests
+        env:
+          CUTOUT_REQUIRE_TOOLS: "1"
+        run: npm run test:unit
+      - name: Dependency security audit
+        run: npm audit --audit-level=moderate
+      - run: npm run build
+      - name: Server tests
+        env:
+          CUTOUT_REQUIRE_E2E: "1"
+        run: npm run test:server
+      - name: Start the production server on 8081
+        run: |
+          HOST=127.0.0.1 PORT=8081 nohup node .output/server/index.mjs > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8081/healthz && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+      - name: End-to-end suites
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: npm run test:e2e
+      - name: HEIC decoder suite
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: npm run test:heic
+      - name: Content-Security-Policy suite
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: npm run test:csp
+      - name: Accessibility suite
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: npm run test:a11y
+      - name: Mobile emulation suite
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: npm run test:mobile
+      - name: Routes and ingest audit suites
+        env:
+          APP_URL: http://127.0.0.1:8081/
+          DEV_URL: http://127.0.0.1:8081/
+          CUTOUT_REQUIRE_E2E: "1"
+          CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+        run: |
+          npm run test:routes
+          npm run test:ingest:audit
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log" || true
+
+  # Suites that import modules from /src need the Vite dev server.
+  dev-server:
+    name: dev-server suites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      APP_URL: http://127.0.0.1:8080/
+      DEV_URL: http://127.0.0.1:8080/
+      CUTOUT_REQUIRE_E2E: "1"
+      CUTOUT_EXPECT_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/patch-dependencies.mjs
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start the dev server on 8080
+        run: |
+          nohup npx vite dev --host 127.0.0.1 --port 8080 --strictPort > "$RUNNER_TEMP/dev.log" 2>&1 &
+          for i in $(seq 1 90); do
+            curl -fsS -o /dev/null http://127.0.0.1:8080/manifest.webmanifest && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/dev.log"
+          exit 1
+      - run: npm run test:ui
+      - run: npm run test:editor
+      - run: npm run test:removal
+      - run: npm run test:formats
+      # The ten opt-in "P1 real integrity:" cases in browser-model-cache.mjs skip
+      # without RUN_REAL_MODELS=1. They are the one declared exclusion, verified
+      # by exact case name; the strict gate is linux-ci.mjs --real-models or the
+      # Mac real-model run (see DEPLOYMENT.md "Ordinary and real-model lanes").
+      # The default shell would be "bash -e" without pipefail, letting a failing
+      # suite exit 0 through the tee; explicit bash runs "-eo pipefail" so the
+      # suite's own status is preserved (the skip check below still re-verifies
+      # the saved log and rejects failed or incomplete summaries).
+      - run: npm run test:advanced 2>&1 | tee "$RUNNER_TEMP/advanced.log"
+        shell: bash
+      - name: Advanced suite skip accounting
+        run: node scripts/linux-ci.mjs --verify-skips "$RUNNER_TEMP/advanced.log"
+      - name: UI audit suites
+        run: |
+          CUTOUT_BROWSER_PROFILE=$(mktemp -d "$RUNNER_TEMP/cutout-ui.XXXXXX")
+          export CUTOUT_BROWSER_PROFILE
+          trap 'rm -rf "$CUTOUT_BROWSER_PROFILE"' EXIT
+          npm run test:ui:audit
+      - name: Dev server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/dev.log" || true
+
+  # A build pointed at a model mirror must actually use it (VITE_MODEL_HOST).
+  model-host:
+    name: model mirror build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/patch-dependencies.mjs
+      - run: npm run build
+        env:
+          VITE_MODEL_HOST: https://models.example/
+      - name: The client bundle points at the mirror
+        run: grep -rlq "models.example" .output/public/assets
+
+  docker:
+    name: docker stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CUTOUT_DOMAIN: localhost
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and start app + Caddy
+        run: docker compose up -d --build --wait
+      - name: Health through Caddy
+        run: curl -fsSk --retry 10 --retry-all-errors --retry-delay 2 https://localhost/healthz
+      - name: Served identity and malformed-path rejection
+        run: |
+          curl -fsSk https://localhost/version.json | grep -F "${{ github.sha }}"
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/%GG)" = "400"
+      - name: Logs
+        if: failure()
+        run: docker compose logs
+      - name: Stop
+        if: always()
+        run: docker compose down -v

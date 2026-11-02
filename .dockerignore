@@ -1,0 +1,38 @@
+node_modules
+**/node_modules
+.output
+.vercel
+dist
+.git
+.codex
+.grok
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+*.log
+.DS_Store
+# Local-only data, tools and test output must never enter build-stage layers.
+**/.omo
+.vinxi
+.nitro
+.idea
+.vscode
+.remember
+coverage
+playwright-report
+test-results
+.smoke
+scratch
+audit-*
+# Tailwind scans tracked text, including docs and tests. Keep those build inputs
+# identical to a normal checkout; only .output is copied to the runtime image.
+.claude
+CODEX-PROMPT.md
+audit
+Cutout_T3_Orchestrator_V2_Final_Polish_Prompt.md
+docs/DEVIN_CROSS_PLATFORM_VERIFICATION_PROMPT.md
+docs/roadmaps
+docs/superpowers

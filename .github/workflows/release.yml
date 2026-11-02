@@ -1,0 +1,125 @@
+# Tag vX.Y.Z on main (matching package.json) to release: the full CI runs first, then the
+# image goes to GHCR as :X.Y.Z and :sha-<commit> (never :latest), with a CycloneDX SBOM,
+# build provenance attestations for the image and the .output tarball, SHA-256 checksums,
+# and a GitHub Release whose notes are the CHANGELOG.md section for the version.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write # create the GitHub Release
+      packages: write # push the image to GHCR
+      id-token: write # sign the attestations
+      attestations: write # store the attestations
+    env:
+      IMAGE: ghcr.io/egerdev/cutout
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: The tag must match package.json
+        id: version
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+      - name: Install dependencies (no install scripts; only our own patch runs)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/patch-dependencies.mjs
+      - run: npm run build
+        env:
+          # Absolute canonical/og URLs and the sitemap (repository variable; see docs/github-settings.md).
+          SITE_URL: ${{ vars.SITE_URL }}
+      - name: Package the build, SBOM, notes and checksums
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir release
+          tar --sort=name --owner=0 --group=0 --numeric-owner -cf - .output | gzip -n > "release/cutout-$VERSION-output.tar.gz"
+          # Include the build graph: Nitro is a devDependency but emits shipped server code.
+          npm sbom --sbom-format cyclonedx --package-lock-only > "release/cutout-$VERSION-sbom.cdx.json"
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 { on = 1; next } /^## \[/ { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $VERSION"
+            exit 1
+          fi
+          (cd release && sha256sum -- * > SHA256SUMS)
+      - name: Attest the build tarball and SBOM
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.cdx.json
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          # ARM VPSes (Ampere, Graviton, Raspberry Pi) too; the build stage is not emulated.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            GITHUB_SHA=${{ github.sha }}
+            SITE_URL=${{ vars.SITE_URL }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+      - name: Attest the image
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf '\n\nImage: `%s:%s` (`%s`)\n' "$IMAGE" "$VERSION" "$DIGEST" >> "$RUNNER_TEMP/notes.md"
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "Cutout $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"

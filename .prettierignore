@@ -1,0 +1,10 @@
+vendor/
+src/routeTree.gen.ts
+public/third-party/source/
+.output
+.omo
+.claude
+.codex
+.grok
+.remember
+CODEX-PROMPT.md

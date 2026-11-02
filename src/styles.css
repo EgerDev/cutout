@@ -1,0 +1,1425 @@
+@import "tailwindcss";
+@import "./features/workspace/workspace-enhancements.css";
+
+@theme {
+  --color-bg: #f3f1eb;
+  --color-elevated: #fffcf7;
+  --color-subtle: #ece8de;
+  --color-fg: #1c1b16;
+  --color-muted: #6a685f;
+  --color-faint: #9a978c;
+  --color-accent: #3d5a73;
+  --color-accent-fg: #f7f4ee;
+  --color-ok: #2f6f4e;
+  --color-float: #fffcf7;
+  --color-line: color-mix(in oklab, var(--color-fg) 12%, transparent);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* One radius scale. Images keep a small radius so their corners stay judgeable;
+     containers add their padding to the radius of what they hold. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-image: 8px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+  --motion-medium: 320ms;
+  --motion-sheet: 220ms;
+  --motion-slow: 400ms;
+  --shadow-float:
+    0 0 0 1px color-mix(in oklab, var(--color-fg) 8%, transparent),
+    0 1px 2px color-mix(in oklab, var(--color-fg) 6%, transparent),
+    0 18px 40px -24px color-mix(in oklab, var(--color-fg) 28%, transparent);
+  --color-checker-a: #e7e3d8;
+  --color-checker-b: #f6f3eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #10100e;
+    --color-elevated: #1a1916;
+    --color-subtle: #22211c;
+    --color-fg: #f3f1ea;
+    --color-muted: #a3a095;
+    --color-faint: #6f6d64;
+    --color-accent: #8aa4b8;
+    --color-accent-fg: #10100e;
+    --color-ok: #8fb89a;
+    --color-float: #22211c;
+    --color-line: color-mix(in oklab, var(--color-fg) 12%, transparent);
+    --color-checker-a: #5a574c;
+    --color-checker-b: #3f3d36;
+    --shadow-float:
+      0 0 0 1px color-mix(in oklab, var(--color-fg) 10%, transparent), 0 18px 40px -24px #0000008c;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    color-scheme: light dark;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+  }
+
+  /* Controls are not content: a long press on a phone must not select their labels. */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="radio"] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+.checker {
+  background-color: var(--color-checker-b);
+  background-image:
+    linear-gradient(45deg, var(--color-checker-a) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-checker-a) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-checker-a) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-checker-a) 75%);
+  background-position:
+    0 0,
+    0 9px,
+    9px -9px,
+    -9px 0;
+  background-size: 18px 18px;
+}
+
+.checker[data-checker="flip"],
+.stage-media[data-checker="flip"] {
+  --color-checker-a: #5a574c;
+  --color-checker-b: #3f3d36;
+}
+
+@media (prefers-color-scheme: dark) {
+  .checker[data-checker="flip"],
+  .stage-media[data-checker="flip"] {
+    --color-checker-a: #e7e3d8;
+    --color-checker-b: #f6f3eb;
+  }
+}
+
+.idle-headline {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The first-run entrance is the one authored moment: the headline settles line by line,
+   then the actions follow. Hidden states live in the keyframes, so a page whose
+   animation never runs still shows everything. */
+.idle-line {
+  display: block;
+  animation: idle-in 300ms var(--ease-out) both;
+}
+
+.idle-line:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.idle-stack > .idle-actions {
+  animation: idle-in 300ms 120ms var(--ease-out) both;
+}
+
+.idle-stack > .idle-more,
+.idle-stack > .idle-note {
+  animation: idle-in 300ms 180ms var(--ease-out) both;
+}
+
+.idle-sample-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  outline: 1px solid oklch(0 0 0 / 0.1);
+  outline-offset: -1px;
+  transition: scale var(--motion-quick) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .idle-sample:hover .idle-sample-thumb {
+    scale: 1.06;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .idle-sample-thumb {
+    outline-color: oklch(1 0 0 / 0.1);
+  }
+}
+
+@keyframes idle-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+    filter: blur(4px);
+  }
+}
+
+.toolbar-dock {
+  animation: dock-in var(--motion-medium) var(--ease-sheet) both;
+}
+
+.status-capsule {
+  position: absolute;
+  left: 50%;
+  bottom: max(1.15rem, env(safe-area-inset-bottom));
+  z-index: 30;
+  pointer-events: none;
+  translate: -50% 0;
+  animation: status-in var(--motion-fast) var(--ease-out) both;
+}
+
+.status-capsule-card {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  width: max-content;
+  max-width: min(
+    22rem,
+    calc(100vw - 2.5rem - env(safe-area-inset-left) - env(safe-area-inset-right))
+  );
+  height: 44px;
+  padding: 0 1.15rem 0 1.2rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-float) 92%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-fg) 8%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--color-fg) 14%, transparent),
+    0 2px 4px color-mix(in oklab, #000 8%, transparent),
+    0 18px 40px -16px color-mix(in oklab, #000 32%, transparent);
+}
+
+.status-capsule-status {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.9rem;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Stop or Retry: the capsule's end cap, divided from the status by a short rule. */
+.status-capsule-card[data-action] {
+  padding-inline-end: 0;
+}
+
+.status-capsule-action {
+  position: relative;
+  align-self: stretch;
+  pointer-events: auto;
+  padding-inline: 0.9rem 1.15rem;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 999px;
+  border-end-end-radius: 999px;
+  font-size: 13px;
+}
+
+/* Its ring stays inside the capsule's outline. */
+.status-capsule-action:focus-visible {
+  outline-offset: -4px;
+}
+
+.status-capsule-action::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 1px;
+  height: 1.25rem;
+  translate: 0 -50%;
+  background: color-mix(in oklab, var(--color-fg) 14%, transparent);
+}
+
+.status-copy {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-fg);
+  animation: status-copy var(--motion-fast) var(--ease-out) both;
+}
+
+.status-track {
+  flex: 1 1 5.5rem;
+  width: 5.5rem;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-fg) 12%, transparent);
+}
+
+.status-fill {
+  position: relative;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-fg);
+  transform-origin: left;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+[dir="rtl"] .status-fill {
+  transform-origin: right;
+}
+
+.status-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-bg) 55%, transparent),
+    transparent
+  );
+  animation: status-sheen 1.6s linear infinite;
+}
+
+@keyframes status-copy {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes status-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.stage-media {
+  --wipe: 50%;
+  contain: layout paint;
+  isolation: isolate;
+  opacity: 0;
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-image);
+}
+
+.stage-media.has-ar {
+  max-width: none;
+  max-height: none;
+  width: min(100cqw, calc(var(--stage-ar) * 100cqh));
+  height: min(100cqh, calc(100cqw / var(--stage-ar)));
+}
+
+.stage-media.is-ready {
+  will-change: transform, opacity;
+  animation: stage-in var(--motion-fast) var(--ease-out) both;
+}
+
+.stage-media.is-settled {
+  will-change: auto;
+  opacity: 1;
+  animation: none;
+}
+
+.stage-media[draggable="true"] .stage-photo {
+  pointer-events: none;
+}
+
+.stage-photo {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+canvas.stage-photo {
+  display: block;
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.stage-compare-source {
+  clip-path: inset(0 calc(100% - var(--wipe, 50%)) 0 0);
+}
+
+/* The wipe follows the pointer and the arrow keys immediately: easing a nudge only makes
+   the line lag the hand. */
+.stage-wipe-line,
+.stage-wipe-handle {
+  left: var(--wipe, 50%);
+}
+
+.stage-media[data-dragging="true"] .stage-compare-source {
+  will-change: clip-path;
+}
+
+.stage-mask-backdrop {
+  background: #12110e;
+}
+
+.stage-mask-fill {
+  background: #f6f3eb;
+  -webkit-mask-image: var(--mask);
+  mask-image: var(--mask);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* Sheet geometry. East sheets start below the header and always end above the dock, so
+   its controls stay reachable. On phones a south sheet has one fixed height and the
+   stage reflows above it: the photo being adjusted stays in view. */
+:root {
+  --sheet-top: max(4.75rem, calc(env(safe-area-inset-top) + 3.25rem));
+  --dock-space: 5.75rem;
+  --south-sheet-h: min(52dvh, 28rem);
+}
+
+.sheet {
+  contain: layout paint;
+  isolation: isolate;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  transition: translate var(--motion-sheet) var(--ease-sheet);
+}
+
+.sheet[data-side="east"] {
+  top: var(--sheet-top);
+  max-height: calc(100% - var(--sheet-top) - var(--dock-space));
+  border-radius: var(--radius-xl);
+}
+
+.sheet[data-side="south"] {
+  height: var(--south-sheet-h);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+@media not all and (orientation: landscape) and (max-height: 500px) {
+  .workspace-frame:has(> .sheet[data-side="south"][aria-hidden="false"]) {
+    padding-bottom: var(--south-sheet-h);
+  }
+
+  .workspace-frame:has(> .sheet[data-side="south"][aria-hidden="false"]) > .workspace-dock,
+  .workspace-frame:has(> .sheet[data-side="south"][aria-hidden="false"]) .workspace-batch {
+    display: none;
+  }
+}
+
+.sheet[aria-hidden="false"] {
+  will-change: translate;
+}
+
+.sheet[aria-hidden="true"] {
+  pointer-events: none;
+  will-change: auto;
+}
+
+.sheet[data-side="east"][aria-hidden="false"],
+.sheet[data-side="south"][aria-hidden="false"] {
+  translate: 0;
+}
+
+.sheet[data-side="east"][aria-hidden="true"] {
+  translate: var(--sheet-delta, 112%) 0;
+  transition-duration: 160ms;
+}
+
+.sheet[data-side="south"][aria-hidden="true"] {
+  translate: 0 110%;
+  transition-duration: 160ms;
+}
+
+.drop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  contain: strict;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  background: color-mix(in oklab, var(--color-bg) 72%, transparent);
+  transition: opacity var(--motion-fast) var(--ease-out);
+  overflow: hidden;
+}
+
+.drop-veil.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drop-card {
+  position: relative;
+  pointer-events: none;
+  display: flex;
+  gap: 0.35rem;
+  width: max-content;
+  max-width: min(
+    22rem,
+    calc(100vw - 2.5rem - env(safe-area-inset-left) - env(safe-area-inset-right))
+  );
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--color-float) 94%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-fg) 8%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--color-fg) 16%, transparent),
+    0 2px 4px color-mix(in oklab, #000 8%, transparent),
+    0 18px 40px -12px color-mix(in oklab, #000 28%, transparent),
+    0 40px 80px -18px color-mix(in oklab, #000 36%, transparent);
+  text-align: center;
+  opacity: 0;
+  transform: translate3d(0, 10px, 0) scale(0.97);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.drop-veil.is-open .drop-card {
+  opacity: 1;
+  transform: translate3d(var(--drop-offset-x, 0px), var(--drop-offset-y, 0px), 0) scale(1);
+}
+
+.drop-card-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--color-fg);
+}
+
+.drop-card-copy {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+/* Reading pages: Guide, Library, Privacy, Terms, Licenses. */
+.doc-page {
+  position: relative;
+  min-height: 100dvh;
+  padding: max(1rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) 7rem
+    max(1.5rem, env(safe-area-inset-left));
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.doc-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+.doc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.doc-nav {
+  display: flex;
+  flex-wrap: wrap;
+  margin-inline-end: -0.625rem;
+  font-size: 14px;
+}
+
+.doc-nav-link,
+.doc-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-muted);
+  text-underline-offset: 6px;
+  transition: color var(--motion-quick) var(--ease-out);
+}
+
+.doc-nav-link {
+  padding-inline: 0.625rem;
+}
+
+.doc-nav-link[aria-current="page"] {
+  color: var(--color-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+}
+
+.doc-back {
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+  margin-inline-start: -0.125rem;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .doc-nav-link:hover,
+  .doc-back:hover {
+    color: var(--color-fg);
+  }
+}
+
+.doc-article {
+  max-width: 42rem;
+  margin: clamp(2rem, 7vh, 4.5rem) auto 0;
+}
+
+.doc-title {
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+
+.doc-lede {
+  margin-top: 0.875rem;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--color-muted);
+  text-wrap: pretty;
+}
+
+.doc-body {
+  margin-top: 2.5rem;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.doc-section {
+  padding-block: 2rem;
+  border-top: 1px solid var(--color-line);
+  scroll-margin-top: 1rem;
+}
+
+.doc-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.doc-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+}
+
+.doc-section-note {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.doc-section-body > * + * {
+  margin-top: 0.875rem;
+}
+
+.doc-section-body p,
+.doc-section-body li {
+  text-wrap: pretty;
+}
+
+.doc-section-body ul,
+.doc-section-body ol {
+  padding-inline-start: 1.25rem;
+}
+
+.doc-section-body ul {
+  list-style: disc;
+}
+
+.doc-section-body ol {
+  list-style: decimal;
+}
+
+.doc-section-body li + li {
+  margin-top: 0.375rem;
+}
+
+.doc-section-body a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 3px;
+}
+
+.doc-section-body strong {
+  font-weight: 600;
+}
+
+.doc-section-body h3 {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.doc-section-body dl > div + div {
+  margin-top: 0.625rem;
+}
+
+.doc-section-body dt {
+  font-weight: 600;
+}
+
+.doc-section-body dd {
+  margin: 0.125rem 0 0;
+}
+
+.doc-section-body code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-xs);
+  background: var(--color-subtle);
+  font-size: 0.875em;
+}
+
+.doc-section-body pre {
+  overflow: auto;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.doc-table,
+.doc-section-body div:has(> table) {
+  overflow-x: auto;
+}
+
+/* Every reading-page table, including ones whose markup predates these styles. */
+.doc-section-body table {
+  width: 100%;
+  border: 0;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.doc-section-body thead {
+  background: none;
+}
+
+.doc-section-body th,
+.doc-section-body td {
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-fg);
+  text-align: start;
+  vertical-align: top;
+}
+
+.doc-section-body th {
+  font-weight: 600;
+}
+
+.doc-section-body thead th {
+  white-space: nowrap;
+}
+
+.doc-note {
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-subtle);
+  font-size: 15px;
+}
+
+.status-page {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: max(1.5rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right))
+    max(1.5rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
+  background: var(--color-bg);
+  color: var(--color-fg);
+  text-align: center;
+}
+
+.status-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding-inline: 1.125rem;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+
+.status-action.is-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  box-shadow: none;
+}
+
+.site-rail {
+  border-top: 1px solid color-mix(in oklab, var(--color-fg) 8%, transparent);
+  padding: 0.5rem max(1rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+}
+
+.site-rail-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 0.5rem;
+  text-underline-offset: 5px;
+  transition: color var(--motion-quick) var(--ease-out);
+}
+
+.site-rail-link[aria-current="page"] {
+  color: var(--color-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-rail-link:hover {
+    color: var(--color-fg);
+  }
+}
+
+.header-guide {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+}
+
+.header-guide:focus-visible {
+  outline: none;
+}
+
+.file-input {
+  position: fixed;
+  inset-inline-start: 0;
+  inset-block-start: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-xs);
+  background: var(--color-elevated);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  box-shadow: var(--shadow-float);
+}
+
+.app-header {
+  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+}
+
+.workspace-frame {
+  position: relative;
+  --gap-frame: 0.35rem;
+  --gap-main: 0.5rem;
+  --gap-dock: 0.5rem;
+  gap: var(--gap-frame);
+  container-type: size;
+  container-name: workspace;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding-top: max(3.75rem, calc(env(safe-area-inset-top) + 2.75rem));
+  padding-right: env(safe-area-inset-right);
+  padding-left: env(safe-area-inset-left);
+}
+
+.workspace-main {
+  display: flex;
+  gap: var(--gap-main);
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-stage {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+  container-name: stage;
+}
+
+.stage-slot {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75rem 1rem;
+  container-type: size;
+}
+
+.workspace-dock {
+  display: flex;
+  gap: var(--gap-dock);
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 0.65rem 1rem max(1.1rem, env(safe-area-inset-bottom));
+}
+
+.workspace-batch {
+  display: flex;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  width: 5.25rem;
+  padding-block: 0 0.5rem;
+  padding-inline: 0.75rem 0.5rem;
+  overflow: auto;
+}
+
+.workspace-batch button {
+  aspect-ratio: 4 / 5;
+  width: 100%;
+}
+
+.idle-stack {
+  display: flex;
+  gap: clamp(1.75rem, 4.5vh, 2.75rem);
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.idle-actions {
+  display: flex;
+  gap: 0.625rem;
+  flex-direction: column;
+  align-items: center;
+}
+
+.idle-choose {
+  display: flex;
+  gap: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.idle-drop {
+  font-size: 15px;
+  color: var(--color-muted);
+}
+
+.idle-meta {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.idle-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem 1.5rem;
+}
+
+.idle-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 44px;
+  padding-inline: 0.25rem;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-fg);
+  transition: color var(--motion-quick) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .idle-link:hover:not(:disabled) {
+    color: var(--color-accent);
+  }
+}
+
+.idle-note {
+  max-width: 34ch;
+  margin-top: -0.75rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-muted);
+  text-wrap: balance;
+}
+
+.idle-shell {
+  container-type: inline-size;
+  container-name: idle;
+  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+}
+
+.sheet[data-side="east"] {
+  --sheet-delta: 112%;
+  inset-inline-end: max(1rem, env(safe-area-inset-right));
+}
+
+[dir="rtl"] .sheet[data-side="east"] {
+  --sheet-delta: -112%;
+}
+
+.sheet[data-side="south"] {
+  left: env(safe-area-inset-left);
+  right: env(safe-area-inset-right);
+}
+
+@media (max-width: 720px) {
+  .idle-keys {
+    display: none;
+  }
+
+  .app-header {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .workspace-frame {
+    padding-top: max(3.25rem, calc(env(safe-area-inset-top) + 2.4rem));
+  }
+
+  .workspace-batch {
+    order: 2;
+    padding: 0.35rem 0.75rem;
+  }
+
+  .workspace-stage {
+    order: 1;
+  }
+
+  .workspace-dock {
+    order: 3;
+    padding-inline: 0.75rem;
+  }
+
+  .stage-slot {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .idle-choose {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .idle-shell ~ footer.absolute {
+    position: relative;
+  }
+
+  .idle-stack {
+    justify-content: flex-start;
+    padding-top: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .workspace-frame {
+    padding-top: max(2.6rem, calc(env(safe-area-inset-top) + 1.6rem));
+  }
+
+  .workspace-dock {
+    position: relative;
+    z-index: 40;
+    padding-top: 0.25rem;
+    padding-bottom: max(0.45rem, env(safe-area-inset-bottom));
+  }
+
+  .stage-slot {
+    padding: 0.35rem 0.75rem;
+  }
+
+  .sheet[data-side="east"] {
+    bottom: 4.75rem;
+    height: unset;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .sheet[data-side="south"] {
+    top: max(4.25rem, calc(env(safe-area-inset-top) + 3rem));
+    inset-inline-end: max(0.75rem, env(safe-area-inset-right));
+    bottom: 4.75rem;
+    inset-inline-start: auto;
+    width: min(22rem, calc(48vw - env(safe-area-inset-right)));
+    height: unset;
+    max-height: none;
+    overflow: auto;
+    border-radius: var(--radius-xl);
+    padding-bottom: 0.75rem;
+  }
+
+  /* A side panel here, so it leaves sideways: sliding down by its own height left its head
+     showing over the stage's bottom corner. */
+  .sheet[data-side="south"][aria-hidden="true"] {
+    translate: 112% 0;
+  }
+
+  [dir="rtl"] .sheet[data-side="south"][aria-hidden="true"] {
+    translate: -112% 0;
+  }
+
+  /* The side panel takes its width from the stage instead of covering the photo. */
+  .workspace-frame:has(> .sheet[data-side="south"][aria-hidden="false"]) > .workspace-main {
+    padding-inline-end: calc(min(22rem, 48vw - env(safe-area-inset-right)) + 0.75rem);
+  }
+}
+
+@container workspace (max-width: 720px) {
+  .workspace-main {
+    flex-direction: column;
+  }
+
+  .workspace-batch {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .workspace-batch button {
+    aspect-ratio: auto;
+    width: 3rem;
+    height: 3rem;
+    flex: 0 0 auto;
+  }
+}
+
+@container stage (max-width: 560px) {
+  .stage-slot {
+    padding: 0.5rem 0.65rem;
+  }
+}
+
+@container workspace (max-height: 700px) {
+  .stage-slot {
+    padding-block: 0.4rem;
+  }
+
+  .workspace-dock {
+    padding-top: 0.35rem;
+  }
+}
+
+@container idle (max-width: 640px) {
+  .idle-headline {
+    max-width: 14ch;
+  }
+
+  .idle-keys {
+    display: none;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .stage-slot {
+    padding: 0.75rem 1.25rem;
+  }
+}
+
+@media (min-width: 1101px) {
+  .stage-slot {
+    padding: 1rem 1.75rem;
+  }
+}
+
+@media (min-width: 1400px) {
+  .idle-headline {
+    max-width: 18ch;
+  }
+
+  .stage-slot {
+    padding: 1.15rem 2.25rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .workspace-frame {
+    padding-top: max(3.1rem, calc(env(safe-area-inset-top) + 2.1rem));
+  }
+
+  .stage-slot {
+    padding-block: 0.4rem;
+  }
+
+  .workspace-dock {
+    padding-top: 0.35rem;
+    padding-bottom: max(0.7rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (pointer: coarse) {
+  .toolbar-dock button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-line: color-mix(in oklab, var(--color-fg) 32%, transparent);
+    --shadow-float: 0 0 0 1.5px color-mix(in oklab, var(--color-fg) 45%, transparent);
+  }
+
+  .toolbar-dock,
+  .status-capsule-card {
+    box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--color-fg) 40%, transparent);
+  }
+}
+
+/* Reduced motion keeps state changes legible with short crossfades and drops movement,
+   scale and blur; nothing pops in or out. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-media.is-ready {
+    animation: none;
+    opacity: 1;
+    will-change: auto;
+  }
+
+  .status-fill::after,
+  .stage-media {
+    animation: none;
+  }
+
+  /* Progress bars step to each reported value. Declared here, after the base rules: the
+     workspace stylesheet is imported above and would lose. */
+  .status-fill,
+  .models-progress > span {
+    transition: none;
+  }
+
+  .sheet {
+    animation: none !important;
+    translate: none !important;
+    transition: opacity 150ms var(--ease-out) !important;
+  }
+
+  .sheet[aria-hidden="true"] {
+    opacity: 0;
+  }
+
+  .idle-headline,
+  .idle-line,
+  .idle-stack > .idle-actions,
+  .idle-stack > .idle-more,
+  .idle-stack > .idle-note,
+  .toolbar-dock,
+  .status-capsule,
+  .status-copy {
+    animation: fade-in 150ms var(--ease-out) both !important;
+  }
+
+  .drop-card,
+  .drop-veil.is-open .drop-card {
+    transform: none;
+    filter: none;
+  }
+
+  .stage-photo {
+    transition-duration: 150ms !important;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Forced colours (Windows contrast themes) repaint text and borders in the user's palette and
+   drop backgrounds, shadows and gradients, which took every pressed, checked and active mark
+   with them. They come back here in system colours; colour that is itself the content keeps
+   its own. Declared last, after the workspace stylesheet imported above. */
+@media (forced-colors: active) {
+  /* Pressed and checked read as the system's selected items. */
+  .dock-tool[aria-pressed="true"],
+  .editor-actionbar button[aria-pressed="true"],
+  .editor-dialog button[aria-pressed="true"],
+  .info-chip[aria-pressed="true"],
+  .format-option[aria-checked="true"] {
+    background-color: Highlight;
+    color: HighlightText;
+  }
+
+  /* This ring sits inside the segment, on the selection colour. */
+  .format-option[aria-checked="true"]:focus-visible {
+    outline-color: HighlightText;
+  }
+
+  /* Rings that were box-shadows. */
+  .batch-thumb::after {
+    box-shadow: none;
+    border: 1px solid CanvasText;
+  }
+
+  .batch-thumb.is-active::after {
+    border: 3px solid Highlight;
+  }
+
+  /* Swatches, the transparency checker and the mask view show the image's own colours. */
+  .checker,
+  .swatch-face,
+  .color-swatch,
+  .brush-surface,
+  .stage-mask-backdrop,
+  .stage-mask-fill {
+    forced-color-adjust: none;
+  }
+
+  /* Every face outlined, so a white one still shows on a white page; the active one ringed. */
+  .swatch-face {
+    box-shadow: inset 0 0 0 1px CanvasText;
+  }
+
+  .swatch[data-active] .swatch-face {
+    box-shadow:
+      inset 0 0 0 1px CanvasText,
+      0 0 0 2px Canvas,
+      0 0 0 4px Highlight;
+  }
+
+  .swatch:focus-visible .swatch-face,
+  .swatch-face:focus-within {
+    outline-color: CanvasText;
+  }
+
+  /* Progress: the track as an outline, the fill in the selection colour. */
+  .status-track,
+  .models-progress {
+    outline: 1px solid CanvasText;
+  }
+
+  .status-fill,
+  .models-progress > span {
+    background-color: Highlight;
+  }
+}

@@ -1,0 +1,100 @@
+# Docker's default json-file logs grow without bound; cap them so a long-running
+# host cannot fill its disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    # A released image (CUTOUT_IMAGE=ghcr.io/egerdev/cutout:0.1.0 docker compose up -d)
+    # or, by default, one built here (docker compose up -d --build). Roll back by
+    # setting CUTOUT_IMAGE to the previous tag and running `up -d` again.
+    image: ${CUTOUT_IMAGE:-cutout-app:local}
+    build:
+      context: .
+      args:
+        # Canonical/og URLs and the sitemap point here (a local build only; a
+        # released image carries the SITE_URL it was built with).
+        SITE_URL: ${SITE_URL:-https://${CUTOUT_DOMAIN:-localhost}}
+        # Optional model mirror, e.g. https://cutout.example.com/models/ (see deploy/Caddyfile).
+        VITE_MODEL_HOST: ${VITE_MODEL_HOST:-}
+        # What /version.json reports (the build context has no .git):
+        # GITHUB_SHA=$(git rev-parse HEAD) docker compose up -d --build
+        GITHUB_SHA: ${GITHUB_SHA:-}
+        # Who runs this copy, named on the Privacy and Terms pages, and a private contact.
+        VITE_SITE_OPERATOR: ${VITE_SITE_OPERATOR:-}
+        VITE_SITE_CONTACT: ${VITE_SITE_CONTACT:-}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The cap limits a runaway process; the image caps the Node heap at 192 MB so it
+    # collects garbage before reaching it.
+    mem_limit: 256m
+    pids_limit: 128
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *logging
+    networks:
+      - web
+  proxy:
+    image: caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    restart: unless-stopped
+    environment:
+      CUTOUT_DOMAIN: ${CUTOUT_DOMAIN:?Set CUTOUT_DOMAIN to your public domain}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      # Optional model mirror (see deploy/Caddyfile and DEPLOYMENT.md):
+      # - ./models:/srv/models:ro
+    # The internet-facing container gets the app's guardrails too; binding 80/443 is the
+    # one privilege it keeps.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 256m
+    healthcheck:
+      # Caddy's admin API answers on localhost only.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+    networks:
+      - web
+networks:
+  web:
+volumes:
+  caddy_data:
+  caddy_config:

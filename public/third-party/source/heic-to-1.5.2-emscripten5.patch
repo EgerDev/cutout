@@ -1,0 +1,70 @@
+--- a/esbuild.mjs
++++ b/esbuild.mjs
+@@ -25,7 +25,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/worker.js',
+-  external: ['fs', 'path', 'crypto']
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto']
+ });
+ 
+ const workerFileContent = fs.readFileSync('tmp/worker.js', 'utf8')
+@@ -58,7 +58,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/worker.min.js',
+-  external: ['fs', 'path', 'crypto']
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto']
+ });
+ 
+ const workerFileMinifyContent = fs.readFileSync('tmp/worker.min.js', 'utf8')
+@@ -91,7 +91,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/csp/worker.js',
+-  external: ['fs', 'path', 'crypto'],
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto'],
+ });
+ 
+ const cspWorkerFileContent = fs.readFileSync('tmp/csp/worker.js', 'utf8')
+@@ -124,7 +124,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/csp/worker.min.js',
+-  external: ['fs', 'path', 'crypto']
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto']
+ });
+ 
+ const cspWorkerFileMinifyContent = fs.readFileSync('tmp/csp/worker.min.js', 'utf8')
+@@ -157,7 +157,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/iife/worker.js',
+-  external: ['fs', 'path', 'crypto']
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto']
+ });
+ 
+ const iifeWorkerFileMinifyContent = fs.readFileSync('tmp/iife/worker.js', 'utf8')
+@@ -193,7 +193,7 @@
+   target: 'es6',
+   platform: 'browser',
+   outfile: 'tmp/worker.js',
+-  external: ['fs', 'path', 'crypto']
++  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path', 'node:crypto']
+ });
+ 
+ const nextWorkerFileContent = fs.readFileSync('tmp/worker.js', 'utf8')
+--- a/src/worker.js
++++ b/src/worker.js
+@@ -1,8 +1,10 @@
+ import buildLibheif from LIB_HEIF_PATH;
+ 
+-const libheif = buildLibheif()
++// Emscripten 5 factories return a promise; older ones returned the module.
++const libheifReady = Promise.resolve(buildLibheif())
+ 
+ const decodeBuffer = async (buffer) => {
++  const libheif = await libheifReady;
+   let decoder, data;
+   try {
+     decoder = new libheif.HeifDecoder();

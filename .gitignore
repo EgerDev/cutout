@@ -1,0 +1,43 @@
+node_modules
+dist
+.vinxi
+.nitro
+.output
+*.log
+.DS_Store
+Thumbs.db
+
+# Secrets: never commit environment files or keys (npm start reads .env.production).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+.smoke/
+
+# Editor and local tool settings
+.idea/
+.vscode/
+.claude/
+.codex/
+.grok/
+.remember/
+.omo/
+
+# Deploy tool artifacts
+.vercel
+
+# Obsolete machine-local handoff; keep it out of scans and distribution contexts.
+CODEX-PROMPT.md
+
+# Private execution records are kept outside the public source snapshot.
+/audit/
+/Cutout_T3_Orchestrator_V2_Final_Polish_Prompt.md
+/docs/DEVIN_CROSS_PLATFORM_VERIFICATION_PROMPT.md
+/docs/roadmaps/
+/docs/superpowers/

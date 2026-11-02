@@ -1,0 +1,18 @@
+Cutout
+Copyright 2026 EgerDev
+
+Cutout's original application code and independently implemented removal engine
+are offered under the MIT License (LICENSE). Third-party code, models and
+assets retain their own licenses and notices; this grant does not relicense them.
+Earlier Apache-2.0 grants remain valid; a copy is retained at
+public/third-party/Apache-2.0.txt. See docs/provenance.md for scope and evidence.
+
+This product includes software developed by third parties; see
+public/third-party/THIRD_PARTY_NOTICES.txt for their notices and licenses.
+Earlier versions of Cutout used BG0 by OpenCoreDev (@bg0/browser, Apache
+License 2.0). The current removal engine was written independently, from a
+behaviour specification and without BG0's source code, and contains no code
+copied from BG0.
+scripts/patch-dependencies.mjs modifies transformers.js
+(@huggingface/transformers, Apache License 2.0) and onnxruntime-web (MIT
+License) at install time.

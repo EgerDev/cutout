@@ -1,0 +1,2 @@
+# Keep LF on every OS (Windows Git defaults to CRLF; prettier and source-text tests expect LF).
+* text=auto eol=lf

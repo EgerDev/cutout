@@ -1,0 +1,34 @@
+{$CUTOUT_DOMAIN} {
+  # Access log to stdout; compose rotates it (10 MB x 3). Photos never reach the server.
+  log
+  encode zstd gzip
+
+  # Optional model mirror (build with VITE_MODEL_HOST=https://<domain>/models/): serve a
+  # directory laid out like Hugging Face (<org>/<model>/resolve/<revision>/<file>),
+  # mounted into this container, e.g. `- ./models:/srv/models:ro` under proxy volumes.
+  # Only files that exist are cached for good: a 404 during the upload must not stick.
+  # handle_path /models/* {
+  #   root * /srv/models
+  #   @exists file
+  #   header @exists Cache-Control "public, max-age=31536000, immutable"
+  #   file_server
+  # }
+
+  reverse_proxy app:3000 {
+    # While `docker compose up -d` replaces the app container (a few seconds),
+    # hold requests and retry instead of answering 502.
+    lb_try_duration 30s
+    lb_try_interval 250ms
+  }
+  # The app sends CSP, COOP/COEP, X-Frame-Options, Permissions-Policy and the rest
+  # itself (server/headers.ts), so a deployment without Caddy gets them too.
+  header {
+    # Add `; includeSubDomains` (and later `; preload`) only once every subdomain of
+    # this domain serves HTTPS: browsers then refuse plain HTTP on all of them.
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    -Server
+    -Via
+  }
+}

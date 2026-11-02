@@ -1,0 +1,8 @@
+{
+  "provenance": "Authored 400x300 white opaque/half-alpha rectangle on clear. Color: native Chromium WebCodecs opaque white, matching nclx BT709/sRGB/BT709 limited. Alpha: macOS ImageIO sips-316 from a stdlib-generated PNG. Independent AV1 parser confirms mono_chrome=1/color_range=1. Genuine payloads, no bitstream or metadata rewriting.",
+  "width": 400,
+  "height": 300,
+  "pngSha256": "c6c054c57f4acaf06e86c1cb6dc1a9b2161683ff09fae077833a8e639b841418",
+  "color": "12000a0d00000004463e5600d1010d0104323410430002082084000800b45a0ca5851004ee551217c8adad1218c7e2fef6c1132e59726e12f091bc8bc56647b4a6a1596f583069",
+  "alpha": "12000a0a00000004463e567ffc1532c201140060e0020880b47263ce958ac6e18e83f3208e54a637bb0c4cd091ba3fc6041a96dc1d5e800c389e96c079a4bad75ff45bb460ddb4b244e355fd642d8a8d18cb792035605a696874f6b93f8aa71e70e3e3ecfb121332912596118cb7430747285aa7e87fbdc237b4ba71031b2b06dc1de62a6ee7937449d05b57a9de541b78e7331b3646902d69791f14c2a15df5660c8f196b198639f9a4dfb65cf5a1c6f106f8b7d3ad188bc3a9365a6826d7a7eba5184a6eb183d1e6054e8721d73b61967d8e"
+}

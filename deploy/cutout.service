@@ -1,0 +1,48 @@
+[Unit]
+Description=Cutout web application
+After=network.target
+
+[Service]
+Type=simple
+User=cutout
+Group=cutout
+WorkingDirectory=/opt/cutout
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+# Heap cap below MemoryMax, so V8 collects garbage before the OOM killer acts.
+Environment=NODE_OPTIONS=--max-old-space-size=192
+EnvironmentFile=-/etc/cutout.env
+ExecStart=/usr/bin/node /opt/cutout/.output/server/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+# Same memory and process limits as compose.yaml.
+MemoryMax=256M
+TasksMax=128
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# The server only reads its files and listens on TCP.
+# MemoryDenyWriteExecute is left out: V8's JIT needs writable executable memory.
+CapabilityBoundingSet=
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

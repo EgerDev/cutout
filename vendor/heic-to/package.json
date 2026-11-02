@@ -1,0 +1,15 @@
+{
+  "name": "heic-to",
+  "version": "1.5.2+libheif.1.23.5.libde265.1.1.3",
+  "private": true,
+  "description": "heic-to 1.5.2's CSP build, rebuilt against libheif 1.23.5 and libde265 1.1.3. How to reproduce or replace it: public/third-party/source/BUILD.md",
+  "license": "LGPL-3.0-or-later",
+  "homepage": "https://github.com/hoppergee/heic-to",
+  "type": "module",
+  "exports": {
+    "./csp": {
+      "types": "./csp.d.ts",
+      "default": "./csp.js"
+    }
+  }
+}
