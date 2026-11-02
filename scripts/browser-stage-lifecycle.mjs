@@ -1,9 +1,12 @@
 // Regression for overlapping asynchronous renderer attachments. Requires Vite dev.
 // Exercises WebGPU where the browser has it and the WebGL2 fallback elsewhere (most Linux).
 import assert from "node:assert/strict";
-import test from "node:test";
+import nodeTest from "node:test";
 import { appCandidates } from "./app-url.mjs";
-import { launchChrome } from "./chrome.mjs";
+import { launchChrome, tolerantTest } from "./chrome.mjs";
+
+// A "WebKit …" test skips if Linux WPE WebKit crashes.
+const test = tolerantTest(nodeTest, (name) => name.startsWith("WebKit "));
 import { requireCutout } from "./require-server.mjs";
 
 const appUrl = await requireCutout(appCandidates("http://127.0.0.1:8080/"));

@@ -3,9 +3,12 @@
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test as nodeTest } from "node:test";
 import { webkit } from "playwright";
-import { launchChrome } from "./chrome.mjs";
+import { launchChrome, tolerantTest } from "./chrome.mjs";
+
+// A "… in webkit" test skips if Linux WPE WebKit crashes.
+const test = tolerantTest(nodeTest, (name) => name.endsWith(" in webkit"));
 import { appCandidates, e2eUrl } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 

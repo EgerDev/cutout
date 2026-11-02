@@ -1,7 +1,9 @@
-import {test} from 'node:test';
+import {test as nodeTest} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium,webkit,devices} from 'playwright';
-import { bypassCsp, launchChrome } from "./chrome.mjs";
+import { bypassCsp, launchChrome, tolerantTest } from "./chrome.mjs";
+// An "iPhone: …" (WebKit) test skips if Linux WPE WebKit crashes.
+const test = tolerantTest(nodeTest, (name) => name.startsWith("iPhone:"));
 import { appCandidates, e2eUrl } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 const url=await requireCutout(appCandidates('http://127.0.0.1:8080/'));

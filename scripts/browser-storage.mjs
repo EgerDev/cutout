@@ -8,8 +8,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { webkit } from "playwright";
-import { after, before, test } from "node:test";
-import { launchChrome } from "./chrome.mjs";
+import { after, before, test as nodeTest } from "node:test";
+import { launchChrome, tolerantTest } from "./chrome.mjs";
+
+// A "… in webkit" test skips if Linux WPE WebKit crashes.
+const test = tolerantTest(nodeTest, (name) => name.endsWith(" in webkit"));
 import { appCandidates } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 

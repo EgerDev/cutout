@@ -4,12 +4,10 @@ import { readFile } from "node:fs/promises";
 import { after, test as nodeTest } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 import { webkit } from "playwright";
-import { launchChrome, tolerateWebkitCrash } from "./chrome.mjs";
+import { launchChrome, tolerantTest } from "./chrome.mjs";
 
 // Every test here is named "<engine>: …"; a webkit one skips if Linux WPE WebKit crashes.
-const test = (name, ...args) =>
-  nodeTest(name, ...args.map((arg) =>
-    typeof arg === "function" && name.startsWith("webkit:") ? tolerateWebkitCrash(arg) : arg));
+const test = tolerantTest(nodeTest, (name) => name.startsWith("webkit:"));
 import { appCandidates } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 

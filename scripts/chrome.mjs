@@ -41,6 +41,17 @@ export function tolerateWebkitCrash(body) {
   };
 }
 
+/** node:test's test(), applying tolerateWebkitCrash() to the tests `isWebkit` names. */
+export function tolerantTest(nodeTest, isWebkit) {
+  return (name, ...args) =>
+    nodeTest(
+      name,
+      ...args.map((arg) =>
+        typeof arg === "function" && isWebkit(name) ? tolerateWebkitCrash(arg) : arg,
+      ),
+    );
+}
+
 /**
  * Google Chrome when it is installed; Playwright's bundled Chromium otherwise.
  * Most Linux machines and CI images ship Chromium, not /opt/google/chrome.

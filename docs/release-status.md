@@ -46,9 +46,9 @@ history or authorize making that original repository public.
 ## Release and hosting
 
 Tests and artifact packaging can run outside GitHub Actions. Hosted CI runs on the public
-repository. On its Linux runners WPE WebKit can crash mid-test in the export, ingest and
-route suites; a WebKit leg that crashes is reported as skipped, and every leg that stays
-up is asserted as usual. No release, signature or GitHub-generated attestation exists yet.
+repository. On its Linux runners WPE WebKit can crash mid-test in any suite that renders
+the app; a WebKit leg that crashes is reported as skipped, and every leg that stays up is
+asserted as usual. Linux CI is therefore not a WebKit gate; macOS remains that gate. No release, signature or GitHub-generated attestation exists yet.
 
 A release needs an exact source/build identity, source/output archives, full
 source/build SBOM, checksums, accurate notes and final publication authorization.
