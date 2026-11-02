@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { readdirSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { webkit } from "playwright";
-import { launchChrome } from "./chrome.mjs";
+import { launchChrome, webkitCrashed } from "./chrome.mjs";
 import { appCandidates } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 
@@ -18,7 +18,7 @@ for (const [name, launch] of [
   ["Chromium", () => launchChrome({ bypassCSP: false })],
   ["WebKit", () => webkit.launch()],
 ]) {
-  test(`${name}: HTML aliases reach interactive canonical pages under enforced CSP`, async () => {
+  test(`${name}: HTML aliases reach interactive canonical pages under enforced CSP`, async (t) => {
     const browser = await launch();
     try {
       const context = await browser.newContext();
@@ -138,6 +138,9 @@ for (const [name, launch] of [
         undefined,
         "inline script blocked",
       );
+    } catch (error) {
+      if (name !== "WebKit" || !webkitCrashed(error)) throw error;
+      return t.skip("Linux WPE WebKit crashed (recorded environment limit)");
     } finally {
       await browser.close();
     }

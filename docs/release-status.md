@@ -46,9 +46,9 @@ history or authorize making that original repository public.
 ## Release and hosting
 
 Tests and artifact packaging can run outside GitHub Actions. Hosted CI runs on the public
-repository; on its Linux runners the WebKit legs of the tiny/odd-size HEIC/AVIF encode
-cases are skipped because WPE WebKit crashes in them. No release, signature or
-GitHub-generated attestation exists yet.
+repository. On its Linux runners WPE WebKit can crash mid-test in the export and route
+suites; a WebKit leg that crashes is reported as skipped, and every leg that stays up
+is asserted as usual. No release, signature or GitHub-generated attestation exists yet.
 
 A release needs an exact source/build identity, source/output archives, full
 source/build SBOM, checksums, accurate notes and final publication authorization.

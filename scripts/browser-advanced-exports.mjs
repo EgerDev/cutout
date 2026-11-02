@@ -11,7 +11,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 import { webkit } from "playwright";
-import { bypassCsp, launchChrome, webkitCodecCrashes } from "./chrome.mjs";
+import { bypassCsp, launchChrome, webkitCrashed } from "./chrome.mjs";
 
 const appUrl = verifiedAppUrl;
 const transparentAvifMessage = "This browser cannot preserve transparency in AVIF. Choose PNG.";
@@ -611,6 +611,9 @@ test("WebKit HEIC keeps alpha at formerly blank sizes; transparent AVIF is safel
       );
       assert.equal(result.clear[3], 0, `${label} clear`);
     }
+  } catch (error) {
+    if (!webkitCrashed(error)) throw error;
+    return t.skip("Linux WPE WebKit crashed (recorded environment limit)");
   } finally {
     await browser.close();
   }
@@ -654,6 +657,10 @@ test("an AVIF or HEIC export that decodes wrong is refused, not reported as save
       }, mime);
       t.diagnostic(`${name} ${mime}: ${JSON.stringify(result ?? "cannot encode here")}`);
       if (result) outcomes.push({ label: `${name} ${mime}`, ...result });
+    } catch (error) {
+      if (name !== "WebKit" || !webkitCrashed(error)) throw error;
+      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashed (recorded environment limit)");
+      continue;
     } finally {
       await browser.close();
     }
@@ -725,6 +732,10 @@ test("a HEIC export that fails to decode is refused where HEIC decodes, and save
       });
       t.diagnostic(`${name}: ${JSON.stringify(result ?? "cannot encode HEIC here")}`);
       if (result) outcomes.push({ name, ...result });
+    } catch (error) {
+      if (name !== "WebKit" || !webkitCrashed(error)) throw error;
+      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashed (recorded environment limit)");
+      continue;
     } finally {
       await browser.close();
     }
@@ -750,10 +761,6 @@ test("HEIC and opaque AVIF pass tiny/odd checks; nonconforming AVIF alpha is ref
     ["Chrome", () => launchChrome()],
     ["WebKit", async () => bypassCsp(await webkit.launch())],
   ]) {
-    if (name === "WebKit" && webkitCodecCrashes) {
-      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashes in these encodes");
-      continue;
-    }
     const browser = await launch();
     try {
       const page = await browser.newPage();
@@ -827,6 +834,10 @@ test("HEIC and opaque AVIF pass tiny/odd checks; nonconforming AVIF alpha is ref
           assert.match(result.cause, /Encoder creation|does not support these output dimensions/);
         } else assert.equal(result.ok, true, `${name} ${result.label}`);
       }
+    } catch (error) {
+      if (name !== "WebKit" || !webkitCrashed(error)) throw error;
+      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashed (recorded environment limit)");
+      continue;
     } finally {
       await browser.close();
     }
@@ -896,6 +907,10 @@ test("textured HEIC cutouts export at all search qualities; nonconforming AVIF i
           assert.equal(result.error, `CutoutError: ${transparentAvifMessage}`, result.label);
         else assert.equal(result.ok, true, `${name} ${result.label}`);
       }
+    } catch (error) {
+      if (name !== "WebKit" || !webkitCrashed(error)) throw error;
+      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashed (recorded environment limit)");
+      continue;
     } finally {
       await browser.close();
     }

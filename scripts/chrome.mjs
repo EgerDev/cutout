@@ -15,11 +15,13 @@ export function bypassCsp(browser) {
 }
 
 /**
- * Linux runs Playwright's WPE WebKit, whose renderer crashes in the tiny/odd-size
- * HEIC/AVIF encode cases (a recorded environment limit, docs/release-status.md). Those
- * cases skip their WebKit leg there; other platforms still run it.
+ * Linux runs Playwright's WPE WebKit, whose browser can crash mid-test in the export and
+ * route suites (a recorded environment limit, docs/release-status.md). True for that
+ * crash on Linux, so a test can skip its WebKit leg; assertion failures still fail.
  */
-export const webkitCodecCrashes = process.platform === "linux";
+export function webkitCrashed(error) {
+  return process.platform === "linux" && /has been closed/.test(error?.message ?? "");
+}
 
 /**
  * Google Chrome when it is installed; Playwright's bundled Chromium otherwise.
