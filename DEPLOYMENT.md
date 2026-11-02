@@ -200,7 +200,7 @@ Rehearse the full cycle once on a staging deployment (or a throwaway Compose sta
    docker compose ps                                                # both services healthy
    curl --fail https://cutout.example.com/healthz                   # ok
    curl --fail https://cutout.example.com/version.json              # the build just deployed
-   curl -s -o /dev/null -w '%{http_code}\n' https://cutout.example.com/%GG   # 400
+   curl --http1.1 -s -o /dev/null -w '%{http_code}\n' https://cutout.example.com/%GG   # 400
    curl -sI https://cutout.example.com/ | grep -i '^cross-origin-'
    ```
 

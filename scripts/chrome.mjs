@@ -15,6 +15,13 @@ export function bypassCsp(browser) {
 }
 
 /**
+ * Linux runs Playwright's WPE WebKit, whose renderer crashes in the tiny/odd-size
+ * HEIC/AVIF encode cases (a recorded environment limit, docs/release-status.md). Those
+ * cases skip their WebKit leg there; other platforms still run it.
+ */
+export const webkitCodecCrashes = process.platform === "linux";
+
+/**
  * Google Chrome when it is installed; Playwright's bundled Chromium otherwise.
  * Most Linux machines and CI images ship Chromium, not /opt/google/chrome.
  */

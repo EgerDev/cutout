@@ -571,7 +571,7 @@ async function main() {
         else if (step === "tools")
           script +=
             "if [ $(uname -m) = aarch64 ]; then apt-get update; apt-get install -y --no-install-recommends cmake g++ make xz-utils; fi; bash /tmp/install-wabt.sh /tmp/tools";
-        else if (step === "audit") script += "npm audit --audit-level=moderate";
+        else if (step === "audit") script += "npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=high";
         else if (step === "unit") script += "CUTOUT_REQUIRE_TOOLS=1 npm run test:unit";
         else if (step === "mirror")
           script +=

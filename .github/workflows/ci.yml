@@ -54,8 +54,11 @@ jobs:
         env:
           CUTOUT_REQUIRE_TOOLS: "1"
         run: npm run test:unit
+      # Shipped dependencies fail on a moderate advisory; dev-only tooling (lint, types, test) on high.
       - name: Dependency security audit
-        run: npm audit --audit-level=moderate
+        run: |
+          npm audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=high
       - run: npm run build
       - name: Server tests
         env:
@@ -214,7 +217,14 @@ jobs:
       - name: Served identity and malformed-path rejection
         run: |
           curl -fsSk https://localhost/version.json | grep -F "${{ github.sha }}"
-          test "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/%GG)" = "400"
+          # The 400 is HTTP/1.1's answer. Over HTTP/2, which plain curl negotiates, Caddy's Go
+          # stack resets a lexically invalid :path before any response (curl 000, exit 92), so
+          # probe the 400 over HTTP/1.1 and require HTTP/2 to refuse the request promptly: a
+          # success (curl exit 0) or a timeout (exit 28) fails the step.
+          test "$(curl --http1.1 -sk -o /dev/null -w '%{http_code}' https://localhost/%GG)" = "400"
+          rc=0
+          curl -fsSk --max-time 5 https://localhost/%GG || rc=$?
+          case $rc in 0 | 28) exit 1 ;; esac
       - name: Logs
         if: failure()
         run: docker compose logs

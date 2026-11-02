@@ -11,7 +11,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 import { webkit } from "playwright";
-import { bypassCsp, launchChrome } from "./chrome.mjs";
+import { bypassCsp, launchChrome, webkitCodecCrashes } from "./chrome.mjs";
 
 const appUrl = verifiedAppUrl;
 const transparentAvifMessage = "This browser cannot preserve transparency in AVIF. Choose PNG.";
@@ -750,6 +750,10 @@ test("HEIC and opaque AVIF pass tiny/odd checks; nonconforming AVIF alpha is ref
     ["Chrome", () => launchChrome()],
     ["WebKit", async () => bypassCsp(await webkit.launch())],
   ]) {
+    if (name === "WebKit" && webkitCodecCrashes) {
+      t.diagnostic("WebKit leg skipped: Linux WPE WebKit crashes in these encodes");
+      continue;
+    }
     const browser = await launch();
     try {
       const page = await browser.newPage();

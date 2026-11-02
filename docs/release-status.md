@@ -1,11 +1,13 @@
 # Release candidate status
 
-Cutout's implementation and the recorded cross-platform verification are prepared.
-Public release and production hosting have not been authorized or executed.
+The source is public at <https://github.com/EgerDev/cutout>, published as one squashed
+snapshot of the private development tree. No version has been tagged or released, and
+production hosting has not been set up.
 
 ## Verification scope
 
-The product baseline is `620bdad67eeed18dbfe1435951ab202b760c7651`. It includes
+The product baseline is `620bdad67eeed18dbfe1435951ab202b760c7651`, a commit in the private
+development repository. It includes
 the verified application and subsequent test-harness portability fixes. Publication
 cleanup preserves application code, model/runtime pins, lockfile, test assertions
 and third-party source/notices. Its own source/build identity is recorded separately
@@ -43,9 +45,10 @@ history or authorize making that original repository public.
 
 ## Release and hosting
 
-Tests and artifact packaging can run outside GitHub Actions. Optional workflows
-remain as reproducible automation recipes; no successful hosted CI run, signature
-or GitHub-generated attestation is inferred from local verification.
+Tests and artifact packaging can run outside GitHub Actions. Hosted CI runs on the public
+repository; on its Linux runners the WebKit legs of the tiny/odd-size HEIC/AVIF encode
+cases are skipped because WPE WebKit crashes in them. No release, signature or
+GitHub-generated attestation exists yet.
 
 A release needs an exact source/build identity, source/output archives, full
 source/build SBOM, checksums, accurate notes and final publication authorization.

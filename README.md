@@ -6,7 +6,7 @@ art), then you can refine the edge, change the background, frame it for a market
 profile picture, and export it. Images are not uploaded; the server only serves the app.
 
 The [release status](docs/release-status.md) records verified platforms, known limits
-and remaining publication decisions. This is a release candidate.
+and remaining release decisions. No version has been released yet.
 
 ## Features
 
