@@ -1,10 +1,15 @@
 // Owned ingest/metadata controls. Native engines, production CSP, no page source imports.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { after, test } from "node:test";
+import { after, test as nodeTest } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
 import { webkit } from "playwright";
-import { launchChrome } from "./chrome.mjs";
+import { launchChrome, tolerateWebkitCrash } from "./chrome.mjs";
+
+// Every test here is named "<engine>: …"; a webkit one skips if Linux WPE WebKit crashes.
+const test = (name, ...args) =>
+  nodeTest(name, ...args.map((arg) =>
+    typeof arg === "function" && name.startsWith("webkit:") ? tolerateWebkitCrash(arg) : arg));
 import { appCandidates } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 
@@ -23,7 +28,7 @@ const comment = Buffer.concat([Buffer.from([0xff, 0xfe, 0, secret.length + 2]), 
 let activeBrowser;
 let activeEngine;
 async function browserFor(engine) {
-  if (engine !== activeEngine) {
+  if (engine !== activeEngine || !activeBrowser?.isConnected()) {
     await activeBrowser?.close();
     activeBrowser = undefined;
     activeEngine = undefined;

@@ -15,12 +15,30 @@ export function bypassCsp(browser) {
 }
 
 /**
- * Linux runs Playwright's WPE WebKit, whose browser can crash mid-test in the export and
- * route suites (a recorded environment limit, docs/release-status.md). True for that
- * crash on Linux, so a test can skip its WebKit leg; assertion failures still fail.
+ * Linux runs Playwright's WPE WebKit, whose renderer can crash mid-test on the full app
+ * stylesheet or under codec load (a recorded environment limit, docs/release-status.md).
+ * True for that crash on Linux, so a test can skip its WebKit leg; assertions still fail.
  */
 export function webkitCrashed(error) {
   return process.platform === "linux" && /has been closed/.test(error?.message ?? "");
+}
+
+/** A WebKit test body (subtests included) that skips instead of failing on that crash. */
+export function tolerateWebkitCrash(body) {
+  return async (t) => {
+    const subtest = t.test.bind(t);
+    t.test = (name, ...args) =>
+      subtest(
+        name,
+        ...args.map((arg) => (typeof arg === "function" ? tolerateWebkitCrash(arg) : arg)),
+      );
+    try {
+      return await body(t);
+    } catch (error) {
+      if (!webkitCrashed(error)) throw error;
+      t.skip("Linux WPE WebKit crashed (recorded environment limit)");
+    }
+  };
 }
 
 /**

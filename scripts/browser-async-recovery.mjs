@@ -261,8 +261,9 @@ test("batch quality failures isolate one image and retry checks the rest of the 
   await captureError("batch", "Retry batch quality checks");
   const first = page.getByRole("button", { name: /^advanced-1\.png/ });
   const second = page.getByRole("button", { name: /^advanced-2\.png/ });
-  assert.match(await first.textContent(), /Quality check unavailable/);
-  assert.match(await second.textContent(), /Ready/);
+  // Each row settles after the retry control appears; wait for it rather than read once.
+  await first.filter({ hasText: /Quality check unavailable/ }).waitFor();
+  await second.filter({ hasText: /Ready/ }).waitFor();
   await page.evaluate(() => {
     window.failBatch = false;
   });
