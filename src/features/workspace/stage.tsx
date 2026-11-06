@@ -59,6 +59,7 @@ export function Stage({
   const dragging = useRef(false);
   const gpuOnRef = useRef(false);
   const [ready, setReady] = useState(false);
+  const [settled, setSettled] = useState(false);
   const [gpuOn, setGpuOn] = useState(false);
   const [invertChecker, setInvertChecker] = useState(false);
   const resultImage = useDecodedImage(resultUrl);
@@ -94,6 +95,7 @@ export function Stage({
     }
     if (!sourceUrl) {
       setReady(false);
+      setSettled(false);
       return;
     }
     let live = true;
@@ -356,6 +358,7 @@ export function Stage({
         className={cn(
           "stage-media relative overflow-hidden shadow-[var(--shadow-float)]",
           ready && "is-ready",
+          settled && "is-settled",
           ar && "has-ar",
           !gpuOn && showResult && "checker",
           split && "cursor-ew-resize touch-none select-none",
@@ -371,7 +374,7 @@ export function Stage({
         onPointerUp={split ? onPointerUp : undefined}
         onPointerCancel={split ? onPointerUp : undefined}
         onAnimationEnd={(event) => {
-          if (event.target === event.currentTarget) event.currentTarget.classList.add("is-settled");
+          if (event.target === event.currentTarget) setSettled(true);
         }}
       >
         <canvas

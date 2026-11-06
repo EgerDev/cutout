@@ -158,6 +158,25 @@ test("dragging the compare wipe updates --wipe and the slider value, nothing els
   await page.getByRole("button", { name: "Compare" }).click();
   const slider = page.getByRole("slider", { name: "Compare original and result" });
   await slider.waitFor();
+  // Entering compare mode rewrites the stage's className (role, cursor-ew-resize…):
+  // is-settled must be React state so it survives, or stage-in replays and its
+  // animationend adds a class change the observer below would flag.
+  assert.ok(
+    await slider.evaluate((el) => el.classList.contains("is-settled")),
+    "is-settled survives the className rewrite that compare mode triggers",
+  );
+  // fill:both keeps a replayed stage-in in getAnimations() even after it ends,
+  // so an empty list here is the deterministic proof nothing re-ran.
+  assert.equal(
+    await slider.evaluate((el) => el.getAnimations().length),
+    0,
+    "entering compare must not restart the stage-in animation",
+  );
+  // With is-settled persisted (animation: none) this resolves at once; it stays as a
+  // guard so any regression that re-runs stage-in finishes before the observer installs.
+  await slider.evaluate((el) =>
+    Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {}))),
+  );
   const gpuBefore = await slider.getAttribute("data-gpu");
   await slider.evaluate((el) => {
     window.__stageMutations = [];
