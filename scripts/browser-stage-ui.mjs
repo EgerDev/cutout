@@ -75,6 +75,47 @@ async function settled(page, count = 1) {
   await page.locator(".workspace-frame .stage-media.is-ready.is-settled").waitFor();
 }
 
+/** Record before a className rewrite: animationend can erase both symptoms afterward. */
+async function watchStageEntrance(stage) {
+  return stage.evaluateHandle((el) => {
+    let classLost = false;
+    let animationStarts = 0;
+    const recordClasses = (records) => {
+      // oldValue retains a transient loss even if the class is restored in the same task.
+      if (
+        records.length &&
+        (!el.classList.contains("is-settled") ||
+          records.some((record) => !record.oldValue?.split(/\s+/).includes("is-settled")))
+      )
+        classLost = true;
+    };
+    const observer = new MutationObserver(recordClasses);
+    observer.observe(el, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+    const onStart = (event) => {
+      if (event.target === el && event.animationName === "stage-in") animationStarts++;
+    };
+    el.addEventListener("animationstart", onStart);
+    return {
+      read() {
+        recordClasses(observer.takeRecords());
+        return { classLost, animationStarts };
+      },
+      stop() {
+        observer.disconnect();
+        el.removeEventListener("animationstart", onStart);
+      },
+    };
+  });
+}
+
+async function assertNoStageEntranceReplay(recorder) {
+  assert.deepEqual(
+    await recorder.evaluate((recording) => recording.read()),
+    { classLost: false, animationStarts: 0 },
+    "a className rewrite restarted the stage entrance",
+  );
+}
+
 /** RGBA at fractional points of an element's screenshot. */
 async function pixels(page, locator, points) {
   const png = await locator.screenshot({ animations: "disabled" });
@@ -155,28 +196,11 @@ test("the stage keeps showing the photo while the compositor's images decode", a
 test("dragging the compare wipe updates --wipe and the slider value, nothing else", async (t) => {
   const page = await open(t);
   await upload(page);
+  const entrance = await watchStageEntrance(page.locator(".stage-media"));
   await page.getByRole("button", { name: "Compare" }).click();
   const slider = page.getByRole("slider", { name: "Compare original and result" });
   await slider.waitFor();
-  // Entering compare mode rewrites the stage's className (role, cursor-ew-resize…):
-  // is-settled must be React state so it survives, or stage-in replays and its
-  // animationend adds a class change the observer below would flag.
-  assert.ok(
-    await slider.evaluate((el) => el.classList.contains("is-settled")),
-    "is-settled survives the className rewrite that compare mode triggers",
-  );
-  // fill:both keeps a replayed stage-in in getAnimations() even after it ends,
-  // so an empty list here is the deterministic proof nothing re-ran.
-  assert.equal(
-    await slider.evaluate((el) => el.getAnimations().length),
-    0,
-    "entering compare must not restart the stage-in animation",
-  );
-  // With is-settled persisted (animation: none) this resolves at once; it stays as a
-  // guard so any regression that re-runs stage-in finishes before the observer installs.
-  await slider.evaluate((el) =>
-    Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {}))),
-  );
+  await assertNoStageEntranceReplay(entrance);
   const gpuBefore = await slider.getAttribute("data-gpu");
   await slider.evaluate((el) => {
     window.__stageMutations = [];
@@ -217,6 +241,48 @@ test("dragging the compare wipe updates --wipe and the slider value, nothing els
     "the spoken value says which side is which",
   );
   assert.equal(await slider.getAttribute("data-gpu"), gpuBefore, "the renderer stayed attached");
+  await assertNoStageEntranceReplay(entrance);
+  await entrance.evaluate((recording) => recording.stop());
+  await entrance.dispose();
+});
+
+test("the entrance recorder detects a replay even after animationend restores the stage", async (t) => {
+  const page = await open(t);
+  await upload(page);
+  const stage = page.locator(".stage-media");
+  const entrance = await watchStageEntrance(stage);
+  await page.getByRole("button", { name: "Compare" }).click();
+  // Simulate the original bug without modifying product code: React dropped the class,
+  // then the old animationend handler added it back. Read only after that recovery.
+  await stage.evaluate((el) => {
+    const restore = (event) => {
+      if (event.target !== el || event.animationName !== "stage-in") return;
+      el.removeEventListener("animationend", restore);
+      el.classList.add("is-settled");
+    };
+    el.addEventListener("animationend", restore);
+    el.classList.remove("is-settled");
+  });
+  await stage.and(page.locator(".is-settled")).waitFor();
+  // A delayed runner sees healthy snapshots, but the recorder retains the replay.
+  assert.equal(await stage.evaluate((el) => el.classList.contains("is-settled")), true);
+  assert.equal(await stage.evaluate((el) => el.getAnimations().length), 0);
+  await assert.rejects(assertNoStageEntranceReplay(entrance), /restarted the stage entrance/);
+  assert.deepEqual(await entrance.evaluate((recording) => recording.read()), {
+    classLost: true,
+    animationStarts: 1,
+  });
+  await entrance.evaluate((recording) => recording.stop());
+  await entrance.dispose();
+
+  const transient = await watchStageEntrance(stage);
+  await stage.evaluate((el) => {
+    el.classList.remove("is-settled");
+    el.classList.add("is-settled");
+  });
+  await assert.rejects(assertNoStageEntranceReplay(transient), /restarted the stage entrance/);
+  await transient.evaluate((recording) => recording.stop());
+  await transient.dispose();
 });
 
 test("compare shows the original file on the source side of the wipe", async (t) => {
