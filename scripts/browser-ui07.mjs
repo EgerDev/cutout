@@ -13,10 +13,10 @@ import { appCandidates, e2eUrl } from "./app-url.mjs";
 import { requireCutout } from "./require-server.mjs";
 
 const appUrl = await requireCutout(appCandidates());
-async function poll(page, predicate) {
+async function poll(page, predicate, arg) {
   const until = Date.now() + 20000;
   while (Date.now() < until) {
-    if (await page.evaluate(predicate)) return;
+    if (await page.evaluate(predicate, arg)) return;
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   throw new Error("UI-07 poll timed out");
@@ -32,8 +32,9 @@ async function fixture(engine, run) {
     context = await browser.newContext({ bypassCSP: false, acceptDownloads: true });
   }
   const errors = [];
+  let page;
   try {
-    const page = await context.newPage();
+    page = await context.newPage();
     page.setDefaultTimeout(20000);
     page.on("pageerror", (error) => errors.push(String(error)));
     await page.addInitScript(() => {
@@ -57,13 +58,47 @@ async function fixture(engine, run) {
     });
     await run(page, context);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    let diagnosticTimer;
+    const state = await Promise.race([
+      page
+        ?.evaluate(() => {
+          const state = window.__cutoutTest?.useWorkspace.getState();
+          return {
+            phase: state?.phase,
+            activeId: state?.activeId,
+            progress: state?.progress,
+            errorMessage: state?.errorMessage,
+            items: state?.items.map(({ id, status, error, width, height }) => ({
+              id,
+              status,
+              error,
+              width,
+              height,
+            })),
+            toolbars: document.querySelectorAll('[role="toolbar"][aria-label="Image actions"]')
+              .length,
+          };
+        })
+        .catch((failure) => ({ unavailable: String(failure) })),
+      new Promise((resolve) => {
+        diagnosticTimer = setTimeout(
+          () => resolve({ unavailable: "diagnostic read timed out" }),
+          1000,
+        );
+      }),
+    ]).finally(() => clearTimeout(diagnosticTimer));
+    // Preserve the original exception: a later diagnostic closure is not evidence
+    // that the failed operation was a WebKit crash.
+    console.error(`UI-07 ${engine} failure state: ${JSON.stringify({ state, errors })}`);
+    throw error;
   } finally {
     await context?.close();
     await browser?.close();
   }
 }
 async function graphic(page, count = 1) {
-  await page.evaluate(async (count) => {
+  const accepted = await page.evaluate(async (count) => {
     const c = document.createElement("canvas");
     c.width = c.height = 48;
     const x = c.getContext("2d");
@@ -72,7 +107,7 @@ async function graphic(page, count = 1) {
     x.fillStyle = "black";
     x.fillRect(12, 12, 24, 24);
     const blob = await new Promise((resolve) => c.toBlob(resolve));
-    window.__cutoutTest.useWorkspace
+    const receipt = await window.__cutoutTest.useWorkspace
       .getState()
       .receiveFiles(
         Array.from(
@@ -80,9 +115,18 @@ async function graphic(page, count = 1) {
           (_, i) => new File([blob], `graphic-${i}.png`, { type: "image/png" }),
         ),
       );
+    return receipt?.items.length ?? 0;
   }, count);
-  await poll(page, () =>
-    window.__cutoutTest.useWorkspace.getState().items.every((i) => i.status === "done"),
+  assert.equal(accepted, count, "UI-07 graphic ingestion must accept every fixture image");
+  await poll(
+    page,
+    (count) => {
+      const state = window.__cutoutTest.useWorkspace.getState();
+      const failed = state.items.find((item) => item.status === "error");
+      if (failed) throw new Error(`UI-07 graphic processing failed: ${failed.error}`);
+      return state.items.length === count && state.items.every((item) => item.status === "done");
+    },
+    count,
   );
   await page.getByRole("toolbar", { name: "Image actions" }).waitFor();
 }
@@ -206,6 +250,44 @@ async function exportFile(page, kind) {
   if (kind !== "download") await closeDialog(page);
   await guard(page, false, `${kind} actual export marks its results saved`);
 }
+
+test("UI-07 setup reports refused ingestion without waiting for an absent toolbar", async () =>
+  fixture("chromium", async (page) => {
+    await page.evaluate(() => {
+      window.__cutoutTest.useWorkspace.setState({
+        receiveFiles: async () => {
+          // Keep the store empty through several polling turns: [].every(done) is true.
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          return null;
+        },
+      });
+    });
+    await assert.rejects(graphic(page), /graphic ingestion must accept every fixture image/);
+  }));
+
+test("UI-07 setup reports a failed image before waiting for its toolbar", async () =>
+  fixture("chromium", async (page) => {
+    await page.evaluate(() => {
+      const store = window.__cutoutTest.useWorkspace;
+      const receiveFiles = store.getState().receiveFiles;
+      store.setState({
+        receiveFiles: async (files) => {
+          const receipt = await receiveFiles(files);
+          // Stop real work first so it cannot overwrite the terminal fixture error.
+          store.getState().cancelProcessing();
+          store.setState({
+            items: store.getState().items.map((item) => ({
+              ...item,
+              status: "error",
+              error: "fixture decoder failed",
+            })),
+          });
+          return receipt;
+        },
+      });
+    });
+    await assert.rejects(graphic(page), /graphic processing failed: fixture decoder failed/);
+  }));
 
 for (const engine of ["chromium", "webkit"]) {
   test(`UI-07 local save/resume/delete/resave and edit/undo in ${engine}`, async () =>
