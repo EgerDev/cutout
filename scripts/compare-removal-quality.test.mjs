@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import fsPromises, { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { alphaMetrics } from "./benchmark/quality.mjs";
+import { decodedOutput } from "./compare-removal-quality.mjs";
 
 test("known-alpha metrics distinguish an exact mask from an eroded edge", () => {
   const truth = Uint8Array.from([0, 0, 0, 0, 0, 64, 192, 0, 0, 255, 255, 0, 0, 0, 0, 0]);
@@ -605,4 +607,34 @@ test("default pair-0 shared output still fails without quality-only row context"
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /known-a outputs must be independent regular PNG files/);
   assert.doesNotMatch(result.stderr, /pair 0 \(/);
+});
+
+test("the scorer reads the checked inode even if its pathname is replaced", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "cutout-quality-race-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "output.png");
+  const original = await png(rgba(1));
+  const replacement = await png(rgba(2));
+  await writeFile(path, original);
+  const open = fsPromises.open;
+  t.mock.method(fsPromises, "open", async (...args) => {
+    const handle = await open(...args);
+    const stat = handle.stat.bind(handle);
+    handle.stat = async () => {
+      const checked = await stat();
+      await rename(path, join(dir, "original.png"));
+      await writeFile(path, replacement);
+      return checked;
+    };
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try {
+    const result = await decodedOutput(path);
+    assert.equal(result.identity.pngSha256, sha256(original));
+    assert.equal(sha256(await readFile(path)), sha256(replacement));
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
 });

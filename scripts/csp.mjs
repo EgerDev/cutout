@@ -7,7 +7,9 @@ import { createHash } from "node:crypto";
  */
 export function inlineScriptHashes(html) {
   const hashes = [];
-  for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi))
+  for (const [, attributes, body] of html.matchAll(
+    /<script\b([^>]*)>([\s\S]*?)<\/script(?=[\t\n\f\r />])[^>]*>/gi,
+  ))
     if (!/\bsrc\s*=/i.test(attributes)) {
       const text = body.replace(/\r\n?/g, "\n").replace(/\0/g, "�");
       hashes.push(`sha256-${createHash("sha256").update(text, "utf8").digest("base64")}`);

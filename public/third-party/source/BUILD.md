@@ -35,7 +35,9 @@ emits it as its own chunk (re-minified, same code).
 | `libde265-1.1.3.tar.gz`                          | `554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905` | https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz                        |
 | `libheif-1.23.5-emscripten-libde265-cmake.patch` | `04cde97f8e317fba97e65096f10d8e5f0a7da1709c0d62446f712ea59a639ca0` | our change to libheif's `build-emscripten.sh`                                                                |
 | `heic-to-1.5.2-emscripten5.patch`                | `53210d1c0e4a90b47d2a8462bf982efd6ad3338458e92ca3b9f4ac9e81dcb09d` | our change to heic-to's `src/worker.js` and `esbuild.mjs`                                                    |
-| `build-heic-to.sh`                               | `b89dc304a904f90fc3c733a6da9cf31a9a20ab98b30ef9fd8e160d798a91361c` | the build script below                                                                                       |
+| `build-heic-to.sh`                               | `0c27ccca8a44aead9b4a533fdcc64954e17ba2a95389e1f3790820af21c0430c` | the build script below                                                                                       |
+| `heic-build-tools/package.json` | `87abe01e9610e6caab1ae6bed1a0df85e51015671c167f6f2abe941a18e7947c` | isolated esbuild 0.25.12 build-tool inputs |
+| `heic-build-tools/package-lock.json` | `5088ac4d843419d1c5b54431adaeedc859842a38ed84711cabb86f7bccbf06d8` | isolated esbuild 0.25.12 build-tool inputs |
 
 The two upstream archives are the release assets GitHub publishes for those tags;
 their SHA-256 matches the `digest` GitHub reports for each asset
@@ -90,8 +92,13 @@ once and can exhaust Docker Desktop's memory.
 2. Unpacks heic-to 1.5.2, applies `heic-to-1.5.2-emscripten5.patch`, and replaces
    `src/lib/libheif-without-unsafe-eval.js` with the new `libheif.js` plus
    `export default libheif` (the same shape heic-to ships).
-3. Installs esbuild 0.25.12 (the version in heic-to v1.5.2's `package-lock.json`)
-   and runs heic-to's own `node esbuild.mjs`.
+3. Copies the isolated `heic-build-tools` manifest and lock into the temporary
+   build root, then installs esbuild 0.25.12 with `npm ci --ignore-scripts
+   --include=optional`. The lock records SHA-512 integrity for esbuild and each
+   native platform package; optional packages are included so no postinstall
+   download fallback is needed. This excludes heic-to's unrelated development
+   server dependencies. Runs heic-to's own `node esbuild.mjs`, which resolves
+   esbuild from the parent build root's `node_modules`.
 4. Copies `dist/csp/heic-to.js` to `out/csp.js` and `dist/csp/heic-to.d.ts` to
    `out/csp.d.ts`.
 

@@ -5,10 +5,15 @@ import { createHash } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
+  constants,
+  fstatSync,
   existsSync,
+  linkSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readFileSync,
+  readSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -193,9 +198,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // searches .exe, so a test double that is an extensionless sh script can never be
 // spawned as "docker" there; CUTOUT_DOCKER overrides it as a JSON argv array
 // (e.g. '["sh","C:/tools/docker-fake"]') so spaced paths stay unambiguous.
-const DOCKER_CMD = process.env.CUTOUT_DOCKER
-  ? JSON.parse(process.env.CUTOUT_DOCKER)
-  : ["docker"];
+const DOCKER_CMD = process.env.CUTOUT_DOCKER ? JSON.parse(process.env.CUTOUT_DOCKER) : ["docker"];
 if (
   !Array.isArray(DOCKER_CMD) ||
   DOCKER_CMD.length === 0 ||
@@ -211,6 +214,67 @@ function capture(cmd, args) {
   if (p.status !== 0) throw new Error(`${cmd}: ${p.stderr || p.stdout}`);
   return p.stdout.trim();
 }
+
+export function claimCommit(file, commit) {
+  const staging = mkdtempSync(`${file}.`);
+  try {
+    const complete = resolve(staging, "commit");
+    writeFileSync(complete, `${commit}\n`, { flag: "wx", mode: 0o600 });
+    try {
+      // Publish complete contents without replacing another process's marker.
+      linkSync(complete, file);
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const fd = openSync(
+        file,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+      );
+      try {
+        if (!fstatSync(fd).isFile() || readFileSync(fd, "utf8").trim() !== commit)
+          throw new Error("Log directory belongs to another commit", { cause: error });
+      } finally {
+        closeSync(fd);
+      }
+    }
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+export function createStepLog(stem) {
+  for (let attempt = 1; ; attempt++) {
+    const path = attempt === 1 ? `${stem}.log` : `${stem}.attempt-${attempt}.log`;
+    try {
+      return { path, fd: openSync(path, "wx+", 0o600) };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+  }
+}
+
+function readStepLog(fd) {
+  const buffer = Buffer.alloc(fstatSync(fd).size);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const count = readSync(fd, buffer, offset, buffer.length - offset, offset);
+    if (!count) break;
+    offset += count;
+  }
+  return buffer.subarray(0, offset).toString("utf8");
+}
+
+// Paths and environment-derived values are argv, never interpolated shell source.
+export const DOCKER_STACK_SCRIPT = `set -e
+log=$1; port=$2; commit=$3; shift 3
+compose=("$@")
+cleanup() { "\${compose[@]}" logs > "$log" 2>&1 || true; "\${compose[@]}" down -v; }
+trap cleanup EXIT
+"\${compose[@]}" up -d --build --wait
+curl -fsSk --retry 10 --retry-all-errors --retry-delay 2 "https://localhost:$port/healthz"
+curl -fsSk "https://localhost:$port/version.json" | grep -F -- "$commit"
+test "$(curl --http1.1 -sk -o /dev/null -w '%{http_code}' "https://localhost:$port/%GG")" = 400
+! curl -fsSk --max-time 5 "https://localhost:$port/%GG"
+`;
 
 async function main() {
   const args = process.argv.slice(2);
@@ -257,9 +321,7 @@ async function main() {
   const source = resolve(logs, "source");
   const commit = capture("git", ["rev-parse", `${opts.ref || "HEAD"}^{commit}`]);
   const previous = resolve(logs, "commit");
-  if (existsSync(previous) && readFileSync(previous, "utf8").trim() !== commit)
-    throw new Error("Log directory belongs to another commit");
-  writeFileSync(previous, `${commit}\n`);
+  claimCommit(previous, commit);
   const selected = opts.job && opts.job !== "all" ? [opts.job] : Object.keys(jobs);
   for (const job of selected) if (!jobs[job]) throw new Error(`Unknown job: ${job}`);
   if (opts.step && !selected.every((job) => jobs[job].includes(opts.step)))
@@ -280,7 +342,12 @@ async function main() {
     resolve(logs, "ports.yaml"),
     `services:\n  proxy:\n    ports: !override\n      - "127.0.0.1:${port}:443"\n`,
   );
-  const composeEnv = `export CUTOUT_DOMAIN=localhost GITHUB_SHA=${quote(commit)} CUTOUT_IMAGE=${id}:app; `;
+  const composeEnv = {
+    ...process.env,
+    CUTOUT_DOMAIN: "localhost",
+    GITHUB_SHA: commit,
+    CUTOUT_IMAGE: `${id}:app`,
+  };
   let lockHeld = false;
   let child;
   const release = () => {
@@ -309,7 +376,7 @@ async function main() {
   };
   process.once("SIGTERM", () => interrupt(143));
   process.once("SIGINT", () => interrupt(130));
-  async function run(job, step, cmd, argv) {
+  async function run(job, step, cmd, argv, env = process.env) {
     if (opts.lock) {
       while (true) {
         try {
@@ -327,14 +394,14 @@ async function main() {
       );
     }
     const stem = resolve(logs, `${job}-${step.replaceAll(":", "-")}`);
-    let path = `${stem}.log`;
-    for (let attempt = 2; existsSync(path); attempt++) path = `${stem}.attempt-${attempt}.log`;
-    const fd = openSync(path, "w");
+    let path, fd;
+    try {
+      ({ path, fd } = createStepLog(stem));
+    } catch (error) {
+      release();
+      throw error;
+    }
     const start = Date.now();
-    writeFileSync(
-      fd,
-      `${JSON.stringify({ commit, cmd, args: argv, start: new Date(start).toISOString() })}\n`,
-    );
     const requireTests = ![
       "container",
       "install",
@@ -349,11 +416,16 @@ async function main() {
     ].includes(step);
     let code;
     let totals;
+    let suiteLog;
     let finished;
     let timeout;
     let kill;
     let timedOut = false;
     try {
+      writeFileSync(
+        fd,
+        `${JSON.stringify({ commit, cmd, args: argv, start: new Date(start).toISOString() })}\n`,
+      );
       if (cmd === "docker" && argv[0] === "exec") {
         dockerCapture(["start", `${id}-${job}`]);
         if (job === "dev-server" && step !== "install")
@@ -369,8 +441,13 @@ async function main() {
             `mkdir -p ${REAL_MODEL_PROFILE} && chown -R pwuser:pwuser ${REAL_MODEL_PROFILE}`,
           ]);
       }
-      const [spawnCmd, spawnArgv] = cmd === "docker" ? dockerCall(argv) : [cmd, argv];
-      child = spawn(spawnCmd, spawnArgv, { cwd: source, detached: true, stdio: ["ignore", fd, fd] });
+      const options = { cwd: source, detached: true, stdio: ["ignore", fd, fd], env };
+      if (cmd !== "docker" && cmd !== "bash")
+        throw new Error(`Unsupported harness command: ${cmd}`);
+      child =
+        cmd === "docker"
+          ? spawn(...dockerCall(argv), options)
+          : spawn("bash", ["-c", DOCKER_STACK_SCRIPT, "--", ...argv], options);
       timeout = setTimeout(() => {
         timedOut = true;
         process.kill(-child.pid, "SIGTERM");
@@ -392,23 +469,29 @@ async function main() {
     } finally {
       clearTimeout(timeout);
       clearTimeout(kill);
-      totals = tapTotals(readFileSync(path, "utf8"));
-      const incompleteSuite = requireTests && !(totals.tests > 0 && totals.pass !== null);
-      if (timedOut || incompleteSuite) {
-        if (cmd === "docker" && argv[0] === "exec")
-          dockerSync(["stop", "-t", "5", `${id}-${job}`]);
-        if (job === "docker")
-          dockerSync([...compose, "down", "-v"], {
-            env: { ...process.env, CUTOUT_DOMAIN: "localhost", CUTOUT_IMAGE: `${id}:app` },
-          });
+      try {
+        suiteLog = readStepLog(fd);
+        totals = tapTotals(suiteLog);
+        const incompleteSuite = requireTests && !(totals.tests > 0 && totals.pass !== null);
+        if (timedOut || incompleteSuite) {
+          if (cmd === "docker" && argv[0] === "exec")
+            dockerSync(["stop", "-t", "5", `${id}-${job}`]);
+          if (job === "docker")
+            dockerSync([...compose, "down", "-v"], {
+              env: { ...process.env, CUTOUT_DOMAIN: "localhost", CUTOUT_IMAGE: `${id}:app` },
+            });
+        }
+      } finally {
+        finished = Date.now();
+        child = undefined;
+        try {
+          closeSync(fd);
+        } finally {
+          release();
+        }
       }
-      finished = Date.now();
-      child = undefined;
-      closeSync(fd);
-      release();
     }
     await sleep(200);
-    const suiteLog = readFileSync(path, "utf8");
     const skipNames = skippedTestNames(suiteLog);
     const unexpected = unexpectedSkips(skipNames, {
       job,
@@ -458,10 +541,13 @@ async function main() {
   if (opts.cleanup) {
     for (const job of Object.keys(jobs).filter((j) => j !== "docker"))
       dockerSync(["rm", "-f", `${id}-${job}`]);
-    await run("docker", "cleanup", "bash", [
-      "-c",
-      `${composeEnv}${["docker", ...compose, "down", "-v", "--remove-orphans"].map(quote).join(" ")}`,
-    ]);
+    await run(
+      "docker",
+      "cleanup",
+      "docker",
+      [...compose, "down", "-v", "--remove-orphans"],
+      composeEnv,
+    );
     return;
   }
   const failures = [];
@@ -571,7 +657,8 @@ async function main() {
         else if (step === "tools")
           script +=
             "if [ $(uname -m) = aarch64 ]; then apt-get update; apt-get install -y --no-install-recommends cmake g++ make xz-utils; fi; bash /tmp/install-wabt.sh /tmp/tools";
-        else if (step === "audit") script += "npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=high";
+        else if (step === "audit")
+          script += "npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=high";
         else if (step === "unit") script += "CUTOUT_REQUIRE_TOOLS=1 npm run test:unit";
         else if (step === "mirror")
           script +=
@@ -633,12 +720,14 @@ async function main() {
           dockerCapture(["cp", `${name}:${WORKDIR}/.output`, resolve(logs, "linux-output")]);
       }
     } else {
-      const c = ["docker", ...compose].map(quote).join(" ");
       try {
-        await run(job, "stack", "bash", [
-          "-c",
-          `set -e; ${composeEnv}cleanup() { ${c} logs > ${quote(resolve(logs, "compose.log"))} 2>&1; ${c} down -v; }; trap cleanup EXIT; ${c} up -d --build --wait; curl -fsSk --retry 10 --retry-all-errors --retry-delay 2 https://localhost:${port}/healthz; curl -fsSk https://localhost:${port}/version.json | grep -F ${quote(commit)}; test "$(curl --http1.1 -sk -o /dev/null -w '%{http_code}' https://localhost:${port}/%GG)" = 400; ! curl -fsSk --max-time 5 https://localhost:${port}/%GG`,
-        ]);
+        await run(
+          job,
+          "stack",
+          "bash",
+          [resolve(logs, "compose.log"), String(port), commit, ...DOCKER_CMD, ...compose],
+          composeEnv,
+        );
       } catch (e) {
         failures.push(e.message);
       }

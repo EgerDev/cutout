@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { request } from "node:http";
 import { once } from "node:events";
@@ -342,10 +342,17 @@ test("the shipped server manifest carries no build-machine paths", { skip }, asy
   }
   // Nothing else in the artifact may embed the checkout path either.
   const leaked = [];
-  for (const file of readdirSync(output, { recursive: true })) {
-    const full = join(output, file);
-    if (!statSync(full).isFile() || statSync(full).size > 8 * 1024 * 1024) continue;
-    if (readFileSync(full).includes(process.cwd())) leaked.push(file);
+  for (const entry of readdirSync(output, { recursive: true, withFileTypes: true })) {
+    if (entry.isDirectory()) continue;
+    const full = join(entry.parentPath, entry.name);
+    const fd = openSync(full, "r");
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.size > 8 * 1024 * 1024) continue;
+      if (readFileSync(fd).includes(process.cwd())) leaked.push(full);
+    } finally {
+      closeSync(fd);
+    }
   }
   assert.deepEqual(leaked, [], "checkout path embedded in the build output");
 });
