@@ -595,6 +595,91 @@ test("opening Adjust or Info does not move the photo or the file name", async (t
   }
 });
 
+// Native focus may reach a sheet after its inert timer expires while the compositor
+// is still sliding it in. Keep that moment deterministic without relying on CPU load.
+for (const direction of ["ltr", "rtl"]) {
+  test(`focusing a sliding sheet cannot scroll the workspace (${direction})`, async (t) => {
+    const page = await open(t);
+    await page.evaluate((dir) => (document.documentElement.dir = dir), direction);
+    await upload(page);
+    const measure = () =>
+      page.evaluate(() => ({
+        stage: document.querySelector(".stage-media").getBoundingClientRect().toJSON(),
+        name: document.querySelector(".image-summary [title]").getBoundingClientRect().toJSON(),
+        scroll: [...document.querySelectorAll("html, body, .workspace-frame")].map((el) => [
+          el.scrollLeft,
+          el.scrollTop,
+        ]),
+      }));
+    const before = await measure();
+    for (const [name, id] of [
+      ["Adjust", "#cutout-adjust"],
+      ["Info", "#cutout-info"],
+    ]) {
+      const paused = await page
+        .getByRole("button", { name, exact: true })
+        .evaluate((button, id) => {
+          button.click();
+          return new Promise((resolve) =>
+            requestAnimationFrame(() => {
+              const transition = document
+                .querySelector(id)
+                .getAnimations()
+                .find((animation) => animation.transitionProperty === "translate");
+              if (!transition) return resolve(false);
+              transition.pause();
+              transition.currentTime = 0;
+              resolve(true);
+            }),
+          );
+        }, id);
+      assert.equal(paused, true, `${name} has a slide transition to pause`);
+      await page.waitForFunction((id) => !document.querySelector(id).inert, id);
+      const focused = await page.locator(id).evaluate((el) => {
+        const button = el.querySelector("button");
+        button.focus();
+        return document.activeElement === button;
+      });
+      assert.equal(focused, true, `${name} remains keyboard focusable`);
+      assert.deepEqual(await measure(), before, `${name} focus scrolled the fixed workspace`);
+      await page
+        .locator(id)
+        .evaluate((el) => el.getAnimations().forEach((animation) => animation.finish()));
+      assert.deepEqual(await measure(), before, `${name} left a scroll offset after opening`);
+      await page.keyboard.press("Escape");
+      await page.locator(`${id}[aria-hidden="true"]`).waitFor();
+      await page
+        .locator(id)
+        .evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+    }
+  });
+}
+
+for (const [label, width, height] of [
+  ["desktop", 1280, 800],
+  ["phone", 390, 844],
+]) {
+  test(`the Adjust sheet still scrolls within the fixed workspace (${label})`, async (t) => {
+    const page = await open(t, { width, height });
+    await upload(page);
+    await openSheet(page, "Adjust");
+    const scroller = page.locator(
+      label === "desktop" ? "#cutout-adjust .sheet-scroll" : "#cutout-adjust",
+    );
+    const box = await scroller.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 500);
+    await page.waitForFunction(
+      (selector) => document.querySelector(selector).scrollTop > 0,
+      label === "desktop" ? "#cutout-adjust .sheet-scroll" : "#cutout-adjust",
+    );
+    assert.deepEqual(
+      await page.locator(".workspace-frame").evaluate((el) => [el.scrollLeft, el.scrollTop]),
+      [0, 0],
+    );
+  });
+}
+
 test("Choose subject fits the photo and offers zoom, undo, redo, show original and Apply", async (t) => {
   const page = await open(t);
   await upload(page);
