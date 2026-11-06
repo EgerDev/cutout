@@ -68,8 +68,7 @@ function snapshot(dir) {
 }
 
 // Each target in the shapes the script matches (the GatherND regexes allow optional spaces).
-const chain =
-  "        ? (webInferenceChain = webInferenceChain.then(run))\n        result = buffer;\n    }";
+const chain = "        ? (webInferenceChain = webInferenceChain.then(run))\n        result = buffer;\n    }";
 const inputDims = (v) =>
   `\${${v}.length === 1 ? "index += i32(uniforms.input_dims);" : "index += i32(uniforms.input_dims[input_dim_idx]);"}`;
 const sliceDims = (v) =>
@@ -102,9 +101,7 @@ for (const fault of ["write-error", "kill", "rename-error"]) {
     // Inject a real partial filesystem write in a separate process, without touching
     // the installed dependencies. This catches in-place truncation, not just API use.
     const preload = path.join(dir, "fault.mjs");
-    fs.writeFileSync(
-      preload,
-      `
+    fs.writeFileSync(preload, `
       import fs from "node:fs";
       const target = ${JSON.stringify(target)};
       const fault = ${JSON.stringify(fault)};
@@ -131,25 +128,24 @@ for (const fault of ["write-error", "kill", "rename-error"]) {
           throw Object.assign(new Error("synthetic rename failure"), { code: "EIO" });
         return rename.call(this, from, to);
       };
-    `,
-    );
+    `);
     // --import takes a URL on Windows (a bare C:\ path parses as scheme "c:").
-    const result = spawnSync(
-      process.execPath,
-      ["--import", pathToFileURL(preload).href, script, dir],
-      {
-        encoding: "utf8",
-      },
-    );
+    const result = spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, script, dir], {
+      encoding: "utf8",
+    });
     // Windows terminates the process without a signal: exit code 1, signal null.
     if (fault === "kill" && process.platform !== "win32")
       assert.equal(result.signal, "SIGKILL", result.stderr);
-    else if (fault === "kill") assert.equal(result.status, 1, result.stderr);
+    else if (fault === "kill")
+      assert.equal(result.status, 1, result.stderr);
     else assert.notEqual(result.status, 0, "a failed publication must fail the install");
     assert.equal(fs.readFileSync(target, "utf8"), original, "no truncated or partial target");
     // POSIX mode bits survive the failed publication. Windows has no rwx bits to
     // preserve: chmod maps onto the read-only flag, so a writable file is 0o666.
-    assert.equal(fs.statSync(target).mode & 0o777, process.platform === "win32" ? 0o666 : 0o751);
+    assert.equal(
+      fs.statSync(target).mode & 0o777,
+      process.platform === "win32" ? 0o666 : 0o751,
+    );
     if (fault !== "kill")
       assert.deepEqual(fs.readdirSync(path.dirname(target)), [path.basename(target)]);
     // A fresh process can recover; a killed process may leave an unused temporary file.
@@ -312,18 +308,14 @@ test("a changed onnxruntime shader fails the install", (t) => {
   assert.match(result.stderr, /ort\.bundle\.min\.mjs/);
 });
 
+
 test("the hub hook rejects before either cache publication or returning the buffer", async () => {
   const code = fs.readFileSync(path.join(root, webFile), "utf8");
-  const start = code.indexOf(
-    "        await _env_js__WEBPACK_IMPORTED_MODULE_2__.env.customCache?.verify?.",
-  );
+  const start = code.indexOf("        await _env_js__WEBPACK_IMPORTED_MODULE_2__.env.customCache?.verify?.");
   assert.ok(start >= 0);
   const end = code.indexOf("\n    }", start);
   const fragment = code.slice(start, end);
-  const runBuffer = new Function(
-    "_env_js__WEBPACK_IMPORTED_MODULE_2__",
-    "buffer",
-    `
+  const runBuffer = new Function("_env_js__WEBPACK_IMPORTED_MODULE_2__", "buffer", `
     return (async () => {
       const path_or_repo_id = "model", filename = "config.json", revision = "pin";
       let result;
@@ -331,21 +323,11 @@ test("the hub hook rejects before either cache publication or returning the buff
       await _env_js__WEBPACK_IMPORTED_MODULE_2__.env.customCache.put();
       return result;
     })();
-  `,
-  );
+  `);
   const bytes = new Uint8Array([1, 2, 3]);
   let puts = 0;
   const reason = new Error("bad bytes");
-  const env = {
-    customCache: {
-      verify() {
-        throw reason;
-      },
-      put() {
-        puts++;
-      },
-    },
-  };
+  const env = { customCache: { verify() { throw reason; }, put() { puts++; } } };
   await assert.rejects(runBuffer({ env }, bytes), (error) => error === reason);
   assert.equal(puts, 0);
   env.customCache.verify = () => {};

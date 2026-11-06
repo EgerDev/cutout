@@ -193,7 +193,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // searches .exe, so a test double that is an extensionless sh script can never be
 // spawned as "docker" there; CUTOUT_DOCKER overrides it as a JSON argv array
 // (e.g. '["sh","C:/tools/docker-fake"]') so spaced paths stay unambiguous.
-const DOCKER_CMD = process.env.CUTOUT_DOCKER ? JSON.parse(process.env.CUTOUT_DOCKER) : ["docker"];
+const DOCKER_CMD = process.env.CUTOUT_DOCKER
+  ? JSON.parse(process.env.CUTOUT_DOCKER)
+  : ["docker"];
 if (
   !Array.isArray(DOCKER_CMD) ||
   DOCKER_CMD.length === 0 ||
@@ -368,11 +370,7 @@ async function main() {
           ]);
       }
       const [spawnCmd, spawnArgv] = cmd === "docker" ? dockerCall(argv) : [cmd, argv];
-      child = spawn(spawnCmd, spawnArgv, {
-        cwd: source,
-        detached: true,
-        stdio: ["ignore", fd, fd],
-      });
+      child = spawn(spawnCmd, spawnArgv, { cwd: source, detached: true, stdio: ["ignore", fd, fd] });
       timeout = setTimeout(() => {
         timedOut = true;
         process.kill(-child.pid, "SIGTERM");
@@ -397,7 +395,8 @@ async function main() {
       totals = tapTotals(readFileSync(path, "utf8"));
       const incompleteSuite = requireTests && !(totals.tests > 0 && totals.pass !== null);
       if (timedOut || incompleteSuite) {
-        if (cmd === "docker" && argv[0] === "exec") dockerSync(["stop", "-t", "5", `${id}-${job}`]);
+        if (cmd === "docker" && argv[0] === "exec")
+          dockerSync(["stop", "-t", "5", `${id}-${job}`]);
         if (job === "docker")
           dockerSync([...compose, "down", "-v"], {
             env: { ...process.env, CUTOUT_DOMAIN: "localhost", CUTOUT_IMAGE: `${id}:app` },
@@ -572,8 +571,7 @@ async function main() {
         else if (step === "tools")
           script +=
             "if [ $(uname -m) = aarch64 ]; then apt-get update; apt-get install -y --no-install-recommends cmake g++ make xz-utils; fi; bash /tmp/install-wabt.sh /tmp/tools";
-        else if (step === "audit")
-          script += "npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=high";
+        else if (step === "audit") script += "npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=high";
         else if (step === "unit") script += "CUTOUT_REQUIRE_TOOLS=1 npm run test:unit";
         else if (step === "mirror")
           script +=

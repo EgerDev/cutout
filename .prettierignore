@@ -8,3 +8,6 @@ public/third-party/source/
 .grok
 .remember
 CODEX-PROMPT.md
+scripts/linux-ci.mjs
+scripts/patch-dependencies.test.mjs
+scripts/compare-removal-quality.mjs
