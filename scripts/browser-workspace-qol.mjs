@@ -7,8 +7,12 @@ import { requireCutout } from "./require-server.mjs";
 
 const appUrl = await requireCutout(appCandidates("http://127.0.0.1:8080/"));
 let browser;
-beforeEach(async () => { browser = await launchChrome(); });
-afterEach(async () => { await browser?.close(); });
+beforeEach(async () => {
+  browser = await launchChrome();
+});
+afterEach(async () => {
+  await browser?.close();
+});
 
 async function newPage(options) {
   const page = await browser.newPage(options);
@@ -19,7 +23,9 @@ async function newPage(options) {
 async function openWorkspace(width = 1280) {
   const page = await newPage({ viewport: { width, height: 800 } });
   page.setDefaultTimeout(15000);
-  await page.addInitScript(() => { delete window.showSaveFilePicker; });
+  await page.addInitScript(() => {
+    delete window.showSaveFilePicker;
+  });
   await page.goto(appUrl, { waitUntil: "domcontentloaded" });
   return page;
 }
@@ -29,15 +35,21 @@ async function uploadGraphic(page, count = 1) {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 96;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "white"; ctx.fillRect(0, 0, 96, 96);
-    ctx.fillStyle = "black"; ctx.fillRect(24, 24, 48, 48);
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, 96, 96);
+    ctx.fillStyle = "black";
+    ctx.fillRect(24, 24, 48, 48);
     return canvas.toDataURL().split(",")[1];
   });
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Choose files", exact: true }).click();
-  await (await chooser).setFiles(
+  await (
+    await chooser
+  ).setFiles(
     Array.from({ length: count }, (_, i) => ({
-      name: `graphic-${i + 1}.png`, mimeType: "image/png", buffer: Buffer.from(base64, "base64"),
+      name: `graphic-${i + 1}.png`,
+      mimeType: "image/png",
+      buffer: Buffer.from(base64, "base64"),
     })),
   );
   await page.getByRole("toolbar", { name: "Image actions" }).waitFor();
@@ -56,7 +68,9 @@ test("idle screen does not request ML assets or models", async () => {
     // Observe beyond the former 2.5-second idle warmup deadline.
     await page.waitForTimeout(3500);
     assert.deepEqual(modelRequests, []);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test("Download saves the selected image with one click", async () => {
@@ -66,7 +80,9 @@ test("Download saves the selected image with one click", async () => {
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: /^Download(?: PNG)?$/ }).click();
     assert.equal((await download).suggestedFilename(), "graphic-1-cutout.png");
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test("Space activates a focused toolbar button instead of stealing the key for peek", async () => {
@@ -77,7 +93,9 @@ test("Space activates a focused toolbar button instead of stealing the key for p
     await compare.focus();
     await page.keyboard.press("Space");
     assert.equal(await compare.getAttribute("aria-pressed"), "true");
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test("keyboard help closes with Escape without clearing the image", async () => {
@@ -90,7 +108,9 @@ test("keyboard help closes with Escape without clearing the image", async () => 
     await page.keyboard.press("Escape");
     await page.getByRole("dialog").waitFor({ state: "hidden" });
     assert.equal(await page.getByRole("toolbar", { name: "Image actions" }).count(), 1);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test("mobile toolbar has accessible icon names and batch statuses", async () => {
@@ -100,16 +120,21 @@ test("mobile toolbar has accessible icon names and batch statuses", async () => 
     await page.getByRole("button", { name: "Compare", exact: true }).waitFor();
     await page.getByRole("button", { name: "Info", exact: true }).waitFor();
     await page.getByRole("button", { name: /graphic-3.png.*Ready/ }).waitFor();
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  } finally { await page.close(); }
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      true,
+    );
+  } finally {
+    await page.close();
+  }
 });
-
 
 test("static GPU preview stops requesting frames and still responds to compare", async () => {
   const page = await newPage();
   const gpuErrors = [];
   page.on("console", (message) => {
-    if (/While validating|GPUValidationError|CreateSampler/.test(message.text())) gpuErrors.push(message.text());
+    if (/While validating|GPUValidationError|CreateSampler/.test(message.text()))
+      gpuErrors.push(message.text());
   });
   try {
     await page.addInitScript(() => {
@@ -122,7 +147,9 @@ test("static GPU preview stops requesting frames and still responds to compare",
             const requestDevice = adapter.requestDevice.bind(adapter);
             adapter.requestDevice = async (...options) => {
               const device = await requestDevice(...options);
-              device.addEventListener("uncapturederror", (event) => window.gpuValidationErrors.push(event.error.message));
+              device.addEventListener("uncapturederror", (event) =>
+                window.gpuValidationErrors.push(event.error.message),
+              );
               return device;
             };
           }
@@ -138,9 +165,14 @@ test("static GPU preview stops requesting frames and still responds to compare",
     });
     await page.goto(appUrl);
     await uploadGraphic(page);
-    await page.locator(".stage-media[data-gpu]").waitFor().catch(async (error) => {
-      throw new Error(`${error.message} GPU validation: ${JSON.stringify(await page.evaluate(() => window.gpuValidationErrors))}`);
-    });
+    await page
+      .locator(".stage-media[data-gpu]")
+      .waitFor()
+      .catch(async (error) => {
+        throw new Error(
+          `${error.message} GPU validation: ${JSON.stringify(await page.evaluate(() => window.gpuValidationErrors))}`,
+        );
+      });
     const frames = await page.evaluate(async () => {
       const waitFrames = async (n) => {
         for (let i = 0; i < n; i++) await new Promise(window.nativeRaf);
@@ -160,9 +192,10 @@ test("static GPU preview stops requesting frames and still responds to compare",
     await page.locator(".stage-media[data-gpu]").waitFor();
     assert.deepEqual(gpuErrors, []);
     assert.deepEqual(await page.evaluate(() => window.gpuValidationErrors), []);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
-
 
 test("WebGL preview recovers after context loss without a continuous render loop", async () => {
   const page = await newPage();
@@ -197,15 +230,30 @@ test("WebGL preview recovers after context loss without a continuous render loop
     const pixels = async () => {
       const png = await stage.screenshot({ animations: "disabled" });
       return page.evaluate(async (base64) => {
-        const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob());
+        const bitmap = await createImageBitmap(
+          await (await fetch(`data:image/png;base64,${base64}`)).blob(),
+        );
         try {
           const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
           const ctx = canvas.getContext("2d");
           ctx.drawImage(bitmap, 0, 0);
-          return [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1]].map(([x, y]) =>
-            Array.from(ctx.getImageData(Math.round(x * (bitmap.width - 1)), Math.round(y * (bitmap.height - 1)), 1, 1).data),
+          return [
+            [0.5, 0.5],
+            [0.1, 0.1],
+            [0.9, 0.1],
+          ].map(([x, y]) =>
+            Array.from(
+              ctx.getImageData(
+                Math.round(x * (bitmap.width - 1)),
+                Math.round(y * (bitmap.height - 1)),
+                1,
+                1,
+              ).data,
+            ),
           );
-        } finally { bitmap.close(); }
+        } finally {
+          bitmap.close();
+        }
       }, png.toString("base64"));
     };
     // Interior points of uploadGraphic's black square and removed white background:
@@ -222,41 +270,55 @@ test("WebGL preview recovers after context loss without a continuous render loop
     };
     await assertQuiet("before loss");
     assertCutout(await pixels());
-    assert.equal(await page.evaluate(() => {
-      const canvas = document.querySelector(".stage-media canvas");
-      const gl = canvas.getContext("webgl2");
-      const extension = gl.getExtension("WEBGL_lose_context");
-      window.webglRecovery = { canvas, gl, extension, lost: 0, restored: 0 };
-      canvas.addEventListener("webglcontextlost", (event) => {
-        window.webglRecovery.lost++;
-        window.webglRecovery.lossTrusted = event.isTrusted;
-        window.webglRecovery.lossPrevented = event.defaultPrevented;
-      });
-      canvas.addEventListener("webglcontextrestored", (event) => {
-        window.webglRecovery.restored++;
-        window.webglRecovery.restoreTrusted = event.isTrusted;
-      });
-      return Boolean(extension) && !gl.isContextLost();
-    }), true, "a live native WebGL context and lose-context extension are required");
+    assert.equal(
+      await page.evaluate(() => {
+        const canvas = document.querySelector(".stage-media canvas");
+        const gl = canvas.getContext("webgl2");
+        const extension = gl.getExtension("WEBGL_lose_context");
+        window.webglRecovery = { canvas, gl, extension, lost: 0, restored: 0 };
+        canvas.addEventListener("webglcontextlost", (event) => {
+          window.webglRecovery.lost++;
+          window.webglRecovery.lossTrusted = event.isTrusted;
+          window.webglRecovery.lossPrevented = event.defaultPrevented;
+        });
+        canvas.addEventListener("webglcontextrestored", (event) => {
+          window.webglRecovery.restored++;
+          window.webglRecovery.restoreTrusted = event.isTrusted;
+        });
+        return Boolean(extension) && !gl.isContextLost();
+      }),
+      true,
+      "a live native WebGL context and lose-context extension are required",
+    );
     await page.evaluate(() => window.webglRecovery.extension.loseContext());
-    await page.waitForFunction(() => window.webglRecovery.lost === 1 && window.webglRecovery.gl.isContextLost());
-    assert.deepEqual(await page.evaluate(() => ({
-      trusted: window.webglRecovery.lossTrusted,
-      prevented: window.webglRecovery.lossPrevented,
-    })), { trusted: true, prevented: true });
+    await page.waitForFunction(
+      () => window.webglRecovery.lost === 1 && window.webglRecovery.gl.isContextLost(),
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        trusted: window.webglRecovery.lossTrusted,
+        prevented: window.webglRecovery.lossPrevented,
+      })),
+      { trusted: true, prevented: true },
+    );
 
     // Reviewed UI-04 (906cee2) advances to a fresh lower backend after failed paint;
     // it does not promote the Stage back to the retired WebGL canvas on restore.
     await page.locator('.stage-media[data-gpu="2d"]').waitFor();
-    assert.equal(await page.evaluate(() => {
-      const current = document.querySelector(".stage-media canvas");
-      window.recoveredStageCanvas = current;
-      return current !== window.webglRecovery.canvas && !window.webglRecovery.canvas.isConnected;
-    }), true);
+    assert.equal(
+      await page.evaluate(() => {
+        const current = document.querySelector(".stage-media canvas");
+        window.recoveredStageCanvas = current;
+        return current !== window.webglRecovery.canvas && !window.webglRecovery.canvas.isConnected;
+      }),
+      true,
+    );
     assertCutout(await pixels());
     await assertQuiet("during native WebGL loss");
     await page.evaluate(() => window.webglRecovery.extension.restoreContext());
-    await page.waitForFunction(() => window.webglRecovery.restored === 1 && !window.webglRecovery.gl.isContextLost());
+    await page.waitForFunction(
+      () => window.webglRecovery.restored === 1 && !window.webglRecovery.gl.isContextLost(),
+    );
     assert.equal(await page.evaluate(() => window.webglRecovery.restoreTrusted), true);
     assertCutout(await pixels());
     await assertQuiet("after native WebGL restore");
@@ -268,7 +330,10 @@ test("WebGL preview recovers after context loss without a continuous render loop
     assert.equal(await slider.getAttribute("aria-valuenow"), "100");
     const source = await pixels();
     assert.deepEqual(source, [black, white, white], "Compare must show the original file");
-    assert.throws(() => assertCutout(source), "the cutout oracle must reject stale original pixels");
+    assert.throws(
+      () => assertCutout(source),
+      "the cutout oracle must reject stale original pixels",
+    );
     // Negative blank-display control on the actual visible fallback canvas. Home
     // must then request a real application repaint, restoring the cutout itself.
     await page.evaluate(() => {
@@ -276,19 +341,31 @@ test("WebGL preview recovers after context loss without a continuous render loop
       canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
     });
     const blank = await pixels();
-    assert.throws(() => assertCutout(blank), "the cutout oracle must reject a blank visible canvas");
+    assert.throws(
+      () => assertCutout(blank),
+      "the cutout oracle must reject a blank visible canvas",
+    );
     await page.keyboard.press("Home");
     assert.equal(await slider.getAttribute("aria-valuenow"), "0");
     assertCutout(await pixels());
     await page.setViewportSize({ width: 768, height: 800 });
     assertCutout(await pixels());
     await assertQuiet("after compare and resize");
-    assert.equal(await page.evaluate(() => window.recoveredStageCanvas === document.querySelector(".stage-media canvas")), true);
+    assert.equal(
+      await page.evaluate(
+        () => window.recoveredStageCanvas === document.querySelector(".stage-media canvas"),
+      ),
+      true,
+    );
     assert.equal(await stage.getAttribute("data-gpu"), "2d");
-    assert.equal(await page.getByRole("toolbar", { name: "Image actions", exact: true }).isVisible(), true);
-  } finally { await page.close(); }
+    assert.equal(
+      await page.getByRole("toolbar", { name: "Image actions", exact: true }).isVisible(),
+      true,
+    );
+  } finally {
+    await page.close();
+  }
 });
-
 
 test("switching ready batch images keeps the live GPU canvas", async () => {
   const page = await openWorkspace();
@@ -296,13 +373,24 @@ test("switching ready batch images keeps the live GPU canvas", async () => {
     await uploadGraphic(page, 2);
     await page.getByRole("button", { name: "graphic-2.png · Ready", exact: true }).waitFor();
     await page.locator(".stage-media[data-gpu]").waitFor();
-    await page.evaluate(() => { window.originalStageCanvas = document.querySelector(".stage-media canvas"); });
+    await page.evaluate(() => {
+      window.originalStageCanvas = document.querySelector(".stage-media canvas");
+    });
     await page.getByRole("button", { name: "graphic-2.png · Ready", exact: true }).click();
     await page.locator(".stage-media[data-gpu]").waitFor();
-    assert.equal(await page.evaluate(() => window.originalStageCanvas === document.querySelector(".stage-media canvas")), true);
-    const image = await page.locator(".stage-media canvas").evaluate((canvas) => canvas.toDataURL());
+    assert.equal(
+      await page.evaluate(
+        () => window.originalStageCanvas === document.querySelector(".stage-media canvas"),
+      ),
+      true,
+    );
+    const image = await page
+      .locator(".stage-media canvas")
+      .evaluate((canvas) => canvas.toDataURL());
     assert.ok(image.length > 100, "Selected image must have a drawable canvas");
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test("Escape closes Adjust from an editable control and keeps the image", async () => {
@@ -314,5 +402,7 @@ test("Escape closes Adjust from an editable control and keeps the image", async 
     await page.keyboard.press("Escape");
     await page.locator('#cutout-adjust[aria-hidden="false"]').waitFor({ state: "hidden" });
     assert.equal(await page.getByRole("toolbar", { name: "Image actions" }).count(), 1);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });

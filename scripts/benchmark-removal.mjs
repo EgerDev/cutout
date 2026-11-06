@@ -111,7 +111,8 @@ function parseArgs(argv) {
   }
   const integer = (key, fallback) => {
     const value = Number(values.get(key) ?? fallback);
-    if (!Number.isInteger(value) || value < 0) throw new Error(`${key} must be a non-negative integer`);
+    if (!Number.isInteger(value) || value < 0)
+      throw new Error(`${key} must be a non-negative integer`);
     return value;
   };
   const options = {
@@ -120,7 +121,9 @@ function parseArgs(argv) {
     baselineCommit: values.get("--baseline-commit"),
     candidateCommit: values.get("--candidate-commit"),
     requestedProvider: values.get("--provider"),
-    manifestPath: resolve(values.get("--manifest") ?? ".omo/benchmarks/cutout-owned-engine/corpus/manifest.json"),
+    manifestPath: resolve(
+      values.get("--manifest") ?? ".omo/benchmarks/cutout-owned-engine/corpus/manifest.json",
+    ),
     split: values.get("--split") ?? "smoke",
     mode: values.get("--mode") ?? "auto",
     pairs: integer("--pairs", 30),
@@ -135,11 +138,22 @@ function parseArgs(argv) {
     allowDirty,
     allowNondeterministicOutputs,
   };
-  for (const key of ["baselineUrl", "candidateUrl", "baselineCommit", "candidateCommit", "requestedProvider", "outputDirectory"])
-    if (!options[key]) throw new Error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
+  for (const key of [
+    "baselineUrl",
+    "candidateUrl",
+    "baselineCommit",
+    "candidateCommit",
+    "requestedProvider",
+    "outputDirectory",
+  ])
+    if (!options[key])
+      throw new Error(
+        `--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`,
+      );
   commit.parse(options.baselineCommit);
   commit.parse(options.candidateCommit);
-  if (!providers.has(options.requestedProvider)) throw new Error("--provider must be webgpu or wasm");
+  if (!providers.has(options.requestedProvider))
+    throw new Error("--provider must be webgpu or wasm");
   if (!modes.has(options.mode)) throw new Error("--mode must be quick, auto, or maximum");
   if (!splits.has(options.split)) throw new Error("--split must be smoke, tune, or heldout");
   if (options.pairs < 1) throw new Error("--pairs must be at least 1");
@@ -151,20 +165,24 @@ function parseArgs(argv) {
 }
 
 async function hash(path) {
-  return createHash("sha256").update(await readFile(path)).digest("hex");
+  return createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
 }
 
 async function heldoutReleased(options) {
   if (options.split !== "heldout") return false;
   if (!options.heldoutLock) throw new Error("--heldout-lock is required for the heldout split");
-  const lock = z.object({
-    candidateCommit: commit,
-    corpusManifestSha256: z.string().regex(/^[0-9a-f]{64}$/),
-    lockedAt: z.string().datetime(),
-  }).parse(JSON.parse(await readFile(options.heldoutLock, "utf8")));
+  const lock = z
+    .object({
+      candidateCommit: commit,
+      corpusManifestSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      lockedAt: z.string().datetime(),
+    })
+    .parse(JSON.parse(await readFile(options.heldoutLock, "utf8")));
   if (lock.candidateCommit !== options.candidateCommit)
     throw new Error("Heldout lock does not name the candidate commit");
-  if (lock.corpusManifestSha256 !== await hash(options.manifestPath))
+  if (lock.corpusManifestSha256 !== (await hash(options.manifestPath)))
     throw new Error("Heldout lock does not match the corpus manifest");
   return true;
 }
@@ -178,7 +196,9 @@ async function main(argv) {
   const { stdout } = await run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
   const dirtyPaths = stdout.trim() ? stdout.trim().split("\n") : [];
   if (dirtyPaths.length && !options.allowDirty)
-    throw new Error("Working tree is dirty; commit/stash it or pass --allow-dirty to record a non-release run");
+    throw new Error(
+      "Working tree is dirty; commit/stash it or pass --allow-dirty to record a non-release run",
+    );
   await mkdir(dirname(options.outputDirectory), { recursive: true });
   await mkdir(options.outputDirectory, { recursive: false });
   const abort = new AbortController();
@@ -197,14 +217,28 @@ async function main(argv) {
     const manifestSha256 = await hash(options.manifestPath);
     let qualityPolicy;
     if (options.qualityPolicyPath) {
-      qualityPolicy = { json: await readFile(options.qualityPolicyPath, "utf8"), sha256: options.qualityPolicySha256 };
+      qualityPolicy = {
+        json: await readFile(options.qualityPolicyPath, "utf8"),
+        sha256: options.qualityPolicySha256,
+      };
       options.qualityCapture = qualityCapturePolicy(qualityPolicy, {
-        ...options, expectedSha256: options.qualityPolicySha256, manifestSha256, fixtures: corpus.fixtures,
+        ...options,
+        expectedSha256: options.qualityPolicySha256,
+        manifestSha256,
+        fixtures: corpus.fixtures,
       });
     }
     const lane = {
-      baseline: { url: options.baselineUrl, commit: options.baselineCommit, dir: options.baselineDir },
-      candidate: { url: options.candidateUrl, commit: options.candidateCommit, dir: options.candidateDir },
+      baseline: {
+        url: options.baselineUrl,
+        commit: options.baselineCommit,
+        dir: options.baselineDir,
+      },
+      candidate: {
+        url: options.candidateUrl,
+        commit: options.candidateCommit,
+        dir: options.candidateDir,
+      },
     };
     // The commit string, then the served bytes (C54), at lane start and again at lane end.
     const verified = async (variant, phase) => {
@@ -228,11 +262,13 @@ async function main(argv) {
       candidate: await verified("candidate", "version check"),
     };
     const releaseIneligibleReasons = new Set(["lane-incomplete"]);
-    if (qualityPolicy) releaseIneligibleReasons.add("quality-only-no-performance-or-release-eligibility");
+    if (qualityPolicy)
+      releaseIneligibleReasons.add("quality-only-no-performance-or-release-eligibility");
     if (dirtyPaths.length) releaseIneligibleReasons.add("runner-checkout-dirty");
     for (const [variant, { served }] of Object.entries(versions)) {
       if (!served.checkout) releaseIneligibleReasons.add(`${variant}-checkout-unverified`);
-      else if (served.checkout.dirtyPaths.length) releaseIneligibleReasons.add(`${variant}-checkout-dirty`);
+      else if (served.checkout.dirtyPaths.length)
+        releaseIneligibleReasons.add(`${variant}-checkout-dirty`);
     }
     artifact = {
       schemaVersion: 1,
@@ -247,37 +283,72 @@ async function main(argv) {
         warmupsPerBlock: options.warmups,
         order: "AB/BA alternating by pair; one engine context alive at a time",
         timeoutMs: options.timeoutMs,
-        headlineTiming: qualityPolicy ? "unavailable: quality-only capture; completeMs is diagnostic only" : "completeMs: input publication to completed usable result",
-        outputIdentity: "sha256 of every measured result blob, hashed in the page; pair 0 is each fixture and variant's reference",
+        headlineTiming: qualityPolicy
+          ? "unavailable: quality-only capture; completeMs is diagnostic only"
+          : "completeMs: input publication to completed usable result",
+        outputIdentity:
+          "sha256 of every measured result blob, hashed in the page; pair 0 is each fixture and variant's reference",
         allowNondeterministicOutputs: options.allowNondeterministicOutputs,
       },
       sources: {
-        baseline: { url: options.baselineUrl, commit: options.baselineCommit, version: versions.baseline.version.version, served: versions.baseline.served },
-        candidate: { url: options.candidateUrl, commit: options.candidateCommit, version: versions.candidate.version.version, served: versions.candidate.served },
+        baseline: {
+          url: options.baselineUrl,
+          commit: options.baselineCommit,
+          version: versions.baseline.version.version,
+          served: versions.baseline.served,
+        },
+        candidate: {
+          url: options.candidateUrl,
+          commit: options.candidateCommit,
+          version: versions.candidate.version.version,
+          served: versions.candidate.served,
+        },
         dirtyPaths,
-        servedBytesVerified: Object.values(versions).every(({ served }) => Boolean(served.checkout)),
+        servedBytesVerified: Object.values(versions).every(({ served }) =>
+          Boolean(served.checkout),
+        ),
         releaseEligible: false,
         releaseIneligibleReasons: [...releaseIneligibleReasons],
         packageLockSha256: await hash("package-lock.json"),
       },
-      host: { platform: os.platform(), release: os.release(), arch: os.arch(), cpus: os.cpus().map((cpu) => cpu.model) },
+      host: {
+        platform: os.platform(),
+        release: os.release(),
+        arch: os.arch(),
+        cpus: os.cpus().map((cpu) => cpu.model),
+      },
       corpus: {
         manifestPath: options.manifestPath,
         manifestSha256,
         heldoutState: corpus.heldoutState,
-        fixtures: corpus.fixtures.map(({ inputPath: _inputPath, alphaPath: _alphaPath, ...fixture }) => fixture),
+        fixtures: corpus.fixtures.map(
+          ({ inputPath: _inputPath, alphaPath: _alphaPath, ...fixture }) => fixture,
+        ),
       },
     };
-    await writeFile(join(options.outputDirectory, "manifest.json"), JSON.stringify(artifact, null, 2));
+    await writeFile(
+      join(options.outputDirectory, "manifest.json"),
+      JSON.stringify(artifact, null, 2),
+    );
     // Every row reaches runs.jsonl as soon as its run is complete and checked.
     const onRow = async (row) => {
-      const complete = { ...row, commit: row.variant === "baseline" ? options.baselineCommit : options.candidateCommit };
+      const complete = {
+        ...row,
+        commit: row.variant === "baseline" ? options.baselineCommit : options.candidateCommit,
+      };
       const changed = outputIdentity([...rows, complete]).nondeterministic.find(
-        (entry) => entry.pair === complete.pair && entry.fixtureId === complete.fixtureId && entry.variant === complete.variant,
+        (entry) =>
+          entry.pair === complete.pair &&
+          entry.fixtureId === complete.fixtureId &&
+          entry.variant === complete.variant,
       );
-      if (changed && !options.allowNondeterministicOutputs) throw nondeterministicOutputError(changed, complete);
+      if (changed && !options.allowNondeterministicOutputs)
+        throw nondeterministicOutputError(changed, complete);
       rows.push(complete);
-      await appendFile(join(options.outputDirectory, "runs.jsonl"), `${JSON.stringify(complete)}\n`);
+      await appendFile(
+        join(options.outputDirectory, "runs.jsonl"),
+        `${JSON.stringify(complete)}\n`,
+      );
     };
     for (let pair = 0; pair < options.pairs; pair += 1) {
       const order = pair % 2 === 0 ? ["baseline", "candidate"] : ["candidate", "baseline"];
@@ -293,7 +364,9 @@ async function main(argv) {
           profileDirectory: profiles[variant],
           saveOutputs: pair === 0 || Boolean(qualityPolicy),
           referenceOutputs: new Map(
-            rows.filter((row) => row.pair === 0 && row.variant === variant).map((row) => [row.fixtureId, row.outputSha256]),
+            rows
+              .filter((row) => row.pair === 0 && row.variant === variant)
+              .map((row) => [row.fixtureId, row.outputSha256]),
           ),
           signal: abort.signal,
           onRow,
@@ -305,51 +378,89 @@ async function main(argv) {
       const { served } = await verified(variant, "lane end");
       const changes = servedBuildChanges(artifact.sources[variant].served, served);
       if (changes.length > 0)
-        throw new BenchmarkContractError(`the served build changed during the lane: ${changes.join(", ")}`, {
-          variant,
-          phase: "lane end",
-        });
+        throw new BenchmarkContractError(
+          `the served build changed during the lane: ${changes.join(", ")}`,
+          {
+            variant,
+            phase: "lane end",
+          },
+        );
       artifact.sources[variant].served.recheckedAtLaneEnd = true;
-      if (served.checkout?.dirtyPaths.length) releaseIneligibleReasons.add(`${variant}-checkout-dirty`);
+      if (served.checkout?.dirtyPaths.length)
+        releaseIneligibleReasons.add(`${variant}-checkout-dirty`);
     }
-    const { stdout: runnerStatusAtLaneEnd } = await run("git", ["--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=all"]);
-    artifact.sources.dirtyPathsAtLaneEnd = runnerStatusAtLaneEnd.trim() ? runnerStatusAtLaneEnd.trim().split("\n") : [];
-    if (artifact.sources.dirtyPathsAtLaneEnd.length) releaseIneligibleReasons.add("runner-checkout-dirty");
-    validateCompletedRuns(rows, corpus.fixtures.map((fixture) => fixture.id), options.pairs, options);
-    if (qualityPolicy && await hash(options.qualityPolicyPath) !== options.qualityPolicySha256)
+    const { stdout: runnerStatusAtLaneEnd } = await run("git", [
+      "--no-optional-locks",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+    ]);
+    artifact.sources.dirtyPathsAtLaneEnd = runnerStatusAtLaneEnd.trim()
+      ? runnerStatusAtLaneEnd.trim().split("\n")
+      : [];
+    if (artifact.sources.dirtyPathsAtLaneEnd.length)
+      releaseIneligibleReasons.add("runner-checkout-dirty");
+    validateCompletedRuns(
+      rows,
+      corpus.fixtures.map((fixture) => fixture.id),
+      options.pairs,
+      options,
+    );
+    if (qualityPolicy && (await hash(options.qualityPolicyPath)) !== options.qualityPolicySha256)
       throw new BenchmarkContractError("Quality policy changed during capture");
-    if (qualityPolicy && await hash(options.manifestPath) !== manifestSha256)
+    if (qualityPolicy && (await hash(options.manifestPath)) !== manifestSha256)
       throw new BenchmarkContractError("Corpus manifest changed during quality capture");
     artifact.status = "completed";
-    artifact.outputIdentity = { ...outputIdentity(rows), allowed: options.allowNondeterministicOutputs };
+    artifact.outputIdentity = {
+      ...outputIdentity(rows),
+      allowed: options.allowNondeterministicOutputs,
+    };
     artifact.completedAt = new Date().toISOString();
     artifact.latency = qualityPolicy ? null : pairedLatency(rows);
-    if (qualityPolicy) artifact.performance = { eligible: false, reason: "quality-only capture; completeMs is diagnostic only; no requested-provider pooling or FASTER inference" };
+    if (qualityPolicy)
+      artifact.performance = {
+        eligible: false,
+        reason:
+          "quality-only capture; completeMs is diagnostic only; no requested-provider pooling or FASTER inference",
+      };
     releaseIneligibleReasons.delete("lane-incomplete");
     artifact.sources.releaseIneligibleReasons = [...releaseIneligibleReasons];
     artifact.sources.releaseEligible = releaseIneligibleReasons.size === 0;
-    await writeFile(join(options.outputDirectory, "manifest.json"), JSON.stringify(artifact, null, 2));
-    process.stdout.write(`${JSON.stringify({ ok: true, output: options.outputDirectory, runs: rows.length })}\n`);
+    await writeFile(
+      join(options.outputDirectory, "manifest.json"),
+      JSON.stringify(artifact, null, 2),
+    );
+    process.stdout.write(
+      `${JSON.stringify({ ok: true, output: options.outputDirectory, runs: rows.length })}\n`,
+    );
   } catch (error) {
     artifact.status = "failed";
     artifact.failedAt = new Date().toISOString();
     // Which run broke the contract and with what row; runs.jsonl holds every row before it.
-    artifact.error = error instanceof Error
-      ? { name: error.name, message: error.message, run: error.run, offendingRow: error.row }
-      : { name: "Unknown", message: String(error) };
+    artifact.error =
+      error instanceof Error
+        ? { name: error.name, message: error.message, run: error.run, offendingRow: error.row }
+        : { name: "Unknown", message: String(error) };
     artifact.completedRows = rows.length;
-    await writeFile(join(options.outputDirectory, "failure.json"), JSON.stringify(artifact, null, 2));
+    await writeFile(
+      join(options.outputDirectory, "failure.json"),
+      JSON.stringify(artifact, null, 2),
+    );
     throw error;
   } finally {
     process.removeListener("SIGINT", interrupted);
     process.removeListener("SIGTERM", interrupted);
-    await Promise.all(Object.values(profiles).map((profile) => rm(profile, { recursive: true, force: true })));
+    await Promise.all(
+      Object.values(profiles).map((profile) => rm(profile, { recursive: true, force: true })),
+    );
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch((error) => {
-    process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`);
+    process.stderr.write(
+      `${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+    );
     process.exitCode = 1;
   });
 }

@@ -117,13 +117,22 @@ test("unedited distinguishes visual edits from export encoding choices", () => {
   assert.equal(unedited({ ...defaults, exportFormat: "jpeg", targetKB: 50 }), true);
   for (const patch of [
     { background: { type: "color" as const, color: "#ff0000" } },
-    { shadow: true }, { feather: 1 }, { choke: 1 }, { preset: "trim" as const },
+    { shadow: true },
+    { feather: 1 },
+    { choke: 1 },
+    { preset: "trim" as const },
     { strokes: [{ mode: "erase" as const, size: 10, points: [{ x: 0.5, y: 0.5 }] }] },
     { hints: [{ kind: "remove" as const, size: 0.1, points: [{ x: 0.5, y: 0.5 }] }] },
     { recolors: [{ from: "#ff0000", to: "#00ff00" }] },
-    { decontaminate: "auto" as const }, { scale: 90 }, { rotate: 90 }, { flipX: true },
-    { matchBackground: true }, { exportWidth: 64 }, { exportHeight: 32 },
-  ]) assert.equal(unedited({ ...defaults, ...patch }), false, JSON.stringify(patch));
+    { decontaminate: "auto" as const },
+    { scale: 90 },
+    { rotate: 90 },
+    { flipX: true },
+    { matchBackground: true },
+    { exportWidth: 64 },
+    { exportHeight: 32 },
+  ])
+    assert.equal(unedited({ ...defaults, ...patch }), false, JSON.stringify(patch));
 });
 
 test("passthrough requires unedited PNG settings without a size target", () => {

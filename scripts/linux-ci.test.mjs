@@ -282,7 +282,10 @@ const ALL_PASS_LOG = [
  * A fake `docker` that records every call's arguments, emits the canned suite
  * output for step execs, and reports a container as existing or not.
  */
-function fakeDockerHarness(tap, { inspectStatus = 0, mounts = "", workdir = "/srv/cutout-l20-src" } = {}) {
+function fakeDockerHarness(
+  tap,
+  { inspectStatus = 0, mounts = "", workdir = "/srv/cutout-l20-src" } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), "cutout-linux-ci-lane-"));
   const bin = join(root, "bin");
   mkdirSync(bin, { recursive: true });
@@ -544,7 +547,11 @@ test("a container from before the workdir change is migrated, not resumed", () =
     const calls = readFileSync(argsFile, "utf8");
     assert.match(calls, /rm -f /, "stale container was never removed");
     assert.ok(calls.indexOf("rm -f") < calls.indexOf("run -d"), calls);
-    assert.match(calls, /cp .*:\/srv\/cutout-l20-src/, "source copy never landed at the new workdir");
+    assert.match(
+      calls,
+      /cp .*:\/srv\/cutout-l20-src/,
+      "source copy never landed at the new workdir",
+    );
   } finally {
     cleanup();
   }

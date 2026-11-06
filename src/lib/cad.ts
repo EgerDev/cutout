@@ -42,10 +42,13 @@ export const PDF_MAX_INFLATE = 256_000_000;
 
 export async function rasterizeCad(file: File, bytes: Uint8Array): Promise<File | null> {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf") || file.type === "application/pdf") return extractPdfImage(bytes, file.name);
+  if (name.endsWith(".pdf") || file.type === "application/pdf")
+    return extractPdfImage(bytes, file.name);
   if (name.endsWith(".dxf") || file.type.includes("dxf")) return rasterizeDxf(bytes, file.name);
-  if (name.endsWith(".dwg") || file.type.includes("dwg")) return extractDibPreview(bytes, file.name);
-  if (name.endsWith(".skp") || file.type.includes("sketchup")) return extractEmbeddedRaster(bytes, file.name);
+  if (name.endsWith(".dwg") || file.type.includes("dwg"))
+    return extractDibPreview(bytes, file.name);
+  if (name.endsWith(".skp") || file.type.includes("sketchup"))
+    return extractEmbeddedRaster(bytes, file.name);
   return extractEmbeddedRaster(bytes, file.name);
 }
 
@@ -196,8 +199,10 @@ function extractPdfJpeg(bytes: Uint8Array, name = "page.jpg") {
     if (end < start) end = text.indexOf("endstream", start);
     if (end < 0) break;
     let slice = bytes.subarray(start, end);
-    if (slice.length >= 2 && slice[slice.length - 1] === 10) slice = slice.subarray(0, slice.length - 1);
-    if (slice.length >= 1 && slice[slice.length - 1] === 13) slice = slice.subarray(0, slice.length - 1);
+    if (slice.length >= 2 && slice[slice.length - 1] === 10)
+      slice = slice.subarray(0, slice.length - 1);
+    if (slice.length >= 1 && slice[slice.length - 1] === 13)
+      slice = slice.subarray(0, slice.length - 1);
     if (slice.length < 32 || slice[0] !== 0xff || slice[1] !== 0xd8) continue;
     if (!best || slice.byteLength > best.byteLength) best = slice;
   }
@@ -207,7 +212,11 @@ function extractPdfJpeg(bytes: Uint8Array, name = "page.jpg") {
 }
 
 function extractEmbeddedRaster(bytes: Uint8Array, name: string) {
-  const png = sliceSignature(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], [0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+  const png = sliceSignature(
+    bytes,
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    [0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82],
+  );
   const jpeg = sliceJpeg(bytes);
   const pick = png && jpeg ? (png.byteLength >= jpeg.byteLength ? png : jpeg) : (png ?? jpeg);
   if (!pick || pick.byteLength < 64) return null;
@@ -278,7 +287,7 @@ function extractDibPreview(bytes: Uint8Array, name: string) {
     if (planes !== 1 || width < 16 || height < 16 || width > 4096 || height > 4096) continue;
     if (![1, 4, 8, 16, 24, 32].includes(bits)) continue;
     const palette = bits <= 8 ? 4 * (1 << bits) : 0;
-    const row = (((bits * width + 31) >> 5) << 2);
+    const row = ((bits * width + 31) >> 5) << 2;
     const pixels = row * height;
     const dib = 40 + palette + pixels;
     if (i + dib > bytes.length) continue;
@@ -394,13 +403,7 @@ function insertTransform(parent: Xform, insert: IInsertEntity, origin: IPoint): 
   };
 }
 
-function walkEntities(
-  dxf: IDxf,
-  entities: IEntity[],
-  drawing: Drawing,
-  xform: Xform,
-  depth = 0,
-) {
+function walkEntities(dxf: IDxf, entities: IEntity[], drawing: Drawing, xform: Xform, depth = 0) {
   if (depth > 8) return;
   const layers = dxf.tables?.layer?.layers;
   for (const entity of entities) {
@@ -416,13 +419,21 @@ function walkEntities(
       if (verts.length >= 2) drawing.stroke(verts.slice(0, 2).map((p) => apply(xform, p)));
     } else if (type === "CIRCLE") {
       const circleEntity = entity as ICircleEntity;
-      drawing.stroke(circle(circleEntity.center.x, circleEntity.center.y, circleEntity.radius).map((p) => apply(xform, p)));
+      drawing.stroke(
+        circle(circleEntity.center.x, circleEntity.center.y, circleEntity.radius).map((p) =>
+          apply(xform, p),
+        ),
+      );
     } else if (type === "ARC") {
       const arcEntity = entity as IArcEntity;
       drawing.stroke(
-        arcRad(arcEntity.center.x, arcEntity.center.y, arcEntity.radius, arcEntity.startAngle, arcEntity.endAngle).map((p) =>
-          apply(xform, p),
-        ),
+        arcRad(
+          arcEntity.center.x,
+          arcEntity.center.y,
+          arcEntity.radius,
+          arcEntity.startAngle,
+          arcEntity.endAngle,
+        ).map((p) => apply(xform, p)),
       );
     } else if (type === "ELLIPSE") {
       const ellipseEntity = entity as IEllipseEntity;
@@ -513,7 +524,11 @@ function stripMtext(value: string | undefined) {
     .trim();
 }
 
-function polylineWithBulge(vertices: Array<IPoint & { bulge?: number }>, closed: boolean, xform: Xform) {
+function polylineWithBulge(
+  vertices: Array<IPoint & { bulge?: number }>,
+  closed: boolean,
+  xform: Xform,
+) {
   const strokes: Array<{ x: number; y: number }[]> = [];
   if (vertices.length < 2) return strokes;
   const count = closed ? vertices.length : vertices.length - 1;
@@ -572,7 +587,8 @@ async function paintDrawing(
   center = false,
 ) {
   const points = [...strokes.flat(), ...fills.flat(), ...texts];
-  if (points.length < 1 || typeof document === "undefined") return extractEmbeddedRaster(bytes, name);
+  if (points.length < 1 || typeof document === "undefined")
+    return extractEmbeddedRaster(bytes, name);
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -665,7 +681,11 @@ async function rasterizeDxfLegacy(bytes: Uint8Array, name: string, text: string)
     const code = lines[i]!.trim();
     const value = lines[i + 1]!.trim();
     if (code === "0") {
-      if (entity === "LINE") drawing.stroke([{ x, y }, { x: x2, y: y2 }]);
+      if (entity === "LINE")
+        drawing.stroke([
+          { x, y },
+          { x: x2, y: y2 },
+        ]);
       if (entity === "CIRCLE") drawing.stroke(circle(cx, cy, radius));
       if (entity === "ARC") drawing.stroke(arc(cx, cy, radius, start, end));
       if (entity === "ELLIPSE") drawing.stroke(ellipse(cx, cy, mx, my, ratio, start, end));
@@ -700,7 +720,15 @@ async function rasterizeDxfLegacy(bytes: Uint8Array, name: string, text: string)
       if (code === "41") start = Number(value);
       if (code === "42") end = Number(value);
     }
-    if (entity === "LWPOLYLINE" || entity === "POLYLINE" || entity === "VERTEX" || entity === "SPLINE" || entity === "SOLID" || entity === "TRACE" || entity === "3DFACE") {
+    if (
+      entity === "LWPOLYLINE" ||
+      entity === "POLYLINE" ||
+      entity === "VERTEX" ||
+      entity === "SPLINE" ||
+      entity === "SOLID" ||
+      entity === "TRACE" ||
+      entity === "3DFACE"
+    ) {
       if (code === "70") closed = (Number(value) & 1) === 1;
       if (code === "10") x = Number(value);
       if (code === "20") {
@@ -711,7 +739,11 @@ async function rasterizeDxfLegacy(bytes: Uint8Array, name: string, text: string)
       }
     }
   }
-  if (entity === "LINE") drawing.stroke([{ x, y }, { x: x2, y: y2 }]);
+  if (entity === "LINE")
+    drawing.stroke([
+      { x, y },
+      { x: x2, y: y2 },
+    ]);
   if (entity === "CIRCLE") drawing.stroke(circle(cx, cy, radius));
   if (entity === "ARC") drawing.stroke(arc(cx, cy, radius, start, end));
   if (entity === "ELLIPSE") drawing.stroke(ellipse(cx, cy, mx, my, ratio, start, end));
@@ -734,7 +766,15 @@ function circle(cx: number, cy: number, radius: number) {
   return points;
 }
 
-function ellipse(cx: number, cy: number, mx: number, my: number, ratio: number, startParam: number, endParam: number) {
+function ellipse(
+  cx: number,
+  cy: number,
+  mx: number,
+  my: number,
+  ratio: number,
+  startParam: number,
+  endParam: number,
+) {
   const major = Math.hypot(mx, my) || 1;
   const angle = Math.atan2(my, mx);
   const start = Number.isFinite(startParam) ? startParam : 0;

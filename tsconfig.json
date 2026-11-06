@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -13,23 +9,13 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": [
-      "vite/client",
-      "node"
-    ],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "heic-to/csp": [
-        "./vendor/heic-to/csp.d.ts"
-      ]
+      "@/*": ["./src/*"],
+      "heic-to/csp": ["./vendor/heic-to/csp.d.ts"]
     },
     "allowImportingTsExtensions": true
   },
-  "include": [
-    "src",
-    "server"
-  ]
+  "include": ["src", "server"]
 }

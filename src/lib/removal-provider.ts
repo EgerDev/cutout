@@ -27,9 +27,12 @@ export class RemovalModelCacheError extends Error {
   readonly code = "removal-model-damaged";
   readonly failureKind = "cache";
   constructor(removed: boolean, cause: unknown) {
-    super(removed
-      ? "The saved model file was damaged and has been removed. Try again."
-      : "The saved model file is damaged. Delete the local remover model and reload the page to try again.", { cause });
+    super(
+      removed
+        ? "The saved model file was damaged and has been removed. Try again."
+        : "The saved model file is damaged. Delete the local remover model and reload the page to try again.",
+      { cause },
+    );
   }
 }
 
@@ -48,7 +51,11 @@ export class RemovalWebgpuInitError extends Error {
 }
 
 export function requiresFreshRemovalContext(error: unknown): boolean {
-  return isRemovalContextLost(error) || isWebgpuInitFailure(error) || field(error, "code") === "removal-model-damaged";
+  return (
+    isRemovalContextLost(error) ||
+    isWebgpuInitFailure(error) ||
+    field(error, "code") === "removal-model-damaged"
+  );
 }
 
 export function isRemovalContextLost(error: unknown): boolean {
@@ -86,7 +93,11 @@ export const ENGINE_ERROR_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 export type RemovalRoute = {
-  readonly primary: { readonly model: RemovalModelKind; readonly provider: RemovalProvider; readonly dtype?: RemovalDtype };
+  readonly primary: {
+    readonly model: RemovalModelKind;
+    readonly provider: RemovalProvider;
+    readonly dtype?: RemovalDtype;
+  };
 };
 
 /** A healthy no-f16 adapter runs the fp32 weights; failed GPUs retain the WASM safety net. */
@@ -96,7 +107,11 @@ export function selectRemovalRoute(options: {
   readonly gpuFailed: boolean;
   readonly fp16?: boolean;
 }): RemovalRoute {
-  if (typeof options.deviceMemory === "number" && options.deviceMemory <= 4 && !options.compatibleGpu) {
+  if (
+    typeof options.deviceMemory === "number" &&
+    options.deviceMemory <= 4 &&
+    !options.compatibleGpu
+  ) {
     return { primary: { model: "isnet", provider: "wasm" } };
   }
   if (options.compatibleGpu && !options.gpuFailed && options.fp16 === false) {
@@ -123,13 +138,18 @@ export function classifyRemovalFailure(error: unknown): RemovalFailureKind {
   const status = field(error, "status");
   if (typeof status === "number" && status >= 500 && status <= 599) return "network";
   const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (/offline|failed to fetch|network|http 50[0-9]|service unavailable/.test(message)) return "network";
+  if (/offline|failed to fetch|network|http 50[0-9]|service unavailable/.test(message))
+    return "network";
   if (/cache (miss|corrupt|unavailable)/.test(message)) return "cache";
   // WebKit's fetch rejection, the same layer as Chromium's "Failed to fetch".
   if (error instanceof TypeError && message === "load failed") return "network";
   // Transformers.js reports an HTTP failure only as text (hub.js ERROR_MAPPING / handleError),
   // with no status: 4xx/5xx from the model host or a mirror is a fetch failure, not the GPU.
-  if (/occurred while trying to load file|could not locate file|(unauthorized|forbidden) access to file/.test(message))
+  if (
+    /occurred while trying to load file|could not locate file|(unauthorized|forbidden) access to file/.test(
+      message,
+    )
+  )
     return "model-fetch";
   if (/model.*(download|fetch)|weight.*(download|fetch)/.test(message)) return "model-fetch";
   if (/device lost|gpu device/.test(message)) return "gpu-device";
@@ -257,14 +277,25 @@ export function clearRemovalFailureRecords(
 
 /** A property of an untrusted value, or undefined when it is not an object. */
 export function field(value: unknown, key: string): unknown {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) return undefined;
+  if ((typeof value !== "object" && typeof value !== "function") || value === null)
+    return undefined;
   return Reflect.get(value, key);
 }
 
 function isFailureKind(value: unknown): value is RemovalFailureKind {
   return (
     typeof value === "string" &&
-    ["abort", "network", "cache", "model-fetch", "provider-init", "gpu-device", "gpu-mask", "model-output", "unknown"].includes(value)
+    [
+      "abort",
+      "network",
+      "cache",
+      "model-fetch",
+      "provider-init",
+      "gpu-device",
+      "gpu-mask",
+      "model-output",
+      "unknown",
+    ].includes(value)
   );
 }
 

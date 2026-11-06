@@ -74,7 +74,10 @@ test("photo removal refines a small subject with a second bounded model pass", a
     assert.equal(result.provenance.cropInferences, 1);
     // One BiRefNet/WASM engine served both passes.
     assert.equal(select(log, { type: "from_pretrained", kind: "model" }).length, 1);
-    assert.ok(result.opaquePixels > 240, `expected refined crop, got ${result.opaquePixels} pixels`);
+    assert.ok(
+      result.opaquePixels > 240,
+      `expected refined crop, got ${result.opaquePixels} pixels`,
+    );
   }));
 
 async function runThirds() {
@@ -85,7 +88,11 @@ async function runThirds() {
       const source = await window.__fx.gradientPhoto({ subject: false });
       const removed = await removeBackgroundLocal(source, {});
       return {
-        alpha: await window.__fx.alphaAt(removed.blob, [[20, 40], [60, 40], [100, 40]]),
+        alpha: await window.__fx.alphaAt(removed.blob, [
+          [20, 40],
+          [60, 40],
+          [100, 40],
+        ]),
         provider: removed.provider,
         size: [removed.width, removed.height],
         provenance: removalRuntime.provenance(),
@@ -96,7 +103,10 @@ async function runThirds() {
 }
 const closeTo = (actual, expected, label) =>
   actual.forEach((value, index) => {
-    assert.ok(Math.abs(value - expected[index]) <= 2, `${label}: ${JSON.stringify({ actual, expected })}`);
+    assert.ok(
+      Math.abs(value - expected[index]) <= 2,
+      `${label}: ${JSON.stringify({ actual, expected })}`,
+    );
   });
 
 test("BiRefNet raw logits are consumed as-is by default", async () => {
@@ -109,7 +119,10 @@ test("BiRefNet raw logits are consumed as-is by default", async () => {
   assert.equal(result.provenance.renderPolicy, "cutout-original-matte-v1");
   assert.equal(result.provenance.rawOutputSemantics, "logits");
   // Tensor ownership: every processor input and the one successful output are disposed, nothing else.
-  assert.equal(disposals(log, "pixel_values"), select(log, { type: "run", phase: "processor" }).length);
+  assert.equal(
+    disposals(log, "pixel_values"),
+    select(log, { type: "run", phase: "processor" }).length,
+  );
   assert.equal(disposals(log, "output_image"), 1);
   assert.equal(disposals(log, "sigmoid-result"), 0);
 });
@@ -216,10 +229,19 @@ test("a successful compatibility result survives failed preferred-engine prepara
       const log = await readFakeLog(page);
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.provider, "wasm");
-      assert.equal(select(log, { type: "from_pretrained", kind: "model", device: "webgpu" }).length, 1);
-      assert.equal(select(log, { type: "from_pretrained", kind: "model", device: "wasm" }).length, 1);
+      assert.equal(
+        select(log, { type: "from_pretrained", kind: "model", device: "webgpu" }).length,
+        1,
+      );
+      assert.equal(
+        select(log, { type: "from_pretrained", kind: "model", device: "wasm" }).length,
+        1,
+      );
       assert.equal(select(log, { type: "from_pretrained", kind: "processor" }).length, 2);
-      assert.ok(result.messages.includes("Switching to compatibility mode"), JSON.stringify(result.messages));
+      assert.ok(
+        result.messages.includes("Switching to compatibility mode"),
+        JSON.stringify(result.messages),
+      );
       assert.equal(result.record, null, "a lost device at load is not a stored GPU failure");
       assert.equal(result.compat?.attempted, true);
       assert.ok(result.alpha > 240);
@@ -282,7 +304,12 @@ test("lossless logo removal retains faint coverage on off-white paper", async ()
 const SUBJECT = [[60, 40]];
 const FIELD = [[2, 2]];
 
-async function recoverRow(options, source, mode = "quick", points = { subject: SUBJECT, field: FIELD }) {
+async function recoverRow(
+  options,
+  source,
+  mode = "quick",
+  points = { subject: SUBJECT, field: FIELD },
+) {
   return withFakePage(options, async (page) => {
     const result = await page.evaluate(
       async ({ source, mode, subject, field }) => {
@@ -310,7 +337,11 @@ async function recoverRow(options, source, mode = "quick", points = { subject: S
 
 test("C4 b1 finished-empty with a nonempty raw cut returns the raw rescue, not the flood", async () => {
   const { result, log } = await recoverRow(
-    { page: { mask: (c, h) => h.rect(c, { x0: 30, y0: 15, x1: 90, y1: 65, inside: 0.18, outside: 0 }) } },
+    {
+      page: {
+        mask: (c, h) => h.rect(c, { x0: 30, y0: 15, x1: 90, y1: 65, inside: 0.18, outside: 0 }),
+      },
+    },
     { name: "floodable", args: [] },
   );
   assert.equal(result.method, "model");
@@ -322,7 +353,10 @@ test("C4 b1 finished-empty with a nonempty raw cut returns the raw rescue, not t
 
 test("C4 b2 raw-empty falls back to the flood", async () => {
   // Raw 0.06 is not flat (>= 0.05) but renders alpha 0 under the fast transfer.
-  const { result, log } = await recoverRow({ page: { mask: () => 0.06 } }, { name: "floodable", args: [] });
+  const { result, log } = await recoverRow(
+    { page: { mask: () => 0.06 } },
+    { name: "floodable", args: [] },
+  );
   assert.equal(result.method, "flood");
   assert.equal(result.subject[0], 255);
   assert.equal(result.field[0], 0);
@@ -346,11 +380,22 @@ test("C4 b4 raw-empty, flood and graphics fail: the finished empty blob is retur
 // E01-O-02: both empty checks are fractions of the frame, so a subject the model found but that
 // fills under 0.8 % of it was replaced by the border flood, which on a textured field keeps most of
 // the photo. Points: the subject's centre, a corner and the open field below it.
-const SMALL = { subject: [[420, 315]], field: [[2, 2], [100, 500], [700, 100]] };
+const SMALL = {
+  subject: [[420, 315]],
+  field: [
+    [2, 2],
+    [100, 500],
+    [700, 100],
+  ],
+};
 
 test("C4 b5 a solid subject under 0.8 % of the frame keeps the model's cut, not the flood (E01-O-02)", async () => {
   const { result, log } = await recoverRow(
-    { page: { mask: (c, h) => h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 20, outside: -20 }) } },
+    {
+      page: {
+        mask: (c, h) => h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 20, outside: -20 }),
+      },
+    },
     { name: "smallSubjectPhoto", args: [] },
     "quick",
     SMALL,
@@ -362,13 +407,22 @@ test("C4 b5 a solid subject under 0.8 % of the frame keeps the model's cut, not 
 });
 
 test("C4 b5 control: an empty mask on the same photo still takes the flood", async () => {
-  const { result } = await recoverRow({ page: { mask: () => -20 } }, { name: "smallSubjectPhoto", args: [] }, "quick", SMALL);
+  const { result } = await recoverRow(
+    { page: { mask: () => -20 } },
+    { name: "smallSubjectPhoto", args: [] },
+    "quick",
+    SMALL,
+  );
   assert.equal(result.method, "flood");
 });
 
 test("C4 b5 control: a weak tiny matte still takes the flood", async () => {
   const { result, log } = await recoverRow(
-    { page: { mask: (c, h) => h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 0.65, outside: 0 }) } },
+    {
+      page: {
+        mask: (c, h) => h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 0.65, outside: 0 }),
+      },
+    },
     { name: "smallSubjectPhoto", args: [] },
     "quick",
     SMALL,
@@ -378,35 +432,47 @@ test("C4 b5 control: a weak tiny matte still takes the flood", async () => {
 });
 
 test("C4 b5 control: a confident raw core erased by cleaning still takes the flood", async () => {
-  await withFakePage({ page: { mask: (c, h) => {
-    const box = h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 1, outside: 0 });
-    return (u, v) => box(u, v) && Math.floor(u * c.side) % 2 === 0 ? 1 : 0;
-  } } }, async (page) => {
-    const result = await page.evaluate(async () => {
-      const { removeBackgroundLocal } = await import("/src/lib/engine.ts?cleaned-core");
-      const source = await window.__fx.smallSubjectPhoto();
-      const encode = HTMLCanvasElement.prototype.toBlob;
-      let cleaned;
-      HTMLCanvasElement.prototype.toBlob = function (...args) {
-        if (!cleaned && this.width === 800 && this.height === 600) {
-          const data = this.getContext("2d").getImageData(0, 0, 800, 600).data;
-          cleaned = { solid: 0, visible: 0 };
-          for (let i = 3; i < data.length; i += 4) {
-            if (data[i] >= 239) cleaned.solid++;
-            if (data[i] > 16) cleaned.visible++;
+  await withFakePage(
+    {
+      page: {
+        mask: (c, h) => {
+          const box = h.rect(c, { x0: 400, y0: 300, x1: 440, y1: 330, inside: 1, outside: 0 });
+          return (u, v) => (box(u, v) && Math.floor(u * c.side) % 2 === 0 ? 1 : 0);
+        },
+      },
+    },
+    async (page) => {
+      const result = await page.evaluate(async () => {
+        const { removeBackgroundLocal } = await import("/src/lib/engine.ts?cleaned-core");
+        const source = await window.__fx.smallSubjectPhoto();
+        const encode = HTMLCanvasElement.prototype.toBlob;
+        let cleaned;
+        HTMLCanvasElement.prototype.toBlob = function (...args) {
+          if (!cleaned && this.width === 800 && this.height === 600) {
+            const data = this.getContext("2d").getImageData(0, 0, 800, 600).data;
+            cleaned = { solid: 0, visible: 0 };
+            for (let i = 3; i < data.length; i += 4) {
+              if (data[i] >= 239) cleaned.solid++;
+              if (data[i] > 16) cleaned.visible++;
+            }
           }
+          return encode.apply(this, args);
+        };
+        try {
+          const cut = await removeBackgroundLocal(source, { mode: "quick" });
+          return { method: cut.method, cleaned };
+        } finally {
+          HTMLCanvasElement.prototype.toBlob = encode;
         }
-        return encode.apply(this, args);
-      };
-      try {
-        const cut = await removeBackgroundLocal(source, { mode: "quick" });
-        return { method: cut.method, cleaned };
-      } finally { HTMLCanvasElement.prototype.toBlob = encode; }
-    });
-    assert.ok(result.cleaned.visible > 0 && result.cleaned.solid < 800 * 600 / 2048, JSON.stringify(result));
-    assert.equal(result.method, "flood");
-    assert.equal(modelRuns(await readFakeLog(page)), 1);
-  });
+      });
+      assert.ok(
+        result.cleaned.visible > 0 && result.cleaned.solid < (800 * 600) / 2048,
+        JSON.stringify(result),
+      );
+      assert.equal(result.method, "flood");
+      assert.equal(modelRuns(await readFakeLog(page)), 1);
+    },
+  );
 });
 
 // ---- Crops consume raw scores (contract-r2 #3) ------------------------------------------------
@@ -414,11 +480,13 @@ test("C4 b5 control: a confident raw core erased by cleaning still takes the flo
 async function runCrops() {
   return withFakePage({ page: { mask: smallSubjectThenAll } }, async (page) => {
     const result = await page.evaluate(async () => {
-      const { removeBackgroundLocal, refineWithUserCrops } = await import("/src/lib/engine.ts?raw-crops");
+      const { removeBackgroundLocal, refineWithUserCrops } =
+        await import("/src/lib/engine.ts?raw-crops");
       const { removalRuntime } = await import("/src/lib/removal-runtime.ts");
       const source = await window.__fx.gradientPhoto();
       const removed = await removeBackgroundLocal(source, {});
-      const provenance = () => (typeof removalRuntime.provenance === "function" ? removalRuntime.provenance() : undefined);
+      const provenance = () =>
+        typeof removalRuntime.provenance === "function" ? removalRuntime.provenance() : undefined;
       const auto = provenance();
       // Event `seq` is exact on one page; wall-clock `t` could overshoot inside one clock tick.
       const marker = globalThis.__fakeTfClock.seq;
@@ -446,6 +514,7 @@ test("crops: the global pass and every automatic and manual crop consume raw sco
   assert.ok(auto, "removalRuntime.provenance() records the job (S5)");
   assert.ok(refined, "removalRuntime.provenance() records the job (S5)");
   assert.ok(auto.cropInferences >= 1);
-  for (const record of [auto, refined]) assert.equal(record.renderPolicy, "cutout-original-matte-v1");
+  for (const record of [auto, refined])
+    assert.equal(record.renderPolicy, "cutout-original-matte-v1");
   assert.equal(modelRuns(manual), refined.cropInferences);
 });

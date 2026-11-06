@@ -13,7 +13,9 @@ import {
 
 test("sniffImage reads PNG, JPEG, WebP and both TIFF byte orders from magic bytes", () => {
   const bytes = (...values: Array<number | string>) =>
-    new Uint8Array(values.flatMap((v) => (typeof v === "string" ? [...v].map((c) => c.charCodeAt(0)) : [v])));
+    new Uint8Array(
+      values.flatMap((v) => (typeof v === "string" ? [...v].map((c) => c.charCodeAt(0)) : [v])),
+    );
   assert.equal(sniffImage(bytes(0x89, "PNG\r\n")), "png");
   assert.equal(sniffImage(bytes(0xff, 0xd8, 0xff, 0xe0)), "jpeg");
   assert.equal(sniffImage(bytes(0xff, 0xd8, 0x00)), null);

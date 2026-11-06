@@ -284,7 +284,14 @@ export async function inspectImageMetadata(file: Blob): Promise<MetadataReport> 
     }
 
     const flat = flattenTags(tags);
-    const blobs = collectStrings([tags.xmp, tags.pngText, tags.exif, tags.iptc, tags.photoshop, flat]);
+    const blobs = collectStrings([
+      tags.xmp,
+      tags.pngText,
+      tags.exif,
+      tags.iptc,
+      tags.photoshop,
+      flat,
+    ]);
     if (tags.xmp?._raw) blobs.push(tags.xmp._raw);
     const haystack = blobs.join("\n");
 
@@ -351,8 +358,7 @@ export async function inspectImageMetadata(file: Blob): Promise<MetadataReport> 
       mimeType: mimeType || undefined,
       fileSize: file.size,
       modified,
-      colorType:
-        readTagValue(flat["Color Type"]) || header.colorType || colorInfo.colorSpace,
+      colorType: readTagValue(flat["Color Type"]) || header.colorType || colorInfo.colorSpace,
       bitDepth:
         header.bitDepth ||
         readTagValue(tags.file?.["Bits Per Sample"]) ||
@@ -374,9 +380,7 @@ export async function inspectImageMetadata(file: Blob): Promise<MetadataReport> 
       copyright: readTagValue(flat.Copyright) || undefined,
       artist: readTagValue(flat.Artist) || readTagValue(flat["By-line"]) || undefined,
       description:
-        readTagValue(flat.ImageDescription) ||
-        readTagValue(flat["Caption/Abstract"]) ||
-        undefined,
+        readTagValue(flat.ImageDescription) || readTagValue(flat["Caption/Abstract"]) || undefined,
       comment: readTagValue(flat.UserComment) || readTagValue(flat.Comment) || jpegComment.comment,
       created: created ? formatExifDate(created) : undefined,
       ai,
@@ -421,10 +425,27 @@ function inspectHeader(buffer: ArrayBuffer, file: Blob) {
     };
   }
   if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57) {
-    return { fileType: "WebP", bitDepth: "8-bit", colorType: "RGB", alpha: "Maybe", compression: "WebP" };
+    return {
+      fileType: "WebP",
+      bitDepth: "8-bit",
+      colorType: "RGB",
+      alpha: "Maybe",
+      compression: "WebP",
+    };
   }
-  if (bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-    const brand = String.fromCharCode(bytes[8] ?? 0, bytes[9] ?? 0, bytes[10] ?? 0, bytes[11] ?? 0).toLowerCase();
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 &&
+    bytes[5] === 0x74 &&
+    bytes[6] === 0x79 &&
+    bytes[7] === 0x70
+  ) {
+    const brand = String.fromCharCode(
+      bytes[8] ?? 0,
+      bytes[9] ?? 0,
+      bytes[10] ?? 0,
+      bytes[11] ?? 0,
+    ).toLowerCase();
     if (brand === "avif" || brand === "avis") {
       return { fileType: "AVIF", bitDepth: "—", colorType: "YUV", alpha: "—" };
     }
@@ -438,7 +459,12 @@ function inspectHeader(buffer: ArrayBuffer, file: Blob) {
   if (/avif/i.test(type) || /\.avif$/i.test(name)) {
     return { fileType: "AVIF", bitDepth: "—", colorType: "YUV", alpha: "—" };
   }
-  return { fileType: type.split("/")[1]?.toUpperCase(), bitDepth: undefined, colorType: undefined, alpha: undefined };
+  return {
+    fileType: type.split("/")[1]?.toUpperCase(),
+    bitDepth: undefined,
+    colorType: undefined,
+    alpha: undefined,
+  };
 }
 
 function inspectPngAncillary(bytes: Uint8Array): {
@@ -484,8 +510,7 @@ function inspectPngAncillary(bytes: Uint8Array): {
     );
     const data = bytes.subarray(offset + 8, offset + 8 + len);
     if (type === "gAMA" && len === 4) {
-      const raw =
-        ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
+      const raw = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
       if (raw > 0) {
         gamma = (100000 / raw).toFixed(3);
         push("Gamma", "Gamma", gamma);
@@ -503,12 +528,10 @@ function inspectPngAncillary(bytes: Uint8Array): {
       modified = `${y}-${String(data[2]).padStart(2, "0")}-${String(data[3]).padStart(2, "0")} ${String(data[4]).padStart(2, "0")}:${String(data[5]).padStart(2, "0")}:${String(data[6]).padStart(2, "0")}`;
       push("tIME", "Modified", modified);
     } else if (type === "acTL" && len >= 4) {
-      const frames =
-        ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
+      const frames = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
       push("acTL", "Animation frames", String(frames));
     } else if (type === "pHYs" && len === 9 && data[8] === 1) {
-      const ppm =
-        ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
+      const ppm = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3] ?? 0)) >>> 0;
       if (ppm > 0) resolutionDpi = `${Math.round(ppm * 0.0254)} DPI`;
     } else if (type === "bKGD") {
       push("bKGD", "Background color", "Present");
@@ -542,7 +565,15 @@ function inspectJpegComment(bytes: Uint8Array): { comment?: string; tags: RawMet
       if (text)
         return {
           comment: text,
-          tags: [{ id: "File:Comment", namespace: "File", tag: "Comment", label: "Comment", value: text }],
+          tags: [
+            {
+              id: "File:Comment",
+              namespace: "File",
+              tag: "Comment",
+              label: "Comment",
+              value: text,
+            },
+          ],
         };
     }
     offset += len;
@@ -585,7 +616,19 @@ function mergeTags(...lists: RawMetadataTag[][]): RawMetadataTag[] {
 
 function flattenTags(tags: ExpandedLike) {
   const flat: Record<string, TagLike> = {};
-  const buckets = [tags.exif, tags.iptc, tags.xmp, tags.png, tags.pngText, tags.icc, tags.file, tags.jfif, tags.gif, tags.riff, tags.photoshop];
+  const buckets = [
+    tags.exif,
+    tags.iptc,
+    tags.xmp,
+    tags.png,
+    tags.pngText,
+    tags.icc,
+    tags.file,
+    tags.jfif,
+    tags.gif,
+    tags.riff,
+    tags.photoshop,
+  ];
   for (const bucket of buckets) {
     if (!bucket || typeof bucket !== "object") continue;
     for (const [key, value] of Object.entries(bucket)) {
@@ -598,11 +641,17 @@ function flattenTags(tags: ExpandedLike) {
 }
 
 function extractAllTags(tags: ExpandedLike): RawMetadataTag[] {
-  const buckets: Array<{ name: RawMetadataTag["namespace"]; obj: Record<string, TagLike> | undefined }> = [
+  const buckets: Array<{
+    name: RawMetadataTag["namespace"];
+    obj: Record<string, TagLike> | undefined;
+  }> = [
     { name: "EXIF", obj: tags.exif },
     { name: "IPTC", obj: tags.iptc },
     { name: "XMP", obj: tags.xmp as Record<string, TagLike> | undefined },
-    { name: "PNG", obj: tags.pngText ? { ...tags.png, ...tags.pngText } : tags.png || tags.pngFile },
+    {
+      name: "PNG",
+      obj: tags.pngText ? { ...tags.png, ...tags.pngText } : tags.png || tags.pngFile,
+    },
     { name: "JFIF", obj: tags.jfif },
     { name: "ICC", obj: tags.icc },
     { name: "File", obj: tags.file },
@@ -647,7 +696,10 @@ function extractAllTags(tags: ExpandedLike): RawMetadataTag[] {
   return result;
 }
 
-function extractResolutionDpi(flat: Record<string, TagLike>, tags: ExpandedLike): string | undefined {
+function extractResolutionDpi(
+  flat: Record<string, TagLike>,
+  tags: ExpandedLike,
+): string | undefined {
   const jUnit = readTagValue(tags.jfif?.["Resolution Unit"]);
   const jX = readTagValue(tags.jfif?.XResolution);
   if (jX && jX !== "0" && jX !== "1") {
@@ -681,7 +733,8 @@ function extractResolutionDpi(flat: Record<string, TagLike>, tags: ExpandedLike)
 }
 
 function extractColorInfo(flat: Record<string, TagLike>, tags: ExpandedLike) {
-  const iccDesc = readTagValue(tags.icc?.["Profile Description"]) || readTagValue(tags.icc?.ProfileDescription);
+  const iccDesc =
+    readTagValue(tags.icc?.["Profile Description"]) || readTagValue(tags.icc?.ProfileDescription);
   const exifColor = readTagValue(flat.ColorSpace);
   const subsampling = readTagValue(tags.file?.Subsampling);
 
@@ -703,7 +756,10 @@ function extractCameraSpecs(flat: Record<string, TagLike>): CameraSpecs | undefi
   const lens = readTagValue(flat.LensModel) || readTagValue(flat.LensMake);
   const exposureTime = readTagValue(flat.ExposureTime);
   const fNumber = readTagValue(flat.FNumber);
-  const iso = readTagValue(flat.ISOSpeedRatings) || readTagValue(flat.ISOSpeed) || readTagValue(flat.PhotographicSensitivity);
+  const iso =
+    readTagValue(flat.ISOSpeedRatings) ||
+    readTagValue(flat.ISOSpeed) ||
+    readTagValue(flat.PhotographicSensitivity);
   const focalLength = readTagValue(flat.FocalLength);
   const focalLength35mm = readTagValue(flat.FocalLengthIn35mmFilm);
   const flash = readTagValue(flat.Flash);
@@ -726,7 +782,11 @@ function extractCameraSpecs(flat: Record<string, TagLike>): CameraSpecs | undefi
     fNumber: fNumber ? formatFNumber(fNumber) : undefined,
     exposureTime: exposureTime ? formatExposure(exposureTime) : undefined,
     iso: iso ? `ISO ${iso}` : undefined,
-    focalLength: focalLength ? (focalLength.includes("mm") ? focalLength : `${focalLength} mm`) : undefined,
+    focalLength: focalLength
+      ? focalLength.includes("mm")
+        ? focalLength
+        : `${focalLength} mm`
+      : undefined,
     focalLength35mm: focalLength35mm ? `${focalLength35mm} mm (35mm equiv)` : undefined,
     flash: flash || undefined,
     whiteBalance: whiteBalance || undefined,
@@ -739,12 +799,26 @@ function extractCameraSpecs(flat: Record<string, TagLike>): CameraSpecs | undefi
   };
 }
 
-function extractGpsLocation(tags: ExpandedLike, flat: Record<string, TagLike>): GpsLocation | undefined {
-  const latitude = signedCoordinate(tags.gps?.Latitude, flat.GPSLatitude, flat.GPSLatitudeRef, true);
-  const longitude = signedCoordinate(tags.gps?.Longitude, flat.GPSLongitude, flat.GPSLongitudeRef, false);
+function extractGpsLocation(
+  tags: ExpandedLike,
+  flat: Record<string, TagLike>,
+): GpsLocation | undefined {
+  const latitude = signedCoordinate(
+    tags.gps?.Latitude,
+    flat.GPSLatitude,
+    flat.GPSLatitudeRef,
+    true,
+  );
+  const longitude = signedCoordinate(
+    tags.gps?.Longitude,
+    flat.GPSLongitude,
+    flat.GPSLongitudeRef,
+    false,
+  );
   if (latitude == null || longitude == null) return undefined;
 
-  const altitude = typeof tags.gps?.Altitude === "number" ? tags.gps.Altitude : altitudeFromTags(flat);
+  const altitude =
+    typeof tags.gps?.Altitude === "number" ? tags.gps.Altitude : altitudeFromTags(flat);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 
   return {
@@ -804,7 +878,10 @@ export function detectAiGeneration(
     const text = readTagValue(candidate);
     if (!text || typeof text !== "string") continue;
 
-    if (/Steps:\s*\d+/i.test(text) && (/Sampler:\s*[^,]+/i.test(text) || /CFG scale:\s*[\d.]+/i.test(text))) {
+    if (
+      /Steps:\s*\d+/i.test(text) &&
+      (/Sampler:\s*[^,]+/i.test(text) || /CFG scale:\s*[\d.]+/i.test(text))
+    ) {
       isAi = true;
       confidence = "high";
       generator = generator || (text.includes("Fooocus") ? "Fooocus" : "Stable Diffusion");
@@ -882,9 +959,16 @@ export function detectAiGeneration(
   // 2. ComfyUI prompt / workflow in PNG chunks
   const comfyPromptRaw = readTagValue(tags.pngText?.prompt);
   const comfyWorkflowRaw = readTagValue(tags.pngText?.workflow);
-  if (comfyPromptRaw && typeof comfyPromptRaw === "string" && comfyPromptRaw.includes("class_type")) {
+  if (
+    comfyPromptRaw &&
+    typeof comfyPromptRaw === "string" &&
+    comfyPromptRaw.includes("class_type")
+  ) {
     try {
-      const data = JSON.parse(comfyPromptRaw) as Record<string, { class_type?: string; inputs?: Record<string, unknown> }>;
+      const data = JSON.parse(comfyPromptRaw) as Record<
+        string,
+        { class_type?: string; inputs?: Record<string, unknown> }
+      >;
       isAi = true;
       confidence = "high";
       generator = generator || "ComfyUI";
@@ -908,7 +992,10 @@ export function detectAiGeneration(
         }
         if (/CheckpointLoader|UNETLoader/i.test(cls)) {
           model =
-            asText(inputs.ckpt_name) || asText(inputs.model_name) || asText(inputs.unet_name) || model;
+            asText(inputs.ckpt_name) ||
+            asText(inputs.model_name) ||
+            asText(inputs.unet_name) ||
+            model;
         }
         if (cls === "CLIPTextEncode" && typeof inputs.text === "string" && inputs.text.trim()) {
           const textVal = inputs.text.trim();
@@ -922,7 +1009,11 @@ export function detectAiGeneration(
     } catch {
       // Ignore invalid JSON
     }
-  } else if (comfyWorkflowRaw && typeof comfyWorkflowRaw === "string" && comfyWorkflowRaw.includes("nodes")) {
+  } else if (
+    comfyWorkflowRaw &&
+    typeof comfyWorkflowRaw === "string" &&
+    comfyWorkflowRaw.includes("nodes")
+  ) {
     isAi = true;
     confidence = "high";
     generator = generator || "ComfyUI";
@@ -939,7 +1030,10 @@ export function detectAiGeneration(
 
   for (const text of descCandidates) {
     if (!text || typeof text !== "string") continue;
-    if (/--(?:v|ar|s|stylize|chaos|weird|tile|no|iw)\b/i.test(text) || /Midjourney/i.test(haystack)) {
+    if (
+      /--(?:v|ar|s|stylize|chaos|weird|tile|no|iw)\b/i.test(text) ||
+      /Midjourney/i.test(haystack)
+    ) {
       isAi = true;
       confidence = "high";
       generator = generator || "Midjourney";
@@ -961,7 +1055,12 @@ export function detectAiGeneration(
   }
 
   // 4. Software tag checks
-  const software = (readTagValue(flat.Software) || readTagValue(flat.ProcessingSoftware) || readTagValue(flat.CreatorTool) || "").toLowerCase();
+  const software = (
+    readTagValue(flat.Software) ||
+    readTagValue(flat.ProcessingSoftware) ||
+    readTagValue(flat.CreatorTool) ||
+    ""
+  ).toLowerCase();
   if (software.includes("midjourney")) {
     isAi = true;
     confidence = "high";
@@ -1033,13 +1132,28 @@ export function detectAiGeneration(
   };
 }
 
-function addGpsFields(tags: ExpandedLike, flat: Record<string, TagLike>, push: (label: string, value: string, group: MetadataGroup) => void) {
-  const latitude = signedCoordinate(tags.gps?.Latitude, flat.GPSLatitude, flat.GPSLatitudeRef, true);
-  const longitude = signedCoordinate(tags.gps?.Longitude, flat.GPSLongitude, flat.GPSLongitudeRef, false);
+function addGpsFields(
+  tags: ExpandedLike,
+  flat: Record<string, TagLike>,
+  push: (label: string, value: string, group: MetadataGroup) => void,
+) {
+  const latitude = signedCoordinate(
+    tags.gps?.Latitude,
+    flat.GPSLatitude,
+    flat.GPSLatitudeRef,
+    true,
+  );
+  const longitude = signedCoordinate(
+    tags.gps?.Longitude,
+    flat.GPSLongitude,
+    flat.GPSLongitudeRef,
+    false,
+  );
   if (latitude != null) push("Latitude", formatCoordinate(latitude, true), "location");
   if (longitude != null) push("Longitude", formatCoordinate(longitude, false), "location");
 
-  const altitude = typeof tags.gps?.Altitude === "number" ? tags.gps.Altitude : altitudeFromTags(flat);
+  const altitude =
+    typeof tags.gps?.Altitude === "number" ? tags.gps.Altitude : altitudeFromTags(flat);
   if (altitude != null) push("Altitude", `${trimNumber(altitude)} m`, "location");
 }
 
@@ -1054,13 +1168,15 @@ function signedCoordinate(computed: number | undefined, tag: TagLike, ref: TagLi
 
 function decimalFromTag(tag: TagLike) {
   if (!tag) return undefined;
-  if (typeof tag.description === "number" && Number.isFinite(tag.description)) return tag.description;
+  if (typeof tag.description === "number" && Number.isFinite(tag.description))
+    return tag.description;
   const numeric = Number(tag.description);
   if (Number.isFinite(numeric) && String(tag.description).trim() !== "") return numeric;
   const value = tag.value;
   if (!Array.isArray(value) || value.length < 3) return undefined;
   const parts = value.map((part) => {
-    if (Array.isArray(part) && part.length >= 2 && Number(part[1])) return Number(part[0]) / Number(part[1]);
+    if (Array.isArray(part) && part.length >= 2 && Number(part[1]))
+      return Number(part[0]) / Number(part[1]);
     return Number(part);
   });
   if (parts.some((part) => !Number.isFinite(part))) return undefined;
@@ -1094,7 +1210,8 @@ function formatField(key: string, value: string) {
   if (/Date|Time/i.test(key) && /^\d{4}:\d{2}:\d{2}/.test(value)) return formatExifDate(value);
   if (key === "ExposureTime") return formatExposure(value);
   if (key === "FNumber") return formatFNumber(value);
-  if (key === "FocalLength" || key === "FocalLengthIn35mmFilm") return /mm/i.test(value) ? value : `${value} mm`;
+  if (key === "FocalLength" || key === "FocalLengthIn35mmFilm")
+    return /mm/i.test(value) ? value : `${value} mm`;
   if (/ISO/i.test(key) && /^\d+(\.\d+)?$/.test(value)) return value;
   return value;
 }
@@ -1102,7 +1219,20 @@ function formatField(key: string, value: string) {
 function formatExifDate(value: string) {
   const match = value.match(/^(\d{4}):(\d{2}):(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
   if (!match) return value;
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const month = months[Number(match[2]) - 1];
   if (!month) return value;
   const date = `${Number(match[3])} ${month} ${match[1]}`;
@@ -1142,7 +1272,12 @@ function addProvenance(
 function detectGenerator(text: string) {
   if (/\bfirefly\b/i.test(text)) return "Adobe Firefly";
   if (/\bcomfy[\s-]?ui\b/i.test(text)) return "ComfyUI";
-  if (/stable[\s-]?diffusion/i.test(text) || /\bsdxl\b/i.test(text) || /\bsd[\s-]?webui\b/i.test(text)) return "Stable Diffusion";
+  if (
+    /stable[\s-]?diffusion/i.test(text) ||
+    /\bsdxl\b/i.test(text) ||
+    /\bsd[\s-]?webui\b/i.test(text)
+  )
+    return "Stable Diffusion";
   if (/\bmidjourney\b/i.test(text)) return "Midjourney";
   if (/\bnovelai\b/i.test(text)) return "NovelAI";
   if (/\bdall[·-]?e\b/i.test(text)) return "OpenAI DALL·E";
@@ -1222,7 +1357,12 @@ function stringifyUnknown(raw: unknown): string {
 
 function groupFor(key: string): MetadataGroup {
   if (/GPS|Latitude|Longitude|Altitude/i.test(key)) return "location";
-  if (/Make|Model|Lens|Date|Time|ISO|Exposure|FNumber|Focal|Flash|WhiteBalance|Metering|Scene/i.test(key)) return "camera";
+  if (
+    /Make|Model|Lens|Date|Time|ISO|Exposure|FNumber|Focal|Flash|WhiteBalance|Metering|Scene/i.test(
+      key,
+    )
+  )
+    return "camera";
   return "other";
 }
 
@@ -1337,7 +1477,7 @@ async function heifSize(blob: Blob): Promise<Size | null> {
     new DataView(await blob.slice(start, end).arrayBuffer());
   async function children(start: number, end: number) {
     const boxes: { type: string; start: number; end: number }[] = [];
-    for (let at = start; at + 8 <= end && at < HEIF_PROPERTIES_WITHIN; ) {
+    for (let at = start; at + 8 <= end && at < HEIF_PROPERTIES_WITHIN;) {
       const head = await read(at, at + 16);
       let size = head.getUint32(0),
         header = 8;
@@ -1388,7 +1528,7 @@ export function hasEmbeddedMetadata(bytes: Uint8Array): boolean {
 
 function pngHasMetadata(bytes: Uint8Array) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  for (let offset = 8; offset + 12 <= bytes.length; ) {
+  for (let offset = 8; offset + 12 <= bytes.length;) {
     const end = offset + 12 + view.getUint32(offset);
     const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
     if (end > bytes.length || !PNG_KEEP.has(type)) return true;
@@ -1462,7 +1602,7 @@ function jpegHasMetadata(bytes: Uint8Array) {
 }
 
 function webpHasMetadata(bytes: Uint8Array) {
-  for (let offset = 12; offset < bytes.length; ) {
+  for (let offset = 12; offset < bytes.length;) {
     if (offset + 8 > bytes.length) return true;
     const id = String.fromCharCode(...bytes.subarray(offset, offset + 4));
     const size = new DataView(bytes.buffer, bytes.byteOffset + offset + 4, 4).getUint32(0, true);
@@ -1530,8 +1670,38 @@ function exifOrientation(data: Uint8Array): number {
 function orientationExif(value: number): Uint8Array {
   // "Exif\0\0", little-endian TIFF header, one IFD entry (0x0112, SHORT, 1, value), no next IFD.
   return Uint8Array.from([
-    0x45, 0x78, 0x69, 0x66, 0, 0, 0x49, 0x49, 0x2a, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0,
-    0, 0, value, 0, 0, 0, 0, 0, 0, 0,
+    0x45,
+    0x78,
+    0x69,
+    0x66,
+    0,
+    0,
+    0x49,
+    0x49,
+    0x2a,
+    0,
+    8,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0x12,
+    0x01,
+    3,
+    0,
+    1,
+    0,
+    0,
+    0,
+    value,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
   ]);
 }
 
@@ -1601,10 +1771,7 @@ export function stripJpegMetadata(bytes: Uint8Array): Uint8Array {
 
   if (orientation > 1) {
     const payload = orientationExif(orientation);
-    const segment = concat([
-      Uint8Array.from([0xff, 0xe1, 0, payload.length + 2]),
-      payload,
-    ]);
+    const segment = concat([Uint8Array.from([0xff, 0xe1, 0, payload.length + 2]), payload]);
     // After JFIF's APP0 when present: JFIF requires APP0 to follow SOI directly.
     const afterApp0 = chunks[1]?.[0] === 0xff && chunks[1]?.[1] === 0xe0 ? 2 : 1;
     chunks.splice(afterApp0, 0, segment);
@@ -1711,6 +1878,9 @@ function isWebpSignature(bytes: Uint8Array): boolean {
 }
 
 function toBlobFromBytes(bytes: Uint8Array, mime: string): Blob {
-  const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const buf = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
   return new Blob([buf], { type: mime });
 }

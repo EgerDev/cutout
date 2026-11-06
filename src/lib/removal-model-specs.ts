@@ -25,25 +25,42 @@ export type PreparedRemovalEngine = {
   readonly provider: RemovalProvider;
   readonly outputImageSemantics: MaskSemantics;
   readonly processor: (image: unknown) => Promise<{ readonly pixel_values: RemovalTensor }>;
-  readonly model: (inputs: { readonly input_image: unknown }) => Promise<{ readonly output_image: RemovalTensor }>;
+  readonly model: (inputs: {
+    readonly input_image: unknown;
+  }) => Promise<{ readonly output_image: RemovalTensor }>;
   dispose(): Promise<void>;
 };
 export type RemovalGpuDevice = { readonly lost: Promise<unknown> };
 
 /** Transformers 3.8.1 exposes ORT's own device here during backend initialization. */
 export function removalGpuDevice(env: unknown): RemovalGpuDevice | undefined {
-  const device = unknownField(unknownField(unknownField(unknownField(env, "backends"), "onnx"), "webgpu"), "device");
-  return unknownField(device, "lost") instanceof Promise ? device as RemovalGpuDevice : undefined;
+  const device = unknownField(
+    unknownField(unknownField(unknownField(env, "backends"), "onnx"), "webgpu"),
+    "device",
+  );
+  return unknownField(device, "lost") instanceof Promise ? (device as RemovalGpuDevice) : undefined;
 }
 
 export interface RemovalLoadFactories {
   gpuDevice?(): Promise<RemovalGpuDevice | undefined>;
-  evictModelFile?(model: RemovalModelKind, provider: RemovalProvider, dtype?: RemovalDtype): Promise<boolean>;
+  evictModelFile?(
+    model: RemovalModelKind,
+    provider: RemovalProvider,
+    dtype?: RemovalDtype,
+  ): Promise<boolean>;
   /** Removes every cached file of the model id (E05-01); true when the cache was reachable. */
   evictModelCache?(model: RemovalModelKind): Promise<boolean>;
 
-  loadProcessor(model: RemovalModelKind, progress: (event: RemovalLoadProgress) => void): Promise<unknown>;
-  loadModel(model: RemovalModelKind, provider: RemovalProvider, progress: (event: RemovalLoadProgress) => void, dtype?: RemovalDtype): Promise<unknown>;
+  loadProcessor(
+    model: RemovalModelKind,
+    progress: (event: RemovalLoadProgress) => void,
+  ): Promise<unknown>;
+  loadModel(
+    model: RemovalModelKind,
+    provider: RemovalProvider,
+    progress: (event: RemovalLoadProgress) => void,
+    dtype?: RemovalDtype,
+  ): Promise<unknown>;
 }
 export type RemovalModelIdentity = {
   readonly model: RemovalModelKind;
@@ -66,7 +83,9 @@ export type RemovalModelSpec = {
   readonly inputDims: readonly number[];
   readonly outputName: "output" | "output_image";
   readonly outputDims: readonly number[];
-  readonly routes: Readonly<Record<RemovalProvider, RemovalModelRoute | undefined>> & { readonly webgpuFp32?: RemovalModelRoute };
+  readonly routes: Readonly<Record<RemovalProvider, RemovalModelRoute | undefined>> & {
+    readonly webgpuFp32?: RemovalModelRoute;
+  };
 };
 
 export type RemovalModelRoute = {
@@ -106,7 +125,9 @@ export const REMOVAL_MODELS = {
 
 /** ONNX: HF x-linked-etag (LFS SHA-256); JSON: SHA-256 of the exact resolved bytes.
  *  Revisions above and these hashes must be reviewed together. */
-export const REMOVAL_MODEL_SHA256: Readonly<Record<RemovalModelKind, Readonly<Record<string, string>>>> = {
+export const REMOVAL_MODEL_SHA256: Readonly<
+  Record<RemovalModelKind, Readonly<Record<string, string>>>
+> = {
   birefnet: {
     "onnx/model.onnx": "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2",
     "onnx/model_fp16.onnx": "eff9216bb2f9d3f023d9c2b7196845a7485739ab1f231593633e4d2344ffc516",
@@ -121,14 +142,21 @@ export const REMOVAL_MODEL_SHA256: Readonly<Record<RemovalModelKind, Readonly<Re
   },
 };
 
-export function removalModelRoute(request: Pick<RemovalLoadRequest, "model" | "provider" | "dtype">): RemovalModelRoute | undefined {
+export function removalModelRoute(
+  request: Pick<RemovalLoadRequest, "model" | "provider" | "dtype">,
+): RemovalModelRoute | undefined {
   const spec: RemovalModelSpec = REMOVAL_MODELS[request.model];
-  const route = request.provider === "webgpu" && request.dtype === "fp32"
-    ? spec.routes.webgpuFp32 : spec.routes[request.provider];
+  const route =
+    request.provider === "webgpu" && request.dtype === "fp32"
+      ? spec.routes.webgpuFp32
+      : spec.routes[request.provider];
   return request.dtype === undefined || request.dtype === route?.dtype ? route : undefined;
 }
 
-export function parseRemovalTensor(value: unknown, expectedDims: readonly number[]): RemovalTensor | undefined {
+export function parseRemovalTensor(
+  value: unknown,
+  expectedDims: readonly number[],
+): RemovalTensor | undefined {
   try {
     if (!isRemovalTensor(value)) return undefined;
     if (!sameDims(value.dims, expectedDims)) return undefined;
@@ -151,8 +179,13 @@ export function removalProgressEvent(value: unknown): RemovalLoadProgress {
   };
 }
 
-export function removalCleanupFailure(source: unknown, cleanup: readonly unknown[]): AggregateError {
-  return new AggregateError([source, ...cleanup], "Removal load failed and cleanup also failed", { cause: source });
+export function removalCleanupFailure(
+  source: unknown,
+  cleanup: readonly unknown[],
+): AggregateError {
+  return new AggregateError([source, ...cleanup], "Removal load failed and cleanup also failed", {
+    cause: source,
+  });
 }
 
 export async function disposeRemovalResource(value: unknown): Promise<void> {
@@ -161,7 +194,9 @@ export async function disposeRemovalResource(value: unknown): Promise<void> {
   await dispose.call(value);
 }
 
-export async function disposeRemovalResources(values: readonly unknown[]): Promise<readonly unknown[]> {
+export async function disposeRemovalResources(
+  values: readonly unknown[],
+): Promise<readonly unknown[]> {
   const seen = new Set<unknown>();
   const failures: unknown[] = [];
   for (const value of values) {
@@ -182,7 +217,9 @@ export function removalResourceFailure(failures: readonly unknown[]): unknown {
     : new AggregateError(failures, "Multiple removal resources failed to dispose");
 }
 
-export function isUnknownCallable(value: unknown): value is (...args: readonly unknown[]) => unknown {
+export function isUnknownCallable(
+  value: unknown,
+): value is (...args: readonly unknown[]) => unknown {
   return typeof value === "function";
 }
 
@@ -202,15 +239,21 @@ function isNumberArray(value: unknown): value is readonly number[] {
 }
 
 function sameDims(actual: readonly number[], expected: readonly number[]): boolean {
-  return actual.length === expected.length && actual.every((dimension, index) => dimension === expected[index]);
+  return (
+    actual.length === expected.length &&
+    actual.every((dimension, index) => dimension === expected[index])
+  );
 }
-
 
 /** Only explicit protobuf corruption warrants deleting weights and replacing the realm. */
 export function isRemovalSessionFailure(error: unknown): boolean {
   for (let depth = 0; error && depth < 5; depth++, error = unknownField(error, "cause")) {
     const message = typeof error === "string" ? error : unknownField(error, "message");
-    if (typeof message === "string" && /protobuf parsing failed|invalid[ _-]protobuf/i.test(message)) return true;
+    if (
+      typeof message === "string" &&
+      /protobuf parsing failed|invalid[ _-]protobuf/i.test(message)
+    )
+      return true;
   }
   return false;
 }
@@ -223,7 +266,12 @@ export function isRemovalSessionFailure(error: unknown): boolean {
 export function isHubJsonFailure(error: unknown): boolean {
   for (let depth = 0; error && depth < 5; depth++, error = unknownField(error, "cause")) {
     const message = unknownField(error, "message");
-    if (unknownField(error, "name") === "SyntaxError" && typeof message === "string" && /json/i.test(message)) return true;
+    if (
+      unknownField(error, "name") === "SyntaxError" &&
+      typeof message === "string" &&
+      /json/i.test(message)
+    )
+      return true;
   }
   return false;
 }
@@ -233,15 +281,27 @@ export function isHubJsonFailure(error: unknown): boolean {
 export async function evictRemovalModelCache(
   model: RemovalModelKind,
   env: unknown,
-  store: { open(name: string): Promise<{ keys(): Promise<readonly { url: string }[]>; delete(key: string): Promise<boolean> }> } | undefined = undefined,
+  store:
+    | {
+        open(name: string): Promise<{
+          keys(): Promise<readonly { url: string }[]>;
+          delete(key: string): Promise<boolean>;
+        }>;
+      }
+    | undefined = undefined,
 ): Promise<boolean> {
   if (unknownField(env, "useBrowserCache") === false) return false;
-  try { store ??= globalThis.caches; } catch { return false; }
+  try {
+    store ??= globalThis.caches;
+  } catch {
+    return false;
+  }
   if (!store) return false;
   const repository = `/${REMOVAL_MODELS[model].modelId}/`;
   try {
     const cache = await store.open("transformers-cache");
-    for (const request of await cache.keys()) if (request.url.includes(repository)) await cache.delete(request.url);
+    for (const request of await cache.keys())
+      if (request.url.includes(repository)) await cache.delete(request.url);
     return true;
   } catch {
     return false;
@@ -252,10 +312,16 @@ export async function evictRemovalModelCache(
 export async function evictRemovalModelFile(
   request: RemovalLoadRequest,
   env: unknown,
-  store: { open(name: string): Promise<{ delete(key: string): Promise<boolean> }> } | undefined = undefined,
+  store:
+    | { open(name: string): Promise<{ delete(key: string): Promise<boolean> }> }
+    | undefined = undefined,
 ): Promise<boolean> {
   if (unknownField(env, "useBrowserCache") === false) return false;
-  try { store ??= globalThis.caches; } catch { return false; }
+  try {
+    store ??= globalThis.caches;
+  } catch {
+    return false;
+  }
   if (!store) return false;
   const spec = REMOVAL_MODELS[request.model];
   const route = removalModelRoute(request);
@@ -263,14 +329,26 @@ export async function evictRemovalModelFile(
   const host = unknownField(env, "remoteHost");
   const template = unknownField(env, "remotePathTemplate");
   const remote = (typeof template === "string" ? template : "{model}/resolve/{revision}/")
-    .replaceAll("{model}", spec.modelId).replaceAll("{revision}", encodeURIComponent(spec.revision));
-  const join = (...parts: string[]) => parts.map((part, index) => index === 0 ? part.replace(/\/+$/, "") : part.replace(/^\/+|\/+$/g, "")).join("/");
-  const url = join(typeof host === "string" ? host : "https://huggingface.co/", remote, "onnx", route.onnxFile);
+    .replaceAll("{model}", spec.modelId)
+    .replaceAll("{revision}", encodeURIComponent(spec.revision));
+  const join = (...parts: string[]) =>
+    parts
+      .map((part, index) =>
+        index === 0 ? part.replace(/\/+$/, "") : part.replace(/^\/+|\/+$/g, ""),
+      )
+      .join("/");
+  const url = join(
+    typeof host === "string" ? host : "https://huggingface.co/",
+    remote,
+    "onnx",
+    route.onnxFile,
+  );
   try {
     const cache = await store.open("transformers-cache");
     await cache.delete(url);
     const local = unknownField(env, "localModelPath");
-    if (typeof local === "string") await cache.delete(join(local, spec.modelId, "onnx", route.onnxFile));
+    if (typeof local === "string")
+      await cache.delete(join(local, spec.modelId, "onnx", route.onnxFile));
     return true; // Already absent is also safe for the next download.
   } catch {
     return false;

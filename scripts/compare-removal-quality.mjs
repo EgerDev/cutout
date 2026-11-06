@@ -5,7 +5,13 @@ import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import sharp from "sharp";
 import { z } from "zod";
-import { loadCorpus, outputIdentity, pairedLatency, qualityCapturePolicy, validateCompletedRuns } from "./benchmark/contract.mjs";
+import {
+  loadCorpus,
+  outputIdentity,
+  pairedLatency,
+  qualityCapturePolicy,
+  validateCompletedRuns,
+} from "./benchmark/contract.mjs";
 import { alphaMetrics } from "./benchmark/quality.mjs";
 
 const HELP = `Usage:
@@ -38,8 +44,16 @@ const artifactSchema = z.object({
     qualityCapture: z.object({ json: z.string(), sha256: z.string() }).strict().optional(),
     allowNondeterministicOutputs: z.boolean().optional(),
   }),
-  sources: z.object({ baseline: z.object({ commit: z.string() }), candidate: z.object({ commit: z.string() }) }).optional(),
-  corpus: z.object({ manifestPath: z.string().min(1), manifestSha256: z.string().regex(/^[0-9a-f]{64}$/) }),
+  sources: z
+    .object({
+      baseline: z.object({ commit: z.string() }),
+      candidate: z.object({ commit: z.string() }),
+    })
+    .optional(),
+  corpus: z.object({
+    manifestPath: z.string().min(1),
+    manifestSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
 });
 
 function options(argv) {
@@ -51,22 +65,31 @@ function options(argv) {
       allowOutputDifferences = true;
       continue;
     }
-    if (!argv[index]?.startsWith("--") || !argv[index + 1]) throw new Error(`Invalid option ${argv[index] ?? ""}`);
+    if (!argv[index]?.startsWith("--") || !argv[index + 1])
+      throw new Error(`Invalid option ${argv[index] ?? ""}`);
     values.set(argv[index], argv[index + 1]);
     index += 1;
   }
   if (!values.get("--benchmark")) throw new Error("--benchmark is required");
   const benchmark = resolve(values.get("--benchmark"));
-  return { benchmark, qualityPolicySha256: values.get("--quality-policy-sha256"), output: resolve(values.get("--output") ?? join(benchmark, "quality.json")), allowOutputDifferences };
+  return {
+    benchmark,
+    qualityPolicySha256: values.get("--quality-policy-sha256"),
+    output: resolve(values.get("--output") ?? join(benchmark, "quality.json")),
+    allowOutputDifferences,
+  };
 }
 
 async function hash(path) {
-  return createHash("sha256").update(await readFile(path)).digest("hex");
+  return createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
 }
 
 function localPath(root, path) {
   const full = resolve(root, path);
-  if (relative(root, full).startsWith("..")) throw new Error(`Artifact path escapes benchmark: ${path}`);
+  if (relative(root, full).startsWith(".."))
+    throw new Error(`Artifact path escapes benchmark: ${path}`);
   return full;
 }
 
@@ -76,20 +99,32 @@ async function predictedAlpha(path) {
   if (!metadata.hasAlpha) throw new Error(`${path} has no alpha channel`);
   const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const alpha = new Uint8Array(info.width * info.height);
-  for (let pixel = 0; pixel < alpha.length; pixel += 1) alpha[pixel] = data[pixel * info.channels + 3];
+  for (let pixel = 0; pixel < alpha.length; pixel += 1)
+    alpha[pixel] = data[pixel * info.channels + 3];
   return { alpha, width: info.width, height: info.height };
 }
 
 /** The PNG's bytes and its decoded 8-bit RGBA, as hashes (never the pixels themselves). */
 async function decodedOutput(path) {
   const stat = await lstat(path);
-  if (!stat.isFile() || stat.nlink !== 1) throw new Error(`${path} must be an independent regular PNG file`);
+  if (!stat.isFile() || stat.nlink !== 1)
+    throw new Error(`${path} must be an independent regular PNG file`);
   const bytes = await readFile(path);
   const image = sharp(bytes, { failOn: "error" });
   if ((await image.metadata()).format !== "png") throw new Error(`${path} is not a PNG file`);
-  const { data, info } = await image.toColourspace("srgb").ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await image
+    .toColourspace("srgb")
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
   const digest = (buffer) => createHash("sha256").update(buffer).digest("hex");
-  return { pngSha256: digest(bytes), rgbaSha256: digest(data), width: info.width, height: info.height, channels: info.channels };
+  return {
+    pngSha256: digest(bytes),
+    rgbaSha256: digest(data),
+    width: info.width,
+    height: info.height,
+    channels: info.channels,
+  };
 }
 
 /**
@@ -123,7 +158,11 @@ async function identityOf(fixture, runIndex, benchmark, qualityOnly = false) {
       annotate(error);
     }
     if (output.pngSha256 !== runRow.outputSha256)
-      annotate(new Error(`${fixture.id} ${variant} saved output does not match the sha256 recorded when it ran`));
+      annotate(
+        new Error(
+          `${fixture.id} ${variant} saved output does not match the sha256 recorded when it ran`,
+        ),
+      );
     sides[variant] = { ...output, method: runRow.method, actualProvider: runRow.actualProvider };
   }
   const baselineRow = runIndex.get(`0:${fixture.id}:baseline`);
@@ -146,7 +185,8 @@ async function identityOf(fixture, runIndex, benchmark, qualityOnly = false) {
     baseline.height !== candidate.height
   )
     problems.push("decoded RGBA differs");
-  if (baseline.method !== candidate.method) problems.push(`method ${baseline.method} != ${candidate.method}`);
+  if (baseline.method !== candidate.method)
+    problems.push(`method ${baseline.method} != ${candidate.method}`);
   if (baseline.actualProvider !== candidate.actualProvider)
     problems.push(`actualProvider ${baseline.actualProvider} != ${candidate.actualProvider}`);
   return { fixtureId: fixture.id, identical: problems.length === 0, problems, baseline, candidate };
@@ -215,14 +255,19 @@ async function assertQualitySavedEvidence(fixtures, runIndex, benchmark, identit
         if (runRow.method !== reference.method)
           fail(`method ${runRow.method} != verified pair 0 ${reference.method}`);
         if (runRow.actualProvider !== reference.actualProvider)
-          fail(`actualProvider ${runRow.actualProvider} != verified pair 0 ${reference.actualProvider}`);
+          fail(
+            `actualProvider ${runRow.actualProvider} != verified pair 0 ${reference.actualProvider}`,
+          );
       }
     }
   }
 }
 
 async function truthAlpha(path) {
-  const { data, info } = await sharp(path, { failOn: "error" }).greyscale().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(path, { failOn: "error" })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
   return { alpha: new Uint8Array(data), width: info.width, height: info.height };
 }
 
@@ -232,7 +277,9 @@ function average(rows, metric) {
 
 function aggregate(rows) {
   if (rows.length === 0) return null;
-  return Object.fromEntries(["mae", "mse", "gradientMae", "boundaryF1"].map((metric) => [metric, average(rows, metric)]));
+  return Object.fromEntries(
+    ["mae", "mse", "gradientMae", "boundaryF1"].map((metric) => [metric, average(rows, metric)]),
+  );
 }
 
 async function main(argv) {
@@ -241,35 +288,57 @@ async function main(argv) {
     process.stdout.write(HELP);
     return;
   }
-  const manifest = artifactSchema.parse(JSON.parse(await readFile(join(selected.benchmark, "manifest.json"), "utf8")));
-  if (await hash(manifest.corpus.manifestPath) !== manifest.corpus.manifestSha256)
+  const manifest = artifactSchema.parse(
+    JSON.parse(await readFile(join(selected.benchmark, "manifest.json"), "utf8")),
+  );
+  if ((await hash(manifest.corpus.manifestPath)) !== manifest.corpus.manifestSha256)
     throw new Error("Corpus manifest changed after benchmark execution");
   const corpus = await loadCorpus(manifest.corpus.manifestPath, manifest.protocol.split, true);
   const capture = manifest.protocol.qualityCapture;
   const qualityOnly = manifest.protocol.purpose === "quality-only";
   if (qualityOnly !== Boolean(capture) || (!qualityOnly && selected.qualityPolicySha256))
     throw new Error("Quality-only purpose/policy identity mismatch");
-  if (qualityOnly && (selected.allowOutputDifferences || manifest.protocol.allowNondeterministicOutputs))
+  if (
+    qualityOnly &&
+    (selected.allowOutputDifferences || manifest.protocol.allowNondeterministicOutputs)
+  )
     throw new Error("quality-only capture requires strict output identity");
-  const qualityCapture = qualityOnly ? qualityCapturePolicy(capture, {
-    expectedSha256: selected.qualityPolicySha256,
-    manifestSha256: manifest.corpus.manifestSha256,
-    fixtures: corpus.fixtures,
-    ...manifest.protocol,
-    baselineCommit: manifest.sources?.baseline.commit,
-    candidateCommit: manifest.sources?.candidate.commit,
-  }) : undefined;
+  const qualityCapture = qualityOnly
+    ? qualityCapturePolicy(capture, {
+        expectedSha256: selected.qualityPolicySha256,
+        manifestSha256: manifest.corpus.manifestSha256,
+        fixtures: corpus.fixtures,
+        ...manifest.protocol,
+        baselineCommit: manifest.sources?.baseline.commit,
+        candidateCommit: manifest.sources?.candidate.commit,
+      })
+    : undefined;
   const text = await readFile(join(selected.benchmark, "runs.jsonl"), "utf8");
-  const rows = text.trim().split("\n").map((line) => JSON.parse(line));
+  const rows = text
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   const allowNondeterministicOutputs = manifest.protocol.allowNondeterministicOutputs === true;
-  const runIndex = validateCompletedRuns(rows, corpus.fixtures.map((fixture) => fixture.id), manifest.protocol.pairs, {
-    allowNondeterministicOutputs,
-    qualityCapture,
-  });
+  const runIndex = validateCompletedRuns(
+    rows,
+    corpus.fixtures.map((fixture) => fixture.id),
+    manifest.protocol.pairs,
+    {
+      allowNondeterministicOutputs,
+      qualityCapture,
+    },
+  );
   const identity = [];
-  for (const fixture of corpus.fixtures) identity.push(await identityOf(fixture, runIndex, selected.benchmark, qualityOnly));
+  for (const fixture of corpus.fixtures)
+    identity.push(await identityOf(fixture, runIndex, selected.benchmark, qualityOnly));
   if (qualityOnly)
-    await assertQualitySavedEvidence(corpus.fixtures, runIndex, selected.benchmark, identity, manifest.protocol.pairs);
+    await assertQualitySavedEvidence(
+      corpus.fixtures,
+      runIndex,
+      selected.benchmark,
+      identity,
+      manifest.protocol.pairs,
+    );
   const differing = identity.filter((entry) => !entry.identical);
   const scored = [];
   const unscored = [];
@@ -310,7 +379,12 @@ async function main(argv) {
   }
   const categories = [...new Set(scored.map((row) => row.category))].sort().map((category) => {
     const group = scored.filter((row) => row.category === category);
-    return { category, fixtures: group.length, baseline: aggregate(group.map((row) => row.baseline)), candidate: aggregate(group.map((row) => row.candidate)) };
+    return {
+      category,
+      fixtures: group.length,
+      baseline: aggregate(group.map((row) => row.baseline)),
+      candidate: aggregate(group.map((row) => row.candidate)),
+    };
   });
   const real = scored.filter((row) => row.evaluation === "real-alpha");
   const known = scored.filter((row) => row.evaluation === "known-alpha");
@@ -330,23 +404,38 @@ async function main(argv) {
       visualOnly: unscored.length,
       hasRealAnnotatedMetrics: real.length > 0,
       allExecutableFixturesScored: unscored.length === 0,
-      note: real.length > 0
-        ? "Real annotations provide metrics for the listed fixtures only; sample count, category coverage, and prespecified acceptance thresholds must be assessed before any broader quality claim. Synthetic masks remain a separate deterministic contract set."
-        : "No real photographic annotations were scored, so photographic quality claims are unavailable.",
+      note:
+        real.length > 0
+          ? "Real annotations provide metrics for the listed fixtures only; sample count, category coverage, and prespecified acceptance thresholds must be assessed before any broader quality claim. Synthetic masks remain a separate deterministic contract set."
+          : "No real photographic annotations were scored, so photographic quality claims are unavailable.",
     },
-    realAnnotated: { baseline: aggregate(real.map((row) => row.baseline)), candidate: aggregate(real.map((row) => row.candidate)) },
-    syntheticKnownAlpha: { baseline: aggregate(known.map((row) => row.baseline)), candidate: aggregate(known.map((row) => row.candidate)) },
+    realAnnotated: {
+      baseline: aggregate(real.map((row) => row.baseline)),
+      candidate: aggregate(real.map((row) => row.candidate)),
+    },
+    syntheticKnownAlpha: {
+      baseline: aggregate(known.map((row) => row.baseline)),
+      candidate: aggregate(known.map((row) => row.candidate)),
+    },
     identity: {
-      expectation: selected.allowOutputDifferences ? "differences allowed (--allow-output-differences)" : "identical",
-      compared: "pair 0 baseline vs candidate: PNG sha256, decoded RGBA sha256 and dimensions, method, actualProvider",
+      expectation: selected.allowOutputDifferences
+        ? "differences allowed (--allow-output-differences)"
+        : "identical",
+      compared:
+        "pair 0 baseline vs candidate: PNG sha256, decoded RGBA sha256 and dimensions, method, actualProvider",
       fixtures: identity.length,
       identical: identity.length - differing.length,
       differing: differing.map(({ fixtureId, problems }) => ({ fixtureId, problems })),
       perFixture: identity,
     },
     outputNondeterminism: { ...outputIdentity(rows), allowed: allowNondeterministicOutputs },
-    ...(qualityOnly ? { purpose: "quality-only", qualityCapture: capture,
-      performance: { eligible: false, reason: "quality-only capture; no latency inference" } } : {}),
+    ...(qualityOnly
+      ? {
+          purpose: "quality-only",
+          qualityCapture: capture,
+          performance: { eligible: false, reason: "quality-only capture; no latency inference" },
+        }
+      : {}),
     latency: qualityOnly ? null : pairedLatency(rows),
     categories,
     fixtures: scored,
@@ -366,7 +455,9 @@ async function main(argv) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch((error) => {
-    process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`);
+    process.stderr.write(
+      `${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+    );
     process.exitCode = 1;
   });
 }

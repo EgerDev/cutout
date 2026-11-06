@@ -48,18 +48,26 @@ function maskSvg(width, height, category, index) {
   if (category === "portrait-hair" || category === "pets-fur") {
     const lines = Array.from({ length: 17 }, (_, line) => {
       const x = Math.round(width * (0.32 + line * 0.022));
-      return `<path d="M${x} ${height * 0.2} Q${x + (line % 3 - 1) * width * 0.08} ${height * 0.5} ${x} ${height * 0.86}" stroke="#${line % 2 ? "c0c0c0" : "ffffff"}" stroke-width="${stroke}" fill="none"/>`;
+      return `<path d="M${x} ${height * 0.2} Q${x + ((line % 3) - 1) * width * 0.08} ${height * 0.5} ${x} ${height * 0.86}" stroke="#${line % 2 ? "c0c0c0" : "ffffff"}" stroke-width="${stroke}" fill="none"/>`;
     }).join("");
     return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><ellipse cx="50%" cy="56%" rx="22%" ry="33%" fill="#fff"/>${lines}</svg>`;
   }
   if (category === "glass-partial-alpha")
     return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><rect x="25%" y="12%" width="50%" height="76%" rx="12%" fill="#606060" stroke="#e0e0e0" stroke-width="${stroke * 3}"/><ellipse cx="50%" cy="22%" rx="22%" ry="8%" fill="#909090"/></svg>`;
   if (category === "plants") {
-    const leaves = Array.from({ length: 9 }, (_, leaf) => `<ellipse cx="${35 + (leaf % 3) * 15}%" cy="${20 + leaf * 7}%" rx="12%" ry="5%" transform="rotate(${leaf % 2 ? 28 : -28} ${width / 2} ${height / 2})" fill="#fff"/>`).join("");
+    const leaves = Array.from(
+      { length: 9 },
+      (_, leaf) =>
+        `<ellipse cx="${35 + (leaf % 3) * 15}%" cy="${20 + leaf * 7}%" rx="12%" ry="5%" transform="rotate(${leaf % 2 ? 28 : -28} ${width / 2} ${height / 2})" fill="#fff"/>`,
+    ).join("");
     return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><rect x="49%" y="15%" width="2%" height="78%" fill="#fff"/>${leaves}</svg>`;
   }
   if (category === "groups-small-subjects") {
-    const dots = Array.from({ length: 12 }, (_, dot) => `<circle cx="${10 + (dot % 4) * 26}%" cy="${20 + Math.floor(dot / 4) * 30}%" r="${3 + (dot % 3)}%" fill="#fff"/>`).join("");
+    const dots = Array.from(
+      { length: 12 },
+      (_, dot) =>
+        `<circle cx="${10 + (dot % 4) * 26}%" cy="${20 + Math.floor(dot / 4) * 30}%" r="${3 + (dot % 3)}%" fill="#fff"/>`,
+    ).join("");
     return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/>${dots}</svg>`;
   }
   return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><path d="M${width * 0.15} ${height * 0.82} L${width * 0.34} ${height * 0.18} Q${width * 0.5} ${height * 0.06} ${width * 0.66} ${height * 0.18} L${width * 0.86} ${height * 0.82} Z" fill="#fff"/></svg>`;
@@ -101,9 +109,12 @@ export async function generateKnownAlpha(outputDirectory) {
       .joinChannel(mask)
       .png()
       .toBuffer();
-    const image = category === "existing-transparency"
-      ? sharp(foreground)
-      : sharp({ create: { width, height, channels: 3, background } }).composite([{ input: foreground }]);
+    const image =
+      category === "existing-transparency"
+        ? sharp(foreground)
+        : sharp({ create: { width, height, channels: 3, background } }).composite([
+            { input: foreground },
+          ]);
     const format = formats[index % formats.length];
     await encode(image, format, join(inputDirectory, `${identifier}.${format}`));
   }
@@ -136,10 +147,10 @@ function edgeMaskSvg(width, height, category) {
   if (category === "interior-gaps") {
     // A chair-like frame: solid seat/legs, back panel punched with five slat holes.
     const slats = Array.from({ length: 5 }, (_, i) => {
-      const x = width * (0.30 + i * 0.10);
+      const x = width * (0.3 + i * 0.1);
       return `<rect x="${x}" y="${height * 0.18}" width="${width * 0.045}" height="${height * 0.44}" rx="${stroke}"/>`;
     }).join("");
-    return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><rect x="${width * 0.22}" y="${height * 0.12}" width="${width * 0.56}" height="${height * 0.50}" fill="#fff"/><rect x="${width * 0.24}" y="${height * 0.62}" width="${width * 0.52}" height="${height * 0.10}" fill="#fff"/><rect x="${width * 0.28}" y="${height * 0.72}" width="${width * 0.05}" height="${height * 0.22}" fill="#fff"/><rect x="${width * 0.67}" y="${height * 0.72}" width="${width * 0.05}" height="${height * 0.22}" fill="#fff"/><g fill="#000">${slats}</g></svg>`;
+    return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><rect x="${width * 0.22}" y="${height * 0.12}" width="${width * 0.56}" height="${height * 0.5}" fill="#fff"/><rect x="${width * 0.24}" y="${height * 0.62}" width="${width * 0.52}" height="${height * 0.1}" fill="#fff"/><rect x="${width * 0.28}" y="${height * 0.72}" width="${width * 0.05}" height="${height * 0.22}" fill="#fff"/><rect x="${width * 0.67}" y="${height * 0.72}" width="${width * 0.05}" height="${height * 0.22}" fill="#fff"/><g fill="#000">${slats}</g></svg>`;
   }
   if (category === "shadow-halo")
     return `<svg width="${width}" height="${height}"><rect width="100%" height="100%" fill="#000"/><ellipse cx="50%" cy="38%" rx="26%" ry="30%" fill="#fff"/><rect x="46%" y="60%" width="8%" height="30%" fill="#fff"/></svg>`;
@@ -180,9 +191,13 @@ async function generateEdgeCases(inputDirectory, alphaDirectory) {
         const k = 1 - 0.45 * (glow[p] / 255);
         for (let c = 0; c < 3; c += 1) shadow[p * 3 + c] = Math.round(bg[c] * k);
       }
-      image = sharp(shadow, { raw: { width, height, channels: 3 } }).composite([{ input: foreground }]);
+      image = sharp(shadow, { raw: { width, height, channels: 3 } }).composite([
+        { input: foreground },
+      ]);
     } else {
-      image = sharp({ create: { width, height, channels: 3, background } }).composite([{ input: foreground }]);
+      image = sharp({ create: { width, height, channels: 3, background } }).composite([
+        { input: foreground },
+      ]);
     }
     const format = formats[i % formats.length];
     await encode(image, format, join(inputDirectory, `${identifier}.${format}`));
@@ -190,8 +205,12 @@ async function generateEdgeCases(inputDirectory, alphaDirectory) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  generateKnownAlpha(resolve(process.argv[2] ?? ".omo/benchmarks/cutout-owned-engine/corpus/known-alpha")).catch((error) => {
-    process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`);
+  generateKnownAlpha(
+    resolve(process.argv[2] ?? ".omo/benchmarks/cutout-owned-engine/corpus/known-alpha"),
+  ).catch((error) => {
+    process.stderr.write(
+      `${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+    );
     process.exitCode = 1;
   });
 }

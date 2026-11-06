@@ -109,7 +109,8 @@ async function main(t) {
     () =>
       window.__cutoutTest.useWorkspace
         .getState()
-        .items.find((i) => i.id === window.__cutoutTest.useWorkspace.getState().activeId)?.status === "done",
+        .items.find((i) => i.id === window.__cutoutTest.useWorkspace.getState().activeId)
+        ?.status === "done",
     undefined,
     { timeout: 60000 },
   );
@@ -303,9 +304,14 @@ async function main(t) {
   // Test 7: Escape preserves images; deliberate clear returns to idle
   // -------------------------------------------------------------
   console.log("\n--- Test 7: Escape preserves the workspace ---");
-  const imageCount = await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().items.length);
+  const imageCount = await page.evaluate(
+    () => window.__cutoutTest.useWorkspace.getState().items.length,
+  );
   await page.keyboard.press("Escape");
-  assert.equal(await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().items.length), imageCount);
+  assert.equal(
+    await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().items.length),
+    imageCount,
+  );
   await page.getByRole("button", { name: "Cutout — clear workspace", exact: true }).click();
   await page.waitForSelector(".idle-headline", { timeout: 3000 });
   const idleHeadline = await page.textContent(".idle-headline");
@@ -330,8 +336,6 @@ async function main(t) {
   console.log("\n==============================================");
   console.log("ALL PRODUCTION PREVIEW & EDGE TESTS PASSED! 🎉");
   console.log("==============================================");
-
-
 }
 
 // A missing server is reported as skipped (failed under CUTOUT_REQUIRE_E2E), not as a pass.

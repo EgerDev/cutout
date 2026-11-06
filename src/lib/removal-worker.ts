@@ -55,7 +55,8 @@ const warmups = new Set<AbortController>();
 let queue: Promise<void> = Promise.resolve();
 /** Asked once per worker; adapters without f16 can run the fp32 route too. */
 let gpuCheck: Promise<boolean> | undefined;
-const hasGpu = () => (gpuCheck ??= requestCompatibleAdapter(navigatorGpu()).then((adapter) => adapter !== null));
+const hasGpu = () =>
+  (gpuCheck ??= requestCompatibleAdapter(navigatorGpu()).then((adapter) => adapter !== null));
 
 /** The message plus its cause chain: loader failures arrive wrapped in a generic error. */
 function describe(error: unknown): string {
@@ -118,8 +119,8 @@ async function handle(data: Exclude<Request, { type: "abort" }>, controller: Abo
       postMessage({ type: "progress", id, progress });
     if (data.type === "warmup") {
       // The model download's fraction rides the progress message; the client hands it back as is.
-      await engine.warmupBiRefNet((fraction) =>
-        onProgress({ stage: "loading", progress: fraction, message: "" }),
+      await engine.warmupBiRefNet(
+        (fraction) => onProgress({ stage: "loading", progress: fraction, message: "" }),
         controller.signal,
       );
       postMessage({ type: "done", id, result: null });

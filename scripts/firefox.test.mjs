@@ -71,9 +71,7 @@ test("a launch rejection removes this invocation's acquired directories", async 
       assert.match(String(error?.message), /executable|launch/i);
       return true;
     });
-    const leftover = fs
-      .readdirSync(parent)
-      .filter((name) => redirected(name) && !before.has(name));
+    const leftover = fs.readdirSync(parent).filter((name) => redirected(name) && !before.has(name));
     assert.deepEqual(leftover, []);
   });
 });

@@ -56,7 +56,9 @@ test("WebKit without OffscreenCanvas shows the notice", async (t) => {
   }
   try {
     const page = await browser.newPage();
-    await page.addInitScript(() => { delete globalThis.OffscreenCanvas; });
+    await page.addInitScript(() => {
+      delete globalThis.OffscreenCanvas;
+    });
     const seen = countModelRequests(page);
     await page.goto(appUrl, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { level: 1, name: notice }).waitFor({ timeout: 30000 });

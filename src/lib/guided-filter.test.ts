@@ -12,10 +12,7 @@ test("boxFilter2D produces exact normalized averages on all-ones buffer", () => 
   boxFilter2D(src, dst, scratch, width, height, 2);
 
   for (let i = 0; i < dst.length; i += 1) {
-    assert.ok(
-      Math.abs(dst[i]! - 1.0) < 1e-5,
-      `expected 1.0, got ${dst[i]} at index ${i}`,
-    );
+    assert.ok(Math.abs(dst[i]! - 1.0) < 1e-5, `expected 1.0, got ${dst[i]} at index ${i}`);
   }
 });
 
@@ -62,7 +59,11 @@ test("fastGuidedFilter preserves opaque interiors and transparent backgrounds", 
     }
   }
 
-  const refined = fastGuidedFilter(rgb, alpha, width, height, { radius: 6, eps: 1e-3, subsample: 2 });
+  const refined = fastGuidedFilter(rgb, alpha, width, height, {
+    radius: 6,
+    eps: 1e-3,
+    subsample: 2,
+  });
 
   // Deep interior pixel (x=8, y=24) must stay solidly opaque (255)
   assert.equal(refined[24 * width + 8], 255, "deep interior must remain 255");
@@ -106,7 +107,11 @@ test("fastGuidedFilter transfers high-contrast optical whiskers into alpha matte
     alpha[32 * width + x] = x <= 31 ? 120 : 0;
   }
 
-  const refined = fastGuidedFilter(rgb, alpha, width, height, { radius: 6, eps: 1e-3, subsample: 2 });
+  const refined = fastGuidedFilter(rgb, alpha, width, height, {
+    radius: 6,
+    eps: 1e-3,
+    subsample: 2,
+  });
 
   // The whisker at x=34, y=32 was 0 in coarse mask; guided filter must reconstruct it
   const whiskerVal = refined[32 * width + 34]!;
@@ -119,7 +124,10 @@ test("fastGuidedFilter transfers high-contrast optical whiskers into alpha matte
 
 test("fastGuidedFilter handles edge cases: 0x0, 1x1, odd dimensions", () => {
   // Empty inputs
-  assert.equal(fastGuidedFilter(new Uint8ClampedArray(0), new Uint8ClampedArray(0), 0, 0).length, 0);
+  assert.equal(
+    fastGuidedFilter(new Uint8ClampedArray(0), new Uint8ClampedArray(0), 0, 0).length,
+    0,
+  );
 
   // 1x1 input
   const rgb1 = new Uint8ClampedArray([255, 255, 255, 255]);
@@ -145,7 +153,11 @@ test("fastGuidedFilter operates within performance budget for megapixel inputs",
   const alpha = new Uint8ClampedArray(width * height);
 
   const start = performance.now();
-  const refined = fastGuidedFilter(rgb, alpha, width, height, { radius: 8, eps: 1e-3, subsample: 4 });
+  const refined = fastGuidedFilter(rgb, alpha, width, height, {
+    radius: 8,
+    eps: 1e-3,
+    subsample: 4,
+  });
   const duration = performance.now() - start;
 
   assert.equal(refined.length, width * height);
@@ -198,8 +210,14 @@ test("fastGuidedFilter handles smaller eps (1e-4) without determinant zeroing or
 
   const res = fastGuidedFilter(rgb, alpha, width, height, { eps: 1e-4, radius: 4 });
   // With eps=1e-4, sharp edge must be cleanly transferred, not blurred into 50/50 flat grey
-  assert.ok(res[16 * width + 15]! > 220, `expected sharp foreground alpha > 220, got ${res[16 * width + 15]}`);
-  assert.ok(res[16 * width + 16]! < 35, `expected sharp background alpha < 35, got ${res[16 * width + 16]}`);
+  assert.ok(
+    res[16 * width + 15]! > 220,
+    `expected sharp foreground alpha > 220, got ${res[16 * width + 15]}`,
+  );
+  assert.ok(
+    res[16 * width + 16]! < 35,
+    `expected sharp background alpha < 35, got ${res[16 * width + 16]}`,
+  );
 });
 
 test("fastGuidedFilter adapts subsampling ratio when small radius is requested", () => {
@@ -222,7 +240,11 @@ test("fastGuidedFilter adapts subsampling ratio when small radius is requested",
   // With radius=1, subsample ratio is clamped to 1, preventing excessive downsampling blur
   const res = fastGuidedFilter(rgb, alpha, width, height, { radius: 1 });
   // 4 pixels away from edge should be unaffected and fully opaque
-  assert.equal(res[32 * width + 27], 255, "radius 1 filter must not blur pixels 5px away from edge");
+  assert.equal(
+    res[32 * width + 27],
+    255,
+    "radius 1 filter must not blur pixels 5px away from edge",
+  );
 });
 
 test("fastGuidedFilter returns zeros safely when given truncated or undersized buffers", () => {
@@ -299,12 +321,7 @@ test("fastGuidedFilterRgba populates RGB from source when recovering previously 
 test("boxFilter2D handles zero and negative radius by copying src to dst without errors", () => {
   const width = 4;
   const height = 4;
-  const src = new Float32Array([
-    1, 2, 3, 4,
-    5, 6, 7, 8,
-    9, 10, 11, 12,
-    13, 14, 15, 16,
-  ]);
+  const src = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
   const dst0 = new Float32Array(16);
   const scratch = new Float32Array(16);
 
@@ -398,4 +415,3 @@ test("fastGuidedFilterRgba handles truncated buffers and zero dimensions safely"
   fastGuidedFilterRgba(shortCutout, shortSource, 2, 2);
   assert.equal(shortCutout.length, 8);
 });
-

@@ -21,22 +21,39 @@ test("disposing a superseded renderer preserves the replacement canvas context",
       const canvas = document.createElement("canvas");
       canvas.style.cssText = "width:96px;height:96px";
       document.body.append(canvas);
-      const bitmap = await createImageBitmap(new ImageData(new Uint8ClampedArray(96 * 96 * 4).fill(255), 96, 96));
-      const [oldRenderer, currentRenderer] = await Promise.all([attachStageGpu(canvas), attachStageGpu(canvas)]);
-      const frame = { source: bitmap, result: bitmap, comparing: false, peeking: false, masking: false, wipe: 0.5 };
+      const bitmap = await createImageBitmap(
+        new ImageData(new Uint8ClampedArray(96 * 96 * 4).fill(255), 96, 96),
+      );
+      const [oldRenderer, currentRenderer] = await Promise.all([
+        attachStageGpu(canvas),
+        attachStageGpu(canvas),
+      ]);
+      const frame = {
+        source: bitmap,
+        result: bitmap,
+        comparing: false,
+        peeking: false,
+        masking: false,
+        wipe: 0.5,
+      };
       oldRenderer?.destroy();
       const painted = currentRenderer?.paint(frame);
       const kind = currentRenderer?.kind;
       await new Promise(requestAnimationFrame);
       const data = canvas.toDataURL();
-      currentRenderer?.destroy(); bitmap.close(); canvas.remove();
+      currentRenderer?.destroy();
+      bitmap.close();
+      canvas.remove();
       return { kind, painted, encodedLength: data.length };
     });
-    if (result.kind !== "webgpu") t.diagnostic(`no WebGPU here; checked the ${result.kind} renderer`);
+    if (result.kind !== "webgpu")
+      t.diagnostic(`no WebGPU here; checked the ${result.kind} renderer`);
     assert.ok(result.kind, "no stage renderer attached");
     assert.equal(result.painted, true);
     assert.ok(result.encodedLength > 100);
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+  }
 });
 
 test("a failed WebGPU resize upload recovers on the next healthy paint", async (t) => {
@@ -160,7 +177,11 @@ test("a failed WebGPU resize upload recovers on the next healthy paint", async (
         `${label}: closed inputs are absent; upload faults decline`,
       );
       assert.equal(entry.recovered, true, `${label}: exact previous identity must recover`);
-      assert.equal(entry.afterRecoveryInvalidated, 0, `${label}: identity retry must not invalidate`);
+      assert.equal(
+        entry.afterRecoveryInvalidated,
+        0,
+        `${label}: identity retry must not invalidate`,
+      );
       assert.equal(entry.later, true, `${label}: later healthy paint`);
       assert.equal(entry.invalidated, 0, `${label}: onInvalidate`);
       assert.deepEqual(entry.errors, [], `${label}: uncaptured GPU errors`);

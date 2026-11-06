@@ -49,10 +49,14 @@ async function runGraphic(scenario) {
       return decode(...args);
     };
     HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
-      return encode.call(this, (output) => {
-        if (scenario === "encoding") controller.abort(reason);
-        callback(output);
-      }, ...args);
+      return encode.call(
+        this,
+        (output) => {
+          if (scenario === "encoding") controller.abort(reason);
+          callback(output);
+        },
+        ...args,
+      );
     };
     if (scenario === "pre-aborted") controller.abort(reason);
     if (scenario === "custom-reason") controller.abort("superseded");
@@ -161,7 +165,9 @@ for (const scenario of ["model-result", "model-error", "wasm-retry"]) {
         try {
           await removeBackgroundLocal(blob, {
             signal: controller.signal,
-            onProgress: () => { if (controller.signal.aborted) staleProgress++; },
+            onProgress: () => {
+              if (controller.signal.aborted) staleProgress++;
+            },
           });
           return { rejected: false };
         } catch (error) {
@@ -183,8 +189,16 @@ for (const scenario of ["model-result", "model-error", "wasm-retry"]) {
       // session (Q4 e) and is the run that is cancelled, so two runs and a single model load.
       assert.equal(result.calls, scenario === "wasm-retry" ? 2 : 1);
       const log = await readLog(modelPage);
-      assert.equal(runsOf(log).length, result.calls, "the event log and the hook count the same runs");
-      assert.equal(loadsOf(log, "model").length, 1, "one BiRefNet session serves the primary and the retry");
+      assert.equal(
+        runsOf(log).length,
+        result.calls,
+        "the event log and the hook count the same runs",
+      );
+      assert.equal(
+        loadsOf(log, "model").length,
+        1,
+        "one BiRefNet session serves the primary and the retry",
+      );
       assert.equal(loadsOf(log, "processor").length, 1);
       assert.ok(
         loadsOf(log, "model").every((e) => e.device === "wasm"),

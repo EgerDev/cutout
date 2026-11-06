@@ -141,16 +141,14 @@ export async function assertDecodableSize(blob: Blob, limits: Limits) {
       .then(tiffDimensions)
       .catch(() => null);
     assertTiffWithinBudget(size, limits.pixels);
-    if (size && declaresTooMuch(size, limits))
-      throw new CutoutError("memory", MEMORY_COPY);
+    if (size && declaresTooMuch(size, limits)) throw new CutoutError("memory", MEMORY_COPY);
     return;
   }
   const size = await declaredSize(blob).catch((error: unknown) => {
     if (error instanceof CutoutError) throw error;
     return null;
   });
-  if (size && declaresTooMuch(size, limits))
-    throw new CutoutError("memory", MEMORY_COPY);
+  if (size && declaresTooMuch(size, limits)) throw new CutoutError("memory", MEMORY_COPY);
 }
 
 const sized = (width: number, height: number): Size | null =>
@@ -232,7 +230,9 @@ async function jpegSize(file: Blob): Promise<{ width: number; height: number } |
       const width = view.getUint16(i + 7);
       // Decoders apply the EXIF orientation: report the size the pixels decode to.
       if (width >= 1 && height >= 1)
-        return orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width, height };
+        return orientation >= 5 && orientation <= 8
+          ? { width: height, height: width }
+          : { width, height };
       return null;
     }
     pos += 2 + length;

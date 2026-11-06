@@ -151,7 +151,7 @@ test("SIMD color-key zeros the page and keeps the mark", async () => {
   key4(data.length, 255, 255, 255);
   const out = new Uint8Array(memory.buffer, 0, data.length);
   assert.equal(out[3], 0);
-  assert.ok(out[((8 * width + 8) * 4) + 3]! > 200);
+  assert.ok(out[(8 * width + 8) * 4 + 3]! > 200);
 });
 
 test("JS knock still keeps the mark", () => {
@@ -170,5 +170,5 @@ test("JS knock still keeps the mark", () => {
   assert.equal(classifyGraphic(data, width, height), "logo");
   knockPaper(data, width, height);
   assert.equal(data[3], 0);
-  assert.ok(data[((12 * width + 12) * 4) + 3]! > 200);
+  assert.ok(data[(12 * width + 12) * 4 + 3]! > 200);
 });

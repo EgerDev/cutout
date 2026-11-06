@@ -43,7 +43,8 @@ function deferred(): Deferred {
 
 /** Let queued microtasks and I/O-free callbacks run. */
 async function flush(rounds = 8): Promise<void> {
-  for (let round = 0; round < rounds; round += 1) await new Promise<void>((resolve) => setImmediate(resolve));
+  for (let round = 0; round < rounds; round += 1)
+    await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 async function until(condition: () => boolean): Promise<void> {
@@ -54,7 +55,9 @@ async function until(condition: () => boolean): Promise<void> {
 function bounded<T>(promise: Promise<T>, ms = 2000): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out (deadlock?)")), ms).unref()),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timed out (deadlock?)")), ms).unref(),
+    ),
   ]);
 }
 
@@ -97,7 +100,8 @@ function harness(options: { gpu?: boolean } = {}) {
   const factories: RemovalLoadFactories = {
     async loadProcessor(model) {
       log.push(`processor:${model}`);
-      return async () => (processorOutput.get(model)?.() ?? { pixel_values: tensor(DIMS[model].input) });
+      return async () =>
+        processorOutput.get(model)?.() ?? { pixel_values: tensor(DIMS[model].input) };
     },
     async loadModel(model: RemovalModelKind, provider: RemovalProvider, progress) {
       const key = `${model}:${provider}`;
@@ -112,7 +116,8 @@ function harness(options: { gpu?: boolean } = {}) {
       live += 1;
       maxLive = Math.max(maxLive, live);
       return Object.assign(
-        async () => (modelOutput.get(key)?.() ?? { [DIMS[model].outputName]: tensor(DIMS[model].output) }),
+        async () =>
+          modelOutput.get(key)?.() ?? { [DIMS[model].outputName]: tensor(DIMS[model].output) },
         {
           async dispose() {
             log.push(`dispose:${key}`);
@@ -184,9 +189,17 @@ afterEach(() => {
 
 test("the module exports a process singleton and the whole documented surface", () => {
   for (const name of [
-    "automaticRoute", "exclusive", "use", "usePrimary", "jobInfo", "recordCleanupFailure",
-    "cleanupErrors", "recordProvenance", "provenance",
-  ] as const) assert.equal(typeof removalRuntime[name], "function", name);
+    "automaticRoute",
+    "exclusive",
+    "use",
+    "usePrimary",
+    "jobInfo",
+    "recordCleanupFailure",
+    "cleanupErrors",
+    "recordProvenance",
+    "provenance",
+  ] as const)
+    assert.equal(typeof removalRuntime[name], "function", name);
   assert.equal(typeof isAbort, "function");
   assert.equal(typeof maskError, "function");
   assert.equal(typeof isGpuSuspectMask, "function");
@@ -245,20 +258,36 @@ test("Q1: adapter output errors map to the original engine errors", async () => 
     const nonfinite = tensor(DIMS.birefnet.output);
     nonfinite.data[0] = Number.NaN;
     const cases: Array<[string, () => unknown, string, boolean]> = [
-      ["nonfinite", () => ({ output_image: nonfinite }), "The model returned an invalid alpha mask", provider === "webgpu"],
-      ["malformed", () => ({ output_image: tensor([1, 1, 4, 4]) }), "The model returned an invalid mask shape", provider === "webgpu"],
+      [
+        "nonfinite",
+        () => ({ output_image: nonfinite }),
+        "The model returned an invalid alpha mask",
+        provider === "webgpu",
+      ],
+      [
+        "malformed",
+        () => ({ output_image: tensor([1, 1, 4, 4]) }),
+        "The model returned an invalid mask shape",
+        provider === "webgpu",
+      ],
       ["missing (Q2/D1)", () => ({}), "The model returned an invalid mask shape", false],
     ];
     for (const [label, output, message, suspect] of cases) {
       const h = harness();
       h.modelOutput.set(`birefnet:${provider}`, output);
       const raw = await rawBoundaryError(h, provider, "model");
-      assert.ok(raw instanceof RemovalModelOutputError, `${provider} ${label}: pool raises its output error`);
+      assert.ok(
+        raw instanceof RemovalModelOutputError,
+        `${provider} ${label}: pool raises its output error`,
+      );
       const mapped = engineErrorFor(raw, "model", provider) as Error & { gpuSuspect?: boolean };
       assert.equal(mapped.name, "MaskError", `${provider} ${label}`);
       assert.equal(mapped.message, message, `${provider} ${label}`);
       assert.equal(mapped.gpuSuspect, suspect, `${provider} ${label}`);
-      assert.ok(mapped.cause instanceof RemovalModelOutputError, `${provider} ${label}: cause kept`);
+      assert.ok(
+        mapped.cause instanceof RemovalModelOutputError,
+        `${provider} ${label}: cause kept`,
+      );
       assert.equal(mapped.cause, raw);
       assert.equal(isRetryableEngineError(mapped) || mapped.name === "MaskError", true);
     }
@@ -293,7 +322,9 @@ test("Q1: raw model boundary throws are named, verbatim, and only the job's abor
   assert.equal(isRetryableEngineError(mapped), true);
   assert.ok(ENGINE_ERROR_NAMES.has(mapped.name));
 
-  const memory = engineErrorFor(new Error("out of memory"), "model", "wasm") as Error & { code?: string };
+  const memory = engineErrorFor(new Error("out of memory"), "model", "wasm") as Error & {
+    code?: string;
+  };
   assert.equal(memory.name, "RemovalInferenceError");
   assert.equal(memory.code, undefined, "memory keeps its non-retryable precedence");
   assert.equal(failureCode(memory), "memory");
@@ -303,21 +334,39 @@ test("Q1: raw model boundary throws are named, verbatim, and only the job's abor
   const readback = new DOMException("Device is lost", "AbortError");
   const named = Object.assign(new Error("x"), { name: "AbortError" });
   for (const signal of [undefined, new AbortController().signal]) {
-    const asModel = engineErrorFor(readback, "model", "webgpu", signal) as Error & { code?: string };
-    assert.deepEqual([asModel.name, asModel.code, asModel.cause], ["RemovalInferenceError", "inference-failed", readback]);
+    const asModel = engineErrorFor(readback, "model", "webgpu", signal) as Error & {
+      code?: string;
+    };
+    assert.deepEqual(
+      [asModel.name, asModel.code, asModel.cause],
+      ["RemovalInferenceError", "inference-failed", readback],
+    );
     assert.equal(isRetryableEngineError(asModel), true);
-    assert.equal((engineErrorFor(named, "processor", "wasm", signal) as Error).name, "RemovalInputError");
+    assert.equal(
+      (engineErrorFor(named, "processor", "wasm", signal) as Error).name,
+      "RemovalInputError",
+    );
   }
   const controller = new AbortController();
   controller.abort();
-  assert.equal(engineErrorFor(readback, "model", "webgpu", controller.signal), readback, "a real cancel passes through");
+  assert.equal(
+    engineErrorFor(readback, "model", "webgpu", controller.signal),
+    readback,
+    "a real cancel passes through",
+  );
   const plain = new Error("whatever");
-  assert.equal(engineErrorFor(plain, "model", "wasm", controller.signal), plain, "an aborted signal wins");
+  assert.equal(
+    engineErrorFor(plain, "model", "wasm", controller.signal),
+    plain,
+    "an aborted signal wins",
+  );
 });
 
 test("Q1 (N1): an opaque inference throw is retryable and coded", () => {
   // documents D4: minting inference-failed is a deviation from 5522, not a restoration.
-  const mapped = engineErrorFor(new Error("ORT session run failed"), "model", "webgpu") as Error & { code?: string };
+  const mapped = engineErrorFor(new Error("ORT session run failed"), "model", "webgpu") as Error & {
+    code?: string;
+  };
   assert.equal(isRetryableEngineError(mapped), true);
   assert.equal(failureCode(mapped), "model");
   assert.equal(mapped.code, "inference-failed");
@@ -417,20 +466,36 @@ test("Q4 (b): an already aborted signal rejects at once with the reason", async 
     h.runtime.exclusive(controller.signal, async () => "never"),
     (error) => error === reason,
   );
-  assert.equal(await h.runtime.exclusive(undefined, async () => "next"), "next", "the chain is not poisoned");
+  assert.equal(
+    await h.runtime.exclusive(undefined, async () => "next"),
+    "next",
+    "the chain is not poisoned",
+  );
 });
 
 test("Q4 (i): a rejected job never poisons the lock chain", async () => {
   const h = harness();
-  await assert.rejects(h.runtime.exclusive(undefined, async () => { throw new Error("A fails"); }), /A fails/);
+  await assert.rejects(
+    h.runtime.exclusive(undefined, async () => {
+      throw new Error("A fails");
+    }),
+    /A fails/,
+  );
   assert.equal(await h.runtime.exclusive(undefined, async () => "B ok"), "B ok");
 });
 
 test("Q4 (j): use outside exclusive is refused", async () => {
   const h = harness();
-  await assert.rejects(h.runtime.use(WASM, {}, () => 1), /removal runtime: use outside exclusive/);
+  await assert.rejects(
+    h.runtime.use(WASM, {}, () => 1),
+    /removal runtime: use outside exclusive/,
+  );
   await h.runtime.exclusive(undefined, async () => undefined);
-  await assert.rejects(h.runtime.use(WASM, {}, () => 1), /use outside exclusive/, "also after a job ended");
+  await assert.rejects(
+    h.runtime.use(WASM, {}, () => 1),
+    /use outside exclusive/,
+    "also after a job ended",
+  );
   assert.equal(h.count("birefnet:wasm"), 0);
 });
 
@@ -445,9 +510,17 @@ test("Q4: job state is reset at link start and cleared before the link settles",
   assert.equal(during?.absorbAttempted, true);
   assert.ok(during?.webgpuLoadFailure instanceof RemovalModelLoadError);
   const after = h.runtime.jobInfo();
-  assert.deepEqual(after, { absorbAttempted: false, absorbLoadFailed: false, webgpuLoadFailure: undefined });
+  assert.deepEqual(after, {
+    absorbAttempted: false,
+    absorbLoadFailed: false,
+    webgpuLoadFailure: undefined,
+  });
   await h.runtime.exclusive(undefined, async () => {
-    assert.deepEqual(h.runtime.jobInfo(), { absorbAttempted: false, absorbLoadFailed: false, webgpuLoadFailure: undefined });
+    assert.deepEqual(h.runtime.jobInfo(), {
+      absorbAttempted: false,
+      absorbLoadFailed: false,
+      webgpuLoadFailure: undefined,
+    });
   });
 });
 
@@ -457,7 +530,9 @@ test("Q4 (c): primary failure then compatibility disposes the primary first and 
     const route = await h.runtime.automaticRoute();
     assert.deepEqual(route.primary, WEBGPU);
     await assert.rejects(
-      h.runtime.usePrimary(route, {}, async () => { throw new Error("run failed"); }),
+      h.runtime.usePrimary(route, {}, async () => {
+        throw new Error("run failed");
+      }),
       /run failed/,
     );
     assert.equal(await h.runtime.use(WASM, {}, (engine) => engine.provider), "wasm");
@@ -469,8 +544,12 @@ test("Q4 (c): primary failure then compatibility disposes the primary first and 
 
 test("Q4 (d): a warmup and a removal job on the same target share one load", async () => {
   const h = harness({ gpu: false });
-  await h.runtime.exclusive(undefined, async () => h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined));
-  await h.runtime.exclusive(undefined, async () => h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined));
+  await h.runtime.exclusive(undefined, async () =>
+    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined),
+  );
+  await h.runtime.exclusive(undefined, async () =>
+    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined),
+  );
   assert.equal(h.count("birefnet:wasm"), 1);
   assert.equal(h.log.filter((entry) => entry.startsWith("dispose:")).length, 0);
 });
@@ -479,7 +558,9 @@ test("Q4 (e): same-target compatibility neither releases nor double-loads", asyn
   const h = harness({ gpu: false });
   await h.runtime.exclusive(undefined, async () => {
     await assert.rejects(
-      h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => { throw new Error("run failed"); }),
+      h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => {
+        throw new Error("run failed");
+      }),
       /run failed/,
     );
     await h.runtime.use(WASM, {}, () => undefined);
@@ -493,7 +574,9 @@ test("Q4 (f): two jobs, job 1 device loss then compat, job 2 routes webgpu again
   await h.runtime.exclusive(undefined, async () => {
     const route = await h.runtime.automaticRoute();
     await assert.rejects(
-      h.runtime.usePrimary(route, {}, async () => { throw new Error("WebGPU device lost"); }),
+      h.runtime.usePrimary(route, {}, async () => {
+        throw new Error("WebGPU device lost");
+      }),
       /device lost/,
     );
     await h.runtime.use(WASM, {}, () => undefined);
@@ -512,7 +595,9 @@ test("Q4 (f): two jobs, job 1 device loss then compat, job 2 routes webgpu again
 
 test("Q4 (g): a route flip releases the warmed webgpu model before loading wasm", async () => {
   const h = harness();
-  await h.runtime.exclusive(undefined, async () => h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined));
+  await h.runtime.exclusive(undefined, async () =>
+    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined),
+  );
   assert.equal(h.count("birefnet:webgpu"), 1);
   rememberGpuFailure("gpu-mask", null);
   assert.equal(readGpuFailure(null), true);
@@ -531,16 +616,27 @@ test("Q4 (h): a release dispose failure is recorded and never skips the compatib
   const result = await bounded(
     h.runtime.exclusive(undefined, async () => {
       await assert.rejects(
-        h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => { throw new Error("device lost"); }),
+        h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => {
+          throw new Error("device lost");
+        }),
         /device lost/,
       );
       return h.runtime.use(WASM, {}, (engine) => engine.provider);
     }),
   );
   assert.equal(result, "wasm");
-  assert.equal(h.runtime.cleanupErrors().length, 2, "both failed teardown attempts remain observable");
-  assert.equal(h.log.filter((event) => event === "dispose:birefnet:webgpu").length, 2, "one bounded retry");
-  for (const error of h.runtime.cleanupErrors()) assert.match((error as Error).message, /dispose failed birefnet:webgpu/);
+  assert.equal(
+    h.runtime.cleanupErrors().length,
+    2,
+    "both failed teardown attempts remain observable",
+  );
+  assert.equal(
+    h.log.filter((event) => event === "dispose:birefnet:webgpu").length,
+    2,
+    "one bounded retry",
+  );
+  for (const error of h.runtime.cleanupErrors())
+    assert.match((error as Error).message, /dispose failed birefnet:webgpu/);
 });
 
 test("Q4: recordCleanupFailure appends to cleanupErrors and provenance is last-write-wins", () => {
@@ -581,9 +677,13 @@ test("Q4 (k) pin: a queued waiter receives no progress until its turn, then mono
   ]);
   const a: number[] = [];
   const b: number[] = [];
-  const jobA = h.runtime.exclusive(undefined, () => h.runtime.use(WASM, { onProgress: (f) => a.push(f) }, () => "a"));
+  const jobA = h.runtime.exclusive(undefined, () =>
+    h.runtime.use(WASM, { onProgress: (f) => a.push(f) }, () => "a"),
+  );
   await until(() => h.count("birefnet:wasm") === 1);
-  const jobB = h.runtime.exclusive(undefined, () => h.runtime.use(WASM, { onProgress: (f) => b.push(f) }, () => "b"));
+  const jobB = h.runtime.exclusive(undefined, () =>
+    h.runtime.use(WASM, { onProgress: (f) => b.push(f) }, () => "b"),
+  );
   await flush();
   assert.deepEqual(a, [0.5, 1], "only .onnx progress events count, as fractions");
   assert.deepEqual(b, [], "B sees nothing while A holds the lock");
@@ -602,7 +702,11 @@ test("C06 cross-target: cancellation evicts the pending load; switching targets 
   const controller = new AbortController();
   const reason = new Error("stop");
   const job = h.runtime.exclusive(controller.signal, async () =>
-    h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => "a"),
+    h.runtime.usePrimary(
+      await h.runtime.automaticRoute(),
+      { signal: controller.signal },
+      () => "a",
+    ),
   );
   await until(() => h.count("birefnet:webgpu") === 1);
   controller.abort(reason);
@@ -703,7 +807,10 @@ test("Q3: decorating the same error twice leaves one code", async () => {
   });
   for (let round = 0; round < 2; round += 1) {
     await runtime.exclusive(undefined, async () => {
-      await assert.rejects(runtime.use(WASM, {}, () => undefined), (error) => error === shared);
+      await assert.rejects(
+        runtime.use(WASM, {}, () => undefined),
+        (error) => error === shared,
+      );
     });
   }
   assert.equal(Reflect.get(shared, "code"), "model-load-failed");
@@ -718,7 +825,9 @@ test("Q3 (r): webgpu rejects Failed to fetch -> exactly one wasm load, run once 
   let info: ReturnType<typeof h.runtime.jobInfo> | undefined;
   await h.runtime.exclusive(undefined, async () => {
     const route = await h.runtime.automaticRoute();
-    await h.runtime.usePrimary(route, {}, (engine) => { runs.push(engine.provider); });
+    await h.runtime.usePrimary(route, {}, (engine) => {
+      runs.push(engine.provider);
+    });
     info = h.runtime.jobInfo();
   });
   assert.deepEqual(runs, ["wasm"]);
@@ -735,22 +844,37 @@ test("C10: usePrimary calls onAbsorb once, just before the absorbing wasm load, 
   const order: string[] = [];
   await h.runtime.exclusive(undefined, async () => {
     const route = await h.runtime.automaticRoute();
-    await h.runtime.usePrimary(route, { onAbsorb: () => order.push(`absorb after ${h.count("birefnet:webgpu")}/${h.count("birefnet:wasm")}`) }, () => {
-      order.push("run");
-    });
+    await h.runtime.usePrimary(
+      route,
+      {
+        onAbsorb: () =>
+          order.push(`absorb after ${h.count("birefnet:webgpu")}/${h.count("birefnet:wasm")}`),
+      },
+      () => {
+        order.push("run");
+      },
+    );
   });
   assert.deepEqual(order, ["absorb after 1/0", "run"]);
 
   const plain = harness();
   const none: string[] = [];
   await plain.runtime.exclusive(undefined, async () => {
-    await plain.runtime.usePrimary(await plain.runtime.automaticRoute(), { onAbsorb: () => none.push("absorb") }, () => undefined);
+    await plain.runtime.usePrimary(
+      await plain.runtime.automaticRoute(),
+      { onAbsorb: () => none.push("absorb") },
+      () => undefined,
+    );
   });
   const init = harness();
   init.script.set("birefnet:webgpu", [failInit()]);
   await init.runtime.exclusive(undefined, async () => {
     await init.runtime
-      .usePrimary(await init.runtime.automaticRoute(), { onAbsorb: () => none.push("absorb") }, () => undefined)
+      .usePrimary(
+        await init.runtime.automaticRoute(),
+        { onAbsorb: () => none.push("absorb") },
+        () => undefined,
+      )
       .catch(() => undefined);
   });
   assert.deepEqual(none, [], "no call on success or on a failure that is not absorbed");
@@ -846,7 +970,11 @@ test("Q3 (r6, concurrency-r5 F1): an abort during the absorb's wasm load does no
   let info: ReturnType<typeof h.runtime.jobInfo> | undefined;
   const job = h.runtime.exclusive(controller.signal, async () => {
     try {
-      await h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined);
+      await h.runtime.usePrimary(
+        await h.runtime.automaticRoute(),
+        { signal: controller.signal },
+        () => undefined,
+      );
     } catch (error) {
       info = h.runtime.jobInfo();
       throw error;
@@ -867,7 +995,11 @@ test("Q3: an abort during the webgpu load rejects with the reason and loads no w
   const controller = new AbortController();
   const reason = new Error("cancel webgpu");
   const job = h.runtime.exclusive(controller.signal, async () =>
-    h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined),
+    h.runtime.usePrimary(
+      await h.runtime.automaticRoute(),
+      { signal: controller.signal },
+      () => undefined,
+    ),
   );
   await until(() => h.count("birefnet:webgpu") === 1);
   controller.abort(reason);
@@ -886,7 +1018,11 @@ test("Q3 (r-abort): abort identity is the signal reason, undecorated, and not ke
   let info: ReturnType<typeof h.runtime.jobInfo> | undefined;
   const job = h.runtime.exclusive(controller.signal, async () => {
     try {
-      await h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined);
+      await h.runtime.usePrimary(
+        await h.runtime.automaticRoute(),
+        { signal: controller.signal },
+        () => undefined,
+      );
     } catch (error) {
       info = h.runtime.jobInfo();
       throw error;
@@ -912,10 +1048,14 @@ test("Q4 (q1): the absorb's wasm engine ready, then an abort in run -> memo netw
   const reason = new Error("abort in run");
   await assert.rejects(
     h.runtime.exclusive(controller.signal, async () =>
-      h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, async () => {
-        controller.abort(reason);
-        throw reason;
-      }),
+      h.runtime.usePrimary(
+        await h.runtime.automaticRoute(),
+        { signal: controller.signal },
+        async () => {
+          controller.abort(reason);
+          throw reason;
+        },
+      ),
     ),
     (error) => error === reason,
   );
@@ -957,7 +1097,11 @@ test("Q4 (q3): webgpu provider-init, compatibility engine ready, abort in run ->
   await assert.rejects(
     h.runtime.exclusive(controller.signal, async () => {
       try {
-        await h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined);
+        await h.runtime.usePrimary(
+          await h.runtime.automaticRoute(),
+          { signal: controller.signal },
+          () => undefined,
+        );
       } catch {
         // the engine's one compatibility attempt
       }
@@ -976,8 +1120,14 @@ test("Q4 (q4): webgpu provider-init and a rejected compatibility load -> no memo
   h.script.set("birefnet:webgpu", [failInit()]);
   h.script.set("birefnet:wasm", [failFetch()]);
   await h.runtime.exclusive(undefined, async () => {
-    await assert.rejects(h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined), RemovalModelLoadError);
-    await assert.rejects(h.runtime.use(WASM, {}, () => undefined), RemovalModelLoadError);
+    await assert.rejects(
+      h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined),
+      RemovalModelLoadError,
+    );
+    await assert.rejects(
+      h.runtime.use(WASM, {}, () => undefined),
+      RemovalModelLoadError,
+    );
   });
   assert.equal(webgpuLoadMemo(), undefined);
 });
@@ -986,7 +1136,10 @@ test("C05 load: an AbortError-named cause follows the init memo policy when WASM
   const h = harness();
   h.script.set("birefnet:webgpu", [Object.assign(new Error("aborted"), { name: "AbortError" })]);
   await h.runtime.exclusive(undefined, async () => {
-    await assert.rejects(h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined), RemovalModelLoadError);
+    await assert.rejects(
+      h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => undefined),
+      RemovalModelLoadError,
+    );
     await h.runtime.use(WASM, {}, () => undefined);
   });
   assert.equal(webgpuLoadMemo(), "init");
@@ -997,7 +1150,9 @@ test("Q4 (q6): inside the absorb's run callback the memo is already set", async 
   h.script.set("birefnet:webgpu", [failFetch()]);
   let seen: string | undefined;
   await h.runtime.exclusive(undefined, async () =>
-    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => { seen = webgpuLoadMemo(); }),
+    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, () => {
+      seen = webgpuLoadMemo();
+    }),
   );
   assert.equal(seen, "network");
 });
@@ -1013,7 +1168,11 @@ test("Q4 (q7): a pre-ready cancel sets no memo; job 2 disposes the finished load
   let info: ReturnType<typeof h.runtime.jobInfo> | undefined;
   const job1 = h.runtime.exclusive(controller.signal, async () => {
     try {
-      await h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined);
+      await h.runtime.usePrimary(
+        await h.runtime.automaticRoute(),
+        { signal: controller.signal },
+        () => undefined,
+      );
     } catch (error) {
       info = h.runtime.jobInfo();
       throw error;
@@ -1050,7 +1209,11 @@ test("Q4 (q7) init variant: a cancel during the compatibility wasm load sets no 
   const reason = new Error("cancel compat load");
   const job1 = h.runtime.exclusive(controller.signal, async () => {
     try {
-      await h.runtime.usePrimary(await h.runtime.automaticRoute(), { signal: controller.signal }, () => undefined);
+      await h.runtime.usePrimary(
+        await h.runtime.automaticRoute(),
+        { signal: controller.signal },
+        () => undefined,
+      );
     } catch {
       // not absorbable: the engine goes on to the compatibility pass
     }
@@ -1067,7 +1230,10 @@ test("Q4 (q7) init variant: a cancel during the compatibility wasm load sets no 
     assert.deepEqual(route.primary, WEBGPU);
     await h.runtime.usePrimary(route, {}, () => undefined).catch(() => undefined);
   });
-  assert.ok(h.index("dispose:birefnet:wasm") < h.index("load:birefnet:webgpu", h.index("ready:birefnet:wasm")));
+  assert.ok(
+    h.index("dispose:birefnet:wasm") <
+      h.index("load:birefnet:webgpu", h.index("ready:birefnet:wasm")),
+  );
 });
 
 test("Q4 (s): a queued waiter reads the memo set by the job before it and loads nothing", async () => {
@@ -1076,7 +1242,9 @@ test("Q4 (s): a queued waiter reads the memo set by the job before it and loads 
   h.script.set("birefnet:webgpu", [failFetch()]);
   const hold = deferred();
   const jobA = h.runtime.exclusive(undefined, async () =>
-    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => { await hold.promise; }),
+    h.runtime.usePrimary(await h.runtime.automaticRoute(), {}, async () => {
+      await hold.promise;
+    }),
   );
   await until(() => h.count("birefnet:wasm") === 1 && h.index("ready:birefnet:wasm") > -1);
   let bProvider: string | undefined;
@@ -1084,7 +1252,9 @@ test("Q4 (s): a queued waiter reads the memo set by the job before it and loads 
     const route = await h.runtime.automaticRoute();
     assert.deepEqual(route.primary, WASM);
     assert.equal(route.shape, "primary");
-    await h.runtime.usePrimary(route, {}, (engine) => { bProvider = engine.provider; });
+    await h.runtime.usePrimary(route, {}, (engine) => {
+      bProvider = engine.provider;
+    });
   });
   await flush();
   hold.resolve();
@@ -1147,7 +1317,10 @@ test("Q10: the adapter is probed once per context", async () => {
   let probes = 0;
   const runtime = createRemovalRuntime({
     pool: createRemovalEnginePool(harness().factories),
-    adapter: async () => { probes += 1; return {}; },
+    adapter: async () => {
+      probes += 1;
+      return {};
+    },
   });
   await runtime.automaticRoute();
   await runtime.automaticRoute();
@@ -1157,7 +1330,9 @@ test("Q10: the adapter is probed once per context", async () => {
 test("Q10: a rejecting adapter probe counts as no adapter", async () => {
   const runtime = createRemovalRuntime({
     pool: createRemovalEnginePool(harness().factories),
-    adapter: async () => { throw new Error("probe failed"); },
+    adapter: async () => {
+      throw new Error("probe failed");
+    },
   });
   const route = await runtime.automaticRoute();
   assert.deepEqual(route.primary, WASM);
@@ -1165,14 +1340,35 @@ test("Q10: a rejecting adapter probe counts as no adapter", async () => {
 });
 
 test("S3-A-ENGINE-02: an adapter without shader-f16 routes BiRefNet/WebGPU fp32 primary", async () => {
-  for (const [memory, fp16] of [[8, async () => false], [4, async () => false], [8, async () => { throw new Error("probe failed"); }]] as const) {
+  for (const [memory, fp16] of [
+    [8, async () => false],
+    [4, async () => false],
+    [
+      8,
+      async () => {
+        throw new Error("probe failed");
+      },
+    ],
+  ] as const) {
     stubNavigator({ deviceMemory: memory });
-    const runtime = createRemovalRuntime({ pool: createRemovalEnginePool(harness().factories), adapter: async () => ({}), fp16 });
+    const runtime = createRemovalRuntime({
+      pool: createRemovalEnginePool(harness().factories),
+      adapter: async () => ({}),
+      fp16,
+    });
     const route = await runtime.automaticRoute();
-    assert.deepEqual(route, { primary: { ...WEBGPU, dtype: "fp32" }, lowMemory: false, shape: "primary" }, `memory ${memory}`);
+    assert.deepEqual(
+      route,
+      { primary: { ...WEBGPU, dtype: "fp32" }, lowMemory: false, shape: "primary" },
+      `memory ${memory}`,
+    );
   }
   stubNavigator({ deviceMemory: 8 });
-  const able = createRemovalRuntime({ pool: createRemovalEnginePool(harness().factories), adapter: async () => ({}), fp16: async () => true });
+  const able = createRemovalRuntime({
+    pool: createRemovalEnginePool(harness().factories),
+    adapter: async () => ({}),
+    fp16: async () => true,
+  });
   assert.deepEqual((await able.automaticRoute()).primary, WEBGPU);
 });
 
@@ -1184,7 +1380,9 @@ test("Q10: the memo and a stored record never leave the process (no storage key 
     length: 0,
     key: () => null,
     getItem: () => null,
-    setItem: (key: string) => { writes.push(key); },
+    setItem: (key: string) => {
+      writes.push(key);
+    },
     removeItem: () => undefined,
   };
   Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true });
@@ -1204,7 +1402,12 @@ test("C08: page engines release after 60 seconds idle, reload on demand, and rel
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const previous = Object.getOwnPropertyDescriptor(globalThis, "addEventListener");
   let hide: (() => void) | undefined;
-  Object.defineProperty(globalThis, "addEventListener", { configurable: true, value: (type: string, fn: () => void) => { if (type === "pagehide") hide = fn; } });
+  Object.defineProperty(globalThis, "addEventListener", {
+    configurable: true,
+    value: (type: string, fn: () => void) => {
+      if (type === "pagehide") hide = fn;
+    },
+  });
   try {
     const h = harness({ gpu: false });
     const run = () => h.runtime.exclusive(undefined, () => h.runtime.use(WASM, {}, () => "cut"));
@@ -1235,7 +1438,12 @@ test("C08: pagehide defers disposal until the active job ends", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const previous = Object.getOwnPropertyDescriptor(globalThis, "addEventListener");
   let hide: (() => void) | undefined;
-  Object.defineProperty(globalThis, "addEventListener", { configurable: true, value: (type: string, fn: () => void) => { if (type === "pagehide") hide = fn; } });
+  Object.defineProperty(globalThis, "addEventListener", {
+    configurable: true,
+    value: (type: string, fn: () => void) => {
+      if (type === "pagehide") hide = fn;
+    },
+  });
   try {
     const h = harness({ gpu: false });
     const gate = deferred();
@@ -1246,7 +1454,8 @@ test("C08: pagehide defers disposal until the active job ends", async (t) => {
     t.mock.timers.tick(60_000);
     await flush();
     assert.equal(h.index("dispose:birefnet:wasm"), -1, "no active-job disposal");
-    gate.resolve(); await run;
+    gate.resolve();
+    await run;
     await flush();
     assert.equal(h.live(), 0, "the hidden page releases as soon as it drains");
   } finally {
@@ -1257,7 +1466,10 @@ test("C08: pagehide defers disposal until the active job ends", async (t) => {
 
 test("C16: malformed WebGPU output keeps its gpu-mask evidence; WASM shape errors do not", () => {
   for (const provider of ["webgpu", "wasm"] as const) {
-    const source = new RemovalModelOutputError({ model: "birefnet", provider, context: "page" }, "Model returned malformed output_image");
+    const source = new RemovalModelOutputError(
+      { model: "birefnet", provider, context: "page" },
+      "Model returned malformed output_image",
+    );
     const error = engineErrorFor(source, "model", provider);
     assert.equal(isGpuSuspectMask(error), provider === "webgpu");
     assert.equal((error as Error).cause, source);
@@ -1272,7 +1484,6 @@ test("S3-A-ENGINE-03: numeric ORT throws at the model boundary are nonretryable 
   assert.equal(isRetryableEngineError(error), false);
 });
 
-
 test("no-f16 WebGPU respects the GPU-failure and load-failure memos", async () => {
   for (const failure of ["gpu", "network", "init"] as const) {
     clearRemovalFailureRecords(null);
@@ -1281,7 +1492,9 @@ test("no-f16 WebGPU respects the GPU-failure and load-failure memos", async () =
     else await inducedMemo(failure);
     const runtime = createRemovalRuntime({ adapter: async () => ({}), fp16: async () => false });
     assert.deepEqual(await runtime.automaticRoute(), {
-      primary: WASM, lowMemory: false, shape: failure === "init" ? "compat" : "primary",
+      primary: WASM,
+      lowMemory: false,
+      shape: failure === "init" ? "compat" : "primary",
     });
   }
 });

@@ -44,7 +44,11 @@ register("data:text/javascript," + encodeURIComponent(HOOKS), import.meta.url);
 type Pixels = { width: number; height: number; data: Uint8ClampedArray };
 const MAGIC = 0x46414b45;
 
-function encodeRaw(width: number, height: number, data: Uint8ClampedArray): Uint8Array<ArrayBuffer> {
+function encodeRaw(
+  width: number,
+  height: number,
+  data: Uint8ClampedArray,
+): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(12 + data.length);
   const view = new DataView(out.buffer);
   view.setUint32(0, MAGIC);
@@ -117,10 +121,29 @@ class FakeContext {
     this.canvas = canvas;
   }
   drawImage(source: Pixels, ...a: number[]) {
-    let [sx, sy, sw, sh, dx, dy, dw, dh] = [0, 0, source.width, source.height, 0, 0, source.width, source.height];
+    let [sx, sy, sw, sh, dx, dy, dw, dh] = [
+      0,
+      0,
+      source.width,
+      source.height,
+      0,
+      0,
+      source.width,
+      source.height,
+    ];
     if (a.length === 2) [dx, dy] = a as [number, number];
     else if (a.length === 4) [dx, dy, dw, dh] = a as [number, number, number, number];
-    else if (a.length === 8) [sx, sy, sw, sh, dx, dy, dw, dh] = a as [number, number, number, number, number, number, number, number];
+    else if (a.length === 8)
+      [sx, sy, sw, sh, dx, dy, dw, dh] = a as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
     const target = this.canvas;
     const out = target.data;
     for (let y = 0; y < dh; y += 1) {
@@ -140,7 +163,8 @@ class FakeContext {
           out.set(source.data.subarray(from, from + 4), to);
         } else if (sa > 0) {
           const k = sa / 255;
-          for (let c = 0; c < 3; c += 1) out[to + c] = source.data[from + c]! * k + out[to + c]! * (1 - k);
+          for (let c = 0; c < 3; c += 1)
+            out[to + c] = source.data[from + c]! * k + out[to + c]! * (1 - k);
           out[to + 3] = Math.min(255, sa + out[to + 3]! * (1 - k));
         }
       }
@@ -165,7 +189,10 @@ class FakeContext {
         const py = y + row;
         if (px < 0 || py < 0 || px >= this.canvas.width || py >= this.canvas.height) continue;
         const from = (row * image.width + col) * 4;
-        this.canvas.data.set(image.data.subarray(from, from + 4), (py * this.canvas.width + px) * 4);
+        this.canvas.data.set(
+          image.data.subarray(from, from + 4),
+          (py * this.canvas.width + px) * 4,
+        );
       }
   }
   createImageData(width: number, height: number) {
@@ -206,7 +233,12 @@ async function fakeCreateImageBitmap(
 ) {
   let pixels: Pixels;
   if (source instanceof Blob) pixels = decodeRaw(new Uint8Array(await source.arrayBuffer()));
-  else pixels = { width: source.width, height: source.height, data: new Uint8ClampedArray(source.data) };
+  else
+    pixels = {
+      width: source.width,
+      height: source.height,
+      data: new Uint8ClampedArray(source.data),
+    };
   if (options?.resizeWidth && options.resizeHeight)
     pixels = scaled(pixels, options.resizeWidth, options.resizeHeight);
   return new FakeBitmap(pixels.width, pixels.height, pixels.data);
@@ -222,7 +254,8 @@ Object.assign(globalThis, {
 // ---------------------------------------------------------------- fake Transformers.js
 
 type Ev = { type: string } & Record<string, unknown>;
-type MaskSpec = number | ((u: number, v: number) => number) | Error | "missing" | "malformed" | "nonfinite";
+type MaskSpec =
+  number | ((u: number, v: number) => number) | Error | "missing" | "malformed" | "nonfinite";
 type Fx = {
   events: Ev[];
   /** n counts the load attempts of this model on this provider, from 1. */
@@ -235,9 +268,14 @@ type Fx = {
 };
 
 const SUBJECT: MaskSpec = (u, v) => (u > 0.33 && u < 0.67 && v > 0.25 && v < 0.75 ? 1 : 0);
-const bands = (a: number, b: number, c: number): MaskSpec => (u) => (u < 1 / 3 ? a : u < 2 / 3 ? b : c);
-const onlyFirstRun = (first: MaskSpec) => (ctx: { run: number }): MaskSpec =>
-  ctx.run === 1 ? first : new Error("crop off");
+const bands =
+  (a: number, b: number, c: number): MaskSpec =>
+  (u) =>
+    u < 1 / 3 ? a : u < 2 / 3 ? b : c;
+const onlyFirstRun =
+  (first: MaskSpec) =>
+  (ctx: { run: number }): MaskSpec =>
+    ctx.run === 1 ? first : new Error("crop off");
 
 function fakeTransformers(fx: Fx) {
   const loads = new Map<string, number>();
@@ -284,7 +322,12 @@ function fakeTransformers(fx: Fx) {
         fx.events.push({ type: "load-processor", model, revision: options.revision });
         return async (image: RawImage) => {
           processorCalls += 1;
-          fx.events.push({ type: "processor-run", model, width: image.width, height: image.height });
+          fx.events.push({
+            type: "processor-run",
+            model,
+            width: image.width,
+            height: image.height,
+          });
           await fx.processorHook?.({ ready, call: processorCalls });
           if (fx.processorReturns === "corrupt") return { pixel_values: {} };
           const side = model === "isnet" ? 1024 : 512;
@@ -295,14 +338,26 @@ function fakeTransformers(fx: Fx) {
     AutoModel: {
       async from_pretrained(
         id: string,
-        options: { device: string; dtype: string; revision?: string; progress_callback?: (event: unknown) => void },
+        options: {
+          device: string;
+          dtype: string;
+          revision?: string;
+          progress_callback?: (event: unknown) => void;
+        },
       ) {
         const model = modelOf(id);
         const provider = options.device;
         const key = `${model}:${provider}`;
         const n = (loads.get(key) ?? 0) + 1;
         loads.set(key, n);
-        fx.events.push({ type: "load-model", model, provider, dtype: options.dtype, revision: options.revision, n });
+        fx.events.push({
+          type: "load-model",
+          model,
+          provider,
+          dtype: options.dtype,
+          revision: options.revision,
+          n,
+        });
         await fx.modelLoadHook?.(model, provider);
         options.progress_callback?.({ status: "progress", file: "config.json", progress: 100 });
         options.progress_callback?.({ status: "progress", file: "onnx/model.onnx", progress: 40 });
@@ -318,13 +373,26 @@ function fakeTransformers(fx: Fx) {
           const spec = fx.mask({ model, provider, run: runs });
           if (spec instanceof Error) throw spec;
           if (spec === "missing") return {};
-          if (spec === "malformed") return { [model === "isnet" ? "output" : "output_image"]: tensor([1, 1, 4, 4], () => 1, "output") };
+          if (spec === "malformed")
+            return {
+              [model === "isnet" ? "output" : "output_image"]: tensor(
+                [1, 1, 4, 4],
+                () => 1,
+                "output",
+              ),
+            };
           const value = (i: number) => {
             if (spec === "nonfinite") return Number.NaN;
             if (typeof spec === "number") return spec;
             return spec((i % side) / side, Math.floor(i / side) / side);
           };
-          return { [model === "isnet" ? "output" : "output_image"]: tensor([1, 1, side, side], value, "output") };
+          return {
+            [model === "isnet" ? "output" : "output_image"]: tensor(
+              [1, 1, side, side],
+              value,
+              "output",
+            ),
+          };
         };
         return Object.assign(call, {
           dispose: async () => {
@@ -373,7 +441,9 @@ async function boot(
             : adapter === "no-f16"
               ? plain
               : adapter === "discrete-f16"
-                ? o?.powerPreference === "high-performance" ? f16 : plain
+                ? o?.powerPreference === "high-performance"
+                  ? f16
+                  : plain
                 : null,
       },
     },
@@ -432,9 +502,12 @@ function alphaAt(image: Pixels, x: number, y: number): number {
 }
 
 const count = (env: Env, type: string, match: Record<string, unknown> = {}) =>
-  env.fx.events.filter((e) => e.type === type && Object.entries(match).every(([k, v]) => e[k] === v)).length;
+  env.fx.events.filter(
+    (e) => e.type === type && Object.entries(match).every(([k, v]) => e[k] === v),
+  ).length;
 const modelLoads = (env: Env, provider?: string) =>
-  env.fx.events.filter((e) => e.type === "load-model" && (!provider || e.provider === provider)).length;
+  env.fx.events.filter((e) => e.type === "load-model" && (!provider || e.provider === provider))
+    .length;
 const fromPretrained = (env: Env) => count(env, "load-processor") + count(env, "load-model");
 const sawProgress = (progress: ConsumerProgress[], stage: string, value: number) =>
   progress.some((p) => p.stage === stage && Math.abs(p.progress - value) < 1e-9);
@@ -447,8 +520,14 @@ function provenanceOf(env: Env) {
 
 /** Every tensor the fake created was disposed exactly once. */
 function assertTensorsBalanced(env: Env) {
-  const made = env.fx.events.filter((e) => e.type === "tensor").map((e) => e.id as number).sort((a, b) => a - b);
-  const gone = env.fx.events.filter((e) => e.type === "dispose-tensor").map((e) => e.id as number).sort((a, b) => a - b);
+  const made = env.fx.events
+    .filter((e) => e.type === "tensor")
+    .map((e) => e.id as number)
+    .sort((a, b) => a - b);
+  const gone = env.fx.events
+    .filter((e) => e.type === "dispose-tensor")
+    .map((e) => e.id as number)
+    .sort((a, b) => a - b);
   assert.ok(made.every(Number.isSafeInteger), "every tensor has an instance id");
   assert.equal(new Set(made).size, made.length, "tensor ids are unique");
   assert.deepEqual(gone, made, "every tensor instance is disposed exactly once");
@@ -476,7 +555,10 @@ test("one 96x96 probe per job, closed after reading; a JPEG never takes the alph
   const pixels = encodeRaw(width, height, data);
   const decode = globalThis.createImageBitmap;
   try {
-    for (const [type, name] of [["image/png", "cut.png"], ["image/jpeg", "cut.jpg"]] as const) {
+    for (const [type, name] of [
+      ["image/png", "cut.png"],
+      ["image/jpeg", "cut.jpg"],
+    ] as const) {
       const env = await boot();
       let probes = 0;
       let closed = 0;
@@ -512,8 +594,20 @@ test("C4 (a1-a5): the global transfer follows mode and memory on returned pixels
     { name: "a1 quick, 8", mode: "quick", memory: 8, expected: [43, 128, 212], transfer: "fast" },
     { name: "a2 auto, 3", mode: "auto", memory: 3, expected: [43, 128, 212], transfer: "fast" },
     { name: "a3 auto, 8", mode: "auto", memory: 8, expected: [77, 128, 179], transfer: "quality" },
-    { name: "a4 auto, missing", mode: "auto", memory: null, expected: [77, 128, 179], transfer: "quality" },
-    { name: "a5 maximum, 3", mode: "maximum", memory: 3, expected: [77, 128, 179], transfer: "quality" },
+    {
+      name: "a4 auto, missing",
+      mode: "auto",
+      memory: null,
+      expected: [77, 128, 179],
+      transfer: "quality",
+    },
+    {
+      name: "a5 maximum, 3",
+      mode: "maximum",
+      memory: 3,
+      expected: [77, 128, 179],
+      transfer: "quality",
+    },
   ] as const;
   for (const row of rows) {
     const env = await boot({ memory: row.memory, mask: onlyFirstRun(bands(0.3, 0.5, 0.7)) });
@@ -521,7 +615,10 @@ test("C4 (a1-a5): the global transfer follows mode and memory on returned pixels
     const image = await pixelsOf(result.blob);
     const sampled = [20, 60, 100].map((x) => alphaAt(image, x, 40));
     sampled.forEach((value, i) =>
-      assert.ok(Math.abs(value - row.expected[i]!) <= 2, `${row.name}: band ${i} is ${value}, wanted ${row.expected[i]}`),
+      assert.ok(
+        Math.abs(value - row.expected[i]!) <= 2,
+        `${row.name}: band ${i} is ${value}, wanted ${row.expected[i]}`,
+      ),
     );
     assert.equal(count(env, "sigmoid"), 0, `${row.name}: no sigmoid under the original policy`);
     assert.equal(provenanceOf(env)?.globalTransfer, row.transfer, row.name);
@@ -534,7 +631,9 @@ test("original rendering: raw logits [-2,0,2] stay raw", async () => {
   const original = await boot({ mask: onlyFirstRun(bands(-2, 0, 2)) });
   const a = await cut(original, { mode: "maximum" });
   const imageA = await pixelsOf(a.result.blob);
-  [0, 0, 255].forEach((want, i) => assert.ok(Math.abs(alphaAt(imageA, [20, 60, 100][i]!, 40) - want) <= 2));
+  [0, 0, 255].forEach((want, i) =>
+    assert.ok(Math.abs(alphaAt(imageA, [20, 60, 100][i]!, 40) - want) <= 2),
+  );
   assert.equal(count(original, "sigmoid"), 0);
   assert.equal(provenanceOf(original)?.renderPolicy, "cutout-original-matte-v1");
   assert.equal(provenanceOf(original)?.rawOutputSemantics, "logits");
@@ -565,7 +664,10 @@ test("tensor ownership on early exits: abort before the model, flat and malforme
   const controller = new AbortController();
   const reason = new Error("stop");
   aborted.fx.processorHook = () => controller.abort(reason);
-  await assert.rejects(cut(aborted, { signal: controller.signal, mode: "quick" }), (error) => error === reason);
+  await assert.rejects(
+    cut(aborted, { signal: controller.signal, mode: "quick" }),
+    (error) => error === reason,
+  );
   assert.equal(count(aborted, "run"), 0, "no model run after the abort");
   assertTensorsBalanced(aborted);
 
@@ -573,7 +675,9 @@ test("tensor ownership on early exits: abort before the model, flat and malforme
   await cut(flat, { mode: "quick" });
   assertTensorsBalanced(flat);
 
-  const nonfinite = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? "nonfinite" : SUBJECT) });
+  const nonfinite = await boot({
+    mask: (ctx) => (ctx.provider === "webgpu" ? "nonfinite" : SUBJECT),
+  });
   const { result } = await cut(nonfinite, { mode: "quick" });
   assert.equal(result.provider, "wasm");
   assertTensorsBalanced(nonfinite);
@@ -618,12 +722,16 @@ test("Q1 (F2): a WASM 'Aborted()' crash is a retryable model failure, never a ca
 
 test("C05: an error named AbortError with a live signal is a failure, never a cancel; only the job's signal cancels", async () => {
   // WebGPU rejects mapAsync after a device loss with this; the worker's reply rebuilds a plain Error so named.
-  const lost = () => new DOMException("Failed to execute 'mapAsync' on 'GPUBuffer': Device is lost", "AbortError");
+  const lost = () =>
+    new DOMException("Failed to execute 'mapAsync' on 'GPUBuffer': Device is lost", "AbortError");
   const named = () => Object.assign(new Error("Aborted"), { name: "AbortError" });
   const log = console.error;
   console.error = () => undefined; // classifyError logs what it classifies
   try {
-    for (const [label, make] of [["DOMException", lost], ["named Error", named]] as const) {
+    for (const [label, make] of [
+      ["DOMException", lost],
+      ["named Error", named],
+    ] as const) {
       // On the global WebGPU run: the compatibility pass recovers the job on WASM, with no GPU record.
       const env = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? make() : SUBJECT) });
       const { result, progress } = await cut(env, { signal: new AbortController().signal });
@@ -633,9 +741,18 @@ test("C05: an error named AbortError with a live signal is a failure, never a ca
       assert.equal(env.provider.readGpuFailure(null), false, label);
 
       // In an automatic crop: the crop is skipped and the job keeps its WebGPU cut.
-      const crop = await boot({ mask: (ctx) => (ctx.provider === "webgpu" && ctx.run >= 2 ? make() : SUBJECT) });
-      assert.equal((await cut(crop, { signal: new AbortController().signal })).result.provider, "webgpu", label);
-      assert.ok((provenanceOf(crop)!.cropInferences as number) >= 1, `${label}: precondition, a crop ran`);
+      const crop = await boot({
+        mask: (ctx) => (ctx.provider === "webgpu" && ctx.run >= 2 ? make() : SUBJECT),
+      });
+      assert.equal(
+        (await cut(crop, { signal: new AbortController().signal })).result.provider,
+        "webgpu",
+        label,
+      );
+      assert.ok(
+        (provenanceOf(crop)!.cropInferences as number) >= 1,
+        `${label}: precondition, a crop ran`,
+      );
 
       // Everywhere: the job fails with a retryable model error instead of reading as "Stopped".
       const always = await boot({ mask: () => make() });
@@ -658,19 +775,27 @@ test("C05: an error named AbortError with a live signal is a failure, never a ca
 test("Q1/Q2: a processor that returns junk is an input error; a model that returns nothing gets one compatibility attempt", async () => {
   const junk = await boot({ adapter: false });
   junk.fx.processorReturns = "corrupt";
-  await assert.rejects(cut(junk), (e: Error) => e.name === "RemovalInputError" && e.message === "Image preprocessing failed");
+  await assert.rejects(
+    cut(junk),
+    (e: Error) => e.name === "RemovalInputError" && e.message === "Image preprocessing failed",
+  );
   assert.equal(count(junk, "run"), 0);
 
   const missing = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? "missing" : SUBJECT) });
   const { result, progress } = await cut(missing);
   assert.equal(result.provider, "wasm");
   assert.ok(switching(progress));
-  assert.equal(missing.provider.readGpuFailure(null), false, "a missing output is never a GPU record");
+  assert.equal(
+    missing.provider.readGpuFailure(null),
+    false,
+    "a missing output is never a GPU record",
+  );
 });
 
 test("Q4 (o): the first network-class load failure is absorbed in the primary shape", async () => {
   const env = await boot();
-  env.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? SERVICE_503() : undefined);
+  env.fx.loadFail = (_m, provider, n) =>
+    provider === "webgpu" && n === 1 ? SERVICE_503() : undefined;
   const first = await cut(env);
   assert.equal(first.result.provider, "wasm");
   assert.equal(first.result.method, "model");
@@ -695,7 +820,12 @@ test("Q4 (o): the first network-class load failure is absorbed in the primary sh
 
   const before = env.fx.events.length;
   const second = await cut(env);
-  assert.equal(env.fx.events.slice(before).filter((e) => e.type.startsWith("load") || e.type.startsWith("dispose-model")).length, 0);
+  assert.equal(
+    env.fx.events
+      .slice(before)
+      .filter((e) => e.type.startsWith("load") || e.type.startsWith("dispose-model")).length,
+    0,
+  );
   assert.deepEqual(
     new Uint8Array(await second.result.blob.arrayBuffer()),
     new Uint8Array(await first.result.blob.arrayBuffer()),
@@ -705,7 +835,8 @@ test("Q4 (o): the first network-class load failure is absorbed in the primary sh
 });
 
 test("C02: real transformers hub failures and WebKit's 'Load failed' are absorbed like 503; jobs 2+ stay primary on WASM", async () => {
-  const url = "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx";
+  const url =
+    "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx";
   // Verbatim from node_modules/@huggingface/transformers/src/utils/hub.js (ERROR_MAPPING, handleError).
   const rows: Array<[string, () => Error]> = [
     ["404", () => Error(`Could not locate file: "${url}".`)],
@@ -716,19 +847,32 @@ test("C02: real transformers hub failures and WebKit's 'Load failed' are absorbe
   ];
   for (const [label, failure] of rows) {
     const env = await boot();
-    env.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? failure() : undefined);
+    env.fx.loadFail = (_m, provider, n) =>
+      provider === "webgpu" && n === 1 ? failure() : undefined;
     const first = await cut(env);
     assert.equal(first.result.provider, "wasm", label);
     assert.ok(!switching(first.progress), `${label}: job 1 takes no compatibility pass`);
     const p = provenanceOf(env)!;
-    assert.deepEqual([p.shape, p.absorbAttempted, p.compat.attempted, p.globalTransfer], ["primary", true, false, "quality"], label);
+    assert.deepEqual(
+      [p.shape, p.absorbAttempted, p.compat.attempted, p.globalTransfer],
+      ["primary", true, false, "quality"],
+      label,
+    );
     assert.equal(p.cropBudget, 1, `${label}: job 1 keeps its refinement`);
     assert.equal(env.provider.webgpuLoadMemo(), "network", label);
     const before = env.fx.events.length;
     const second = await cut(env);
-    assert.equal(env.fx.events.slice(before).filter((e) => e.type === "load-model").length, 0, `${label}: job 2 loads nothing`);
+    assert.equal(
+      env.fx.events.slice(before).filter((e) => e.type === "load-model").length,
+      0,
+      `${label}: job 2 loads nothing`,
+    );
     assert.ok(!switching(second.progress), `${label}: job 2 is not compatibility-shaped`);
-    assert.deepEqual([provenanceOf(env)!.shape, provenanceOf(env)!.provider], ["primary", "wasm"], label);
+    assert.deepEqual(
+      [provenanceOf(env)!.shape, provenanceOf(env)!.provider],
+      ["primary", "wasm"],
+      label,
+    );
     assert.equal(env.provider.readGpuFailure(null), false, label);
   }
 });
@@ -741,12 +885,19 @@ test("Q4 (n), pins D5 (fetch-layer memo), default unchanged: a network failure i
   const before = env.fx.events.length;
   await cut(env);
   const added = env.fx.events.slice(before);
-  assert.equal(added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length, 0);
+  assert.equal(
+    added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length,
+    0,
+  );
   env.provider.clearRemovalFailureRecords(null);
   await cut(env);
   assert.equal(modelLoads(env, "webgpu"), 2, "the memo is gone: WebGPU is attempted again");
   assert.equal(modelLoads(env, "wasm"), 2, "and absorbed again");
-  assert.equal(count(env, "dispose-model", { provider: "wasm" }), 1, "the old WASM session was released first");
+  assert.equal(
+    count(env, "dispose-model", { provider: "wasm" }),
+    1,
+    "the old WASM session was released first",
+  );
 });
 
 test("Q4 (p): a second consecutive load failure takes the compatibility shape; no memo after a double failure", async () => {
@@ -757,9 +908,15 @@ test("Q4 (p): a second consecutive load failure takes the compatibility shape; n
   assert.equal(result.provider, "wasm");
   assert.ok(switching(progress));
   const finishing = progress.filter((p) => p.stage === "finishing").map((p) => p.progress);
-  assert.ok(finishing.indexOf(0.92) >= 0 && finishing.indexOf(0.92) < finishing.indexOf(0.94), "0.92 then 0.94");
+  assert.ok(
+    finishing.indexOf(0.92) >= 0 && finishing.indexOf(0.92) < finishing.indexOf(0.94),
+    "0.92 then 0.94",
+  );
   assert.ok(!sawProgress(progress, "cutting", 0.7), "no processing 0.7");
-  assert.ok(sawProgress(progress, "cutting", 0.72), "processing 0.72 starts the compatibility clock after the load");
+  assert.ok(
+    sawProgress(progress, "cutting", 0.72),
+    "processing 0.72 starts the compatibility clock after the load",
+  );
   const p = provenanceOf(env)!;
   assert.equal(p.absorbAttempted, true);
   assert.equal(p.compat.attempted, true);
@@ -772,7 +929,9 @@ test("Q4 (p): a second consecutive load failure takes the compatibility shape; n
 
   const before = env.fx.events.length;
   await cut(env);
-  const added = env.fx.events.slice(before).filter((e) => e.type === "dispose-model" || e.type === "load-model");
+  const added = env.fx.events
+    .slice(before)
+    .filter((e) => e.type === "dispose-model" || e.type === "load-model");
   assert.equal(added[0]?.type, "dispose-model", "dispose(wasm) comes first");
   assert.equal(added[1]?.provider, "webgpu", "then WebGPU is attempted again");
   assert.equal(modelLoads(env, "webgpu"), 2);
@@ -812,7 +971,11 @@ test("Q4 (m): a persistent WebGPU init failure leaves jobs 2+ compatibility-shap
     const { result, progress } = await cut(env);
     assert.equal(result.model, "birefnet", `job ${job}: the compatibility shape names its model`);
     const added = env.fx.events.slice(before);
-    assert.equal(added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length, 0, `job ${job}`);
+    assert.equal(
+      added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length,
+      0,
+      `job ${job}`,
+    );
     assert.ok(switching(progress), `job ${job}: transition present`);
     assert.ok(!sawProgress(progress, "cutting", 0.7), `job ${job}: no processing 0.7`);
     const p = provenanceOf(env)!;
@@ -823,7 +986,11 @@ test("Q4 (m): a persistent WebGPU init failure leaves jobs 2+ compatibility-shap
   }
   env.provider.clearRemovalFailureRecords(null);
   await cut(env);
-  assert.equal(modelLoads(env, "webgpu"), 2, "after the memo is cleared WebGPU is attempted once more");
+  assert.equal(
+    modelLoads(env, "webgpu"),
+    2,
+    "after the memo is cleared WebGPU is attempted once more",
+  );
 });
 
 test("Q4 (t): a cancel after the absorb's engine is ready keeps the memo; job 2 loads and disposes nothing", async () => {
@@ -843,7 +1010,10 @@ test("Q4 (t): a cancel after the absorb's engine is ready keeps the memo; job 2 
   const before = env.fx.events.length;
   await cut(env);
   const added = env.fx.events.slice(before);
-  assert.equal(added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length, 0);
+  assert.equal(
+    added.filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length,
+    0,
+  );
   assert.equal(provenanceOf(env)?.shape, "primary");
 });
 
@@ -862,14 +1032,20 @@ test("Q4 (u): the init variant of the post-ready cancel keeps the memo and the c
   await assert.rejects(cut(env, { signal: controller.signal }), (e) => e === reason);
   const before = env.fx.events.length;
   const { progress } = await cut(env);
-  assert.equal(env.fx.events.slice(before).filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length, 0);
+  assert.equal(
+    env.fx.events
+      .slice(before)
+      .filter((e) => e.type.startsWith("load") || e.type === "dispose-model").length,
+    0,
+  );
   assert.ok(switching(progress));
   assert.equal(provenanceOf(env)?.shape, "compat");
 });
 
 test("Q4 (v): no adapter, one WASM load failure -> one compatibility pass; no fp16, no webgpu", async () => {
   const env = await boot({ adapter: false });
-  env.fx.loadFail = (_m, provider, n) => (provider === "wasm" && n === 1 ? FETCH_FAILURE() : undefined);
+  env.fx.loadFail = (_m, provider, n) =>
+    provider === "wasm" && n === 1 ? FETCH_FAILURE() : undefined;
   const { result, progress } = await cut(env);
   assert.equal(result.provider, "wasm");
   assert.equal(result.method, "model");
@@ -886,7 +1062,10 @@ test("Q4 (v): no adapter, one WASM load failure -> one compatibility pass; no fp
   assert.equal(p.cropInferences, 0);
   assert.equal(modelLoads(env, "webgpu"), 0);
   assert.equal(modelLoads(env, "wasm"), 2);
-  assert.ok(env.fx.events.filter((e) => e.type === "load-model").every((e) => e.dtype === "fp32"), "no fp16");
+  assert.ok(
+    env.fx.events.filter((e) => e.type === "load-model").every((e) => e.dtype === "fp32"),
+    "no fp16",
+  );
   assert.equal(env.provider.webgpuLoadMemo(), undefined);
   assert.equal(env.provider.readGpuFailure(null), false);
 });
@@ -923,7 +1102,8 @@ test("Q6: only a confirmed flat GPU mask is persisted; load failures and device 
   assert.equal(empty.provider.readGpuFailure(null), false);
 
   const lost = await boot();
-  lost.fx.loadFail = (_m, provider) => (provider === "webgpu" ? new Error("WebGPU device lost") : undefined);
+  lost.fx.loadFail = (_m, provider) =>
+    provider === "webgpu" ? new Error("WebGPU device lost") : undefined;
   const third = await cut(lost);
   assert.equal(third.result.provider, "wasm");
   assert.equal(lost.provider.readGpuFailure(null), false);
@@ -997,8 +1177,10 @@ test("C03: raw-alpha diagnostics preserve crops and bytes just below the Auto ti
   assert.deepEqual([charged!.provider, charged!.method, charged!.probes], ["webgpu", "model", 0]);
   // These are the post-shadow-suppression bytes: contact-shadow attenuation alters
   // partial-alpha pixels of this fixture's matte fringe versus the pre-C03 base.
-  assert.equal(createHash("sha256").update(charged!.bytes).digest("hex"),
-    "19c619fdc1bf29b10f592cf6d07af9bb7e88cf78005fc909821709007e302b31");
+  assert.equal(
+    createHash("sha256").update(charged!.bytes).digest("hex"),
+    "19c619fdc1bf29b10f592cf6d07af9bb7e88cf78005fc909821709007e302b31",
+  );
 });
 
 test("C03: a failed raw-alpha diagnostic cannot discard the successful WASM cut", async () => {
@@ -1014,7 +1196,10 @@ test("C03: a failed raw-alpha diagnostic cannot discard the successful WASM cut"
   };
   try {
     const { result } = await cut(env);
-    assert.deepEqual([result.provider, result.method, result.webgpuBroken], ["wasm", "model", false]);
+    assert.deepEqual(
+      [result.provider, result.method, result.webgpuBroken],
+      ["wasm", "model", false],
+    );
     assert.equal(env.provider.readGpuFailure(null), false, "an unconfirmed GPU is not recorded");
     assert.equal(probes, 1, "only the compatibility decision attempts the diagnostic");
   } finally {
@@ -1029,7 +1214,11 @@ test("A-01: the full-size source pixels a cut held are freed before its first cr
   try {
     for (const row of [
       { label: "primary", mask: (): MaskSpec => SUBJECT, firstCrop: 2 },
-      { label: "compatibility", mask: (ctx: { provider: string }): MaskSpec => (ctx.provider === "webgpu" ? 0.01 : SUBJECT), firstCrop: 3 },
+      {
+        label: "compatibility",
+        mask: (ctx: { provider: string }): MaskSpec => (ctx.provider === "webgpu" ? 0.01 : SUBJECT),
+        firstCrop: 3,
+      },
     ]) {
       const env = await boot({ mask: row.mask });
       const source = sourceImage();
@@ -1052,7 +1241,11 @@ test("A-01: the full-size source pixels a cut held are freed before its first cr
       const { result } = await cut(env, { file: source });
       assert.equal(result.provider, row.label === "primary" ? "webgpu" : "wasm", row.label);
       assert.ok(full.length >= 2, `${row.label}: precondition, the global run read its pixels`);
-      assert.equal(alive, 0, `${row.label}: no full-size pixels of the global run survive into the crops`);
+      assert.equal(
+        alive,
+        0,
+        `${row.label}: no full-size pixels of the global run survive into the crops`,
+      );
     }
   } finally {
     FakeContext.prototype.getImageData = read;
@@ -1063,17 +1256,34 @@ test("C01: an automatic WebGPU crop that finds nothing writes no GPU record; job
   // Realistic background logits (every value below 0.05), a flat near-zero field, and a non-finite one:
   // the crop is skipped, but the global WebGPU run of the same job succeeded, so nothing is confirmed.
   const lowField: MaskSpec = (u, v) => -3 - 0.5 * u - 0.3 * v;
-  for (const [label, crop] of [["low logits", lowField], ["flat", 0.01], ["nonfinite", "nonfinite"]] as const) {
-    const env = await boot({ mask: (ctx) => (ctx.provider === "webgpu" && ctx.run >= 2 ? crop : SUBJECT) });
+  for (const [label, crop] of [
+    ["low logits", lowField],
+    ["flat", 0.01],
+    ["nonfinite", "nonfinite"],
+  ] as const) {
+    const env = await boot({
+      mask: (ctx) => (ctx.provider === "webgpu" && ctx.run >= 2 ? crop : SUBJECT),
+    });
     const first = await cut(env);
     assert.equal(first.result.provider, "webgpu", label);
-    assert.ok((provenanceOf(env)!.cropInferences as number) >= 1, `${label}: precondition, an automatic crop ran`);
-    assert.equal(env.provider.readGpuFailure(null), false, `${label}: a skipped crop is not a broken GPU`);
+    assert.ok(
+      (provenanceOf(env)!.cropInferences as number) >= 1,
+      `${label}: precondition, an automatic crop ran`,
+    );
+    assert.equal(
+      env.provider.readGpuFailure(null),
+      false,
+      `${label}: a skipped crop is not a broken GPU`,
+    );
     env.fx.mask = () => SUBJECT;
     const before = env.fx.events.length;
     const second = await cut(env);
     assert.equal(second.result.provider, "webgpu", `${label}: job 2 stays on WebGPU`);
-    assert.equal(env.fx.events.slice(before).filter((e) => e.type === "load-model").length, 0, `${label}: job 2 loads nothing`);
+    assert.equal(
+      env.fx.events.slice(before).filter((e) => e.type === "load-model").length,
+      0,
+      `${label}: job 2 loads nothing`,
+    );
   }
 });
 
@@ -1093,7 +1303,9 @@ test("Q10: no adapter fetches only the fp32 BiRefNet/WASM pair, with the primary
 test("S3-A-ENGINE-02: a no-f16 adapter runs BiRefNet/WebGPU fp32 with the former WASM crop budget", async () => {
   // Transformers' own gate, thrown before any weight is requested when the adapter lacks shader-f16.
   const fp16Gate = (_m: string, provider: string, _n: number, dtype: string) =>
-    provider === "webgpu" && dtype === "fp16" ? new Error("The device (webgpu) does not support fp16.") : undefined;
+    provider === "webgpu" && dtype === "fp16"
+      ? new Error("The device (webgpu) does not support fp16.")
+      : undefined;
   for (const adapter of ["no-f16", "discrete-f16"] as const) {
     const env = await boot({ adapter });
     env.fx.loadFail = fp16Gate;
@@ -1102,12 +1314,17 @@ test("S3-A-ENGINE-02: a no-f16 adapter runs BiRefNet/WebGPU fp32 with the former
       assert.equal(result.provider, "webgpu", `${adapter} job ${job}`);
       assert.ok(!switching(progress), `${adapter} job ${job}: no compatibility pass`);
       const p = provenanceOf(env)!;
-      assert.deepEqual([p.shape, p.absorbAttempted, p.compat.attempted, p.globalTransfer], ["primary", false, false, "quality"]);
+      assert.deepEqual(
+        [p.shape, p.absorbAttempted, p.compat.attempted, p.globalTransfer],
+        ["primary", false, false, "quality"],
+      );
       assert.equal(p.dtype, "fp32");
       assert.equal(p.cropBudget, 1, `${adapter} job ${job}: keep the former WASM budget`);
     }
     assert.deepEqual(
-      env.fx.events.filter((e) => e.type === "load-model").map((e) => [e.model, e.provider, e.dtype]),
+      env.fx.events
+        .filter((e) => e.type === "load-model")
+        .map((e) => [e.model, e.provider, e.dtype]),
       [["birefnet", "webgpu", "fp32"]],
       `${adapter}: one BiRefNet/WebGPU fp32 load`,
     );
@@ -1117,13 +1334,24 @@ test("S3-A-ENGINE-02: a no-f16 adapter runs BiRefNet/WebGPU fp32 with the former
   // Manual re-cut uses the same fp32 GPU route in a fresh context.
   const fresh = await boot({ adapter: "no-f16" });
   fresh.fx.loadFail = fp16Gate;
-  const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], { type: "image/png" });
-  assert.ok((await fresh.engine.refineWithUserCrops(sourceImage(), base, [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }])) instanceof Blob);
+  const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], {
+    type: "image/png",
+  });
+  assert.ok(
+    (await fresh.engine.refineWithUserCrops(sourceImage(), base, [
+      { x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+    ])) instanceof Blob,
+  );
   assert.equal(modelLoads(fresh, "webgpu"), 1);
   // Low memory with an adapter keeps BiRefNet (the original chose ISNet only without any adapter).
   const small = await boot({ memory: 4, adapter: "no-f16" });
   await cut(small);
-  assert.deepEqual(small.fx.events.filter((e) => e.type === "load-model").map((e) => [e.model, e.provider, e.dtype]), [["birefnet", "webgpu", "fp32"]]);
+  assert.deepEqual(
+    small.fx.events
+      .filter((e) => e.type === "load-model")
+      .map((e) => [e.model, e.provider, e.dtype]),
+    [["birefnet", "webgpu", "fp32"]],
+  );
   // An adapter with shader-f16 is unchanged: WebGPU.
   const f16 = await boot({ adapter: true });
   assert.equal((await cut(f16)).result.provider, "webgpu");
@@ -1138,12 +1366,20 @@ test("Q10 warmup: one shared load, no compatibility path; an absorbable failure 
   assert.equal(modelLoads(plain), 1);
   const before = plain.fx.events.length;
   await cut(plain);
-  assert.equal(plain.fx.events.slice(before).filter((e) => e.type === "load-model").length, 0, "the job reuses the warmed session");
+  assert.equal(
+    plain.fx.events.slice(before).filter((e) => e.type === "load-model").length,
+    0,
+    "the job reuses the warmed session",
+  );
 
   const absorb = await boot();
-  absorb.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined);
+  absorb.fx.loadFail = (_m, provider, n) =>
+    provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined;
   await absorb.engine.warmupBiRefNet();
-  assert.deepEqual(absorb.fx.events.filter((e) => e.type === "load-model").map((e) => e.provider), ["webgpu", "wasm"]);
+  assert.deepEqual(
+    absorb.fx.events.filter((e) => e.type === "load-model").map((e) => e.provider),
+    ["webgpu", "wasm"],
+  );
   assert.equal(absorb.provider.webgpuLoadMemo(), "network");
   const mark = absorb.fx.events.length;
   await cut(absorb);
@@ -1151,7 +1387,11 @@ test("Q10 warmup: one shared load, no compatibility path; an absorbable failure 
 
   const init = await boot();
   init.fx.loadFail = (_m, provider) => (provider === "webgpu" ? SESSION_FAILURE() : undefined);
-  await assert.rejects(init.engine.warmupBiRefNet(), { name: "RemovalModelLoadError" }, "a non-absorbable failure rejects (C09)");
+  await assert.rejects(
+    init.engine.warmupBiRefNet(),
+    { name: "RemovalModelLoadError" },
+    "a non-absorbable failure rejects (C09)",
+  );
   assert.equal(init.provider.webgpuLoadMemo(), undefined, "with no memo");
   await assert.rejects(init.engine.warmupBiRefNet(), { name: "RemovalModelLoadError" });
   assert.equal(modelLoads(init, "webgpu"), 2, "and warmup is attempted again");
@@ -1160,21 +1400,30 @@ test("Q10 warmup: one shared load, no compatibility path; an absorbable failure 
 test("C09: warmup reports the model download to every caller waiting on it, and rejects once the shared load fails", async () => {
   const env = await boot({ adapter: false });
   const [a, b]: number[][] = [[], []];
-  await Promise.all([env.engine.warmupBiRefNet((f) => a.push(f)), env.engine.warmupBiRefNet((f) => b.push(f))]);
+  await Promise.all([
+    env.engine.warmupBiRefNet((f) => a.push(f)),
+    env.engine.warmupBiRefNet((f) => b.push(f)),
+  ]);
   assert.deepEqual(a, [0.4, 1], "the .onnx download, as a fraction");
   assert.deepEqual(b, [0.4, 1], "a second caller joins the same load and its progress");
   assert.equal(modelLoads(env), 1);
   const late: number[] = [];
   await env.engine.warmupBiRefNet((f) => late.push(f));
-  assert.deepEqual(late, [1], "a later warmup rechecks the live lease and replays its ready progress");
+  assert.deepEqual(
+    late,
+    [1],
+    "a later warmup rechecks the live lease and replays its ready progress",
+  );
 
   const failing = await boot({ adapter: false });
   failing.fx.loadFail = () => FETCH_FAILURE();
   const seen: number[] = [];
-  const error = await failing.engine.warmupBiRefNet((f) => seen.push(f)).then(
-    () => assert.fail("expected a rejection"),
-    (e: unknown) => e as Error,
-  );
+  const error = await failing.engine
+    .warmupBiRefNet((f) => seen.push(f))
+    .then(
+      () => assert.fail("expected a rejection"),
+      (e: unknown) => e as Error,
+    );
   assert.equal(error.name, "RemovalModelLoadError");
   assert.deepEqual(seen, [0.4, 1], "the progress it made is still reported");
   failing.fx.loadFail = undefined;
@@ -1208,7 +1457,10 @@ test("Q11: loading progress comes only from .onnx files, bounded and monotonic; 
     return p.progress;
   }, 0);
 
-  const clock = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? 0.01 : ctx.run <= 2 ? SUBJECT : new Error("crop off")) });
+  const clock = await boot({
+    mask: (ctx) =>
+      ctx.provider === "webgpu" ? 0.01 : ctx.run <= 2 ? SUBJECT : new Error("crop off"),
+  });
   const realNow = performance.now.bind(performance);
   let offset = 0;
   clock.fx.modelLoadHook = (_m, provider) => {
@@ -1220,30 +1472,49 @@ test("Q11: loading progress comes only from .onnx files, bounded and monotonic; 
   } finally {
     performance.now = realNow;
   }
-  assert.equal(provenanceOf(clock)?.cropBudget, 1, "13 s of loading must not count as inference time");
+  assert.equal(
+    provenanceOf(clock)?.cropBudget,
+    1,
+    "13 s of loading must not count as inference time",
+  );
 });
 
 test("C07: a file the probe could not decode and that does not decode fails as a decode error before any model load", async () => {
   const env = await boot();
-  const corrupt = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 1, 2, 3])], "broken.jpg", { type: "image/jpeg" });
+  const corrupt = new File(
+    [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 1, 2, 3])],
+    "broken.jpg",
+    { type: "image/jpeg" },
+  );
   const error = await cut(env, { file: corrupt }).then(
     () => assert.fail("expected a rejection"),
     (e: unknown) => e as Error,
   );
-  assert.deepEqual([error.name, error.message], ["InvalidStateError", "not an image"], "the decoder's own error");
+  assert.deepEqual(
+    [error.name, error.message],
+    ["InvalidStateError", "not an image"],
+    "the decoder's own error",
+  );
   assert.equal(fromPretrained(env), 0, "no model or processor is loaded for it");
 });
 
 test("C10: an absorbed WebGPU load failure restarts the progress band, so the WASM download's ticks reach the caller", async () => {
   const env = await boot();
-  env.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined);
+  env.fx.loadFail = (_m, provider, n) =>
+    provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined;
   const { result, progress } = await cut(env, { mode: "quick" });
   assert.equal(result.provider, "wasm");
-  const downloads = progress.filter((p) => p.message === "Preparing remover · only needed once").map((p) => p.progress);
+  const downloads = progress
+    .filter((p) => p.message === "Preparing remover · only needed once")
+    .map((p) => p.progress);
   // Each load reports 40 % then 100 % of its .onnx file (0.312 and 0.66 of the bar): WebGPU's, then WASM's.
   assert.equal(downloads.length, 4, `both downloads are shown: ${downloads.join(", ")}`);
-  [0.312, 0.66, 0.312, 0.66].forEach((want, i) => assert.ok(Math.abs(downloads[i]! - want) < 1e-9, `tick ${i}`));
-  const after = progress.slice(progress.findIndex((p) => p.message === "Preparing remover · only needed once") + 2);
+  [0.312, 0.66, 0.312, 0.66].forEach((want, i) =>
+    assert.ok(Math.abs(downloads[i]! - want) < 1e-9, `tick ${i}`),
+  );
+  const after = progress.slice(
+    progress.findIndex((p) => p.message === "Preparing remover · only needed once") + 2,
+  );
   after.reduce((last, p) => {
     assert.ok(p.progress >= last, `monotonic again after the restart (${last} -> ${p.progress})`);
     return p.progress;
@@ -1268,9 +1539,15 @@ test("cancellation: a pre-aborted signal loads nothing; any abort is rethrown as
 
 test("manual refine: zero usable crops return the base untouched with no model work", async () => {
   const env = await boot();
-  const base = new Blob([encodeRaw(2, 2, new Uint8ClampedArray(16).fill(255))], { type: "image/png" });
+  const base = new Blob([encodeRaw(2, 2, new Uint8ClampedArray(16).fill(255))], {
+    type: "image/png",
+  });
   const source = sourceImage();
-  for (const boxes of [[], [{ x: 0.99, y: 0.5, width: 0.5, height: 0.5 }], [{ x: 0.5, y: 0.98, width: 0.5, height: 0.5 }]]) {
+  for (const boxes of [
+    [],
+    [{ x: 0.99, y: 0.5, width: 0.5, height: 0.5 }],
+    [{ x: 0.5, y: 0.98, width: 0.5, height: 0.5 }],
+  ]) {
     assert.equal(await env.engine.refineWithUserCrops(source, base, boxes), base);
   }
   assert.equal(fromPretrained(env), 0);
@@ -1286,7 +1563,11 @@ test("manual refine: one lease, one crop inference per crop, quality transfer, n
   ]);
   assert.ok(refined instanceof Blob);
   const added = env.fx.events.slice(mark);
-  assert.equal(added.filter((e) => e.type === "load-model").length, 0, "the engine from the cut is reused");
+  assert.equal(
+    added.filter((e) => e.type === "load-model").length,
+    0,
+    "the engine from the cut is reused",
+  );
   assert.equal(added.filter((e) => e.type === "run").length, 1, "exactly one crop inference");
   assert.equal(added.filter((e) => e.type === "dispose-model").length, 0);
   const p = provenanceOf(env)!;
@@ -1297,14 +1578,19 @@ test("manual refine: one lease, one crop inference per crop, quality transfer, n
 });
 
 test("C4 (c2): manual crops render with the quality transfer and no sigmoid", async () => {
-  const opaque = new Blob([encodeRaw(120, 80, new Uint8ClampedArray(120 * 80 * 4).fill(255))], { type: "image/png" });
+  const opaque = new Blob([encodeRaw(120, 80, new Uint8ClampedArray(120 * 80 * 4).fill(255))], {
+    type: "image/png",
+  });
   const box = [{ x: 0.25, y: 0.25, width: 0.5, height: 0.5 }];
   const half: MaskSpec = (u) => (u < 0.5 ? 0.3 : 1);
   const original = await boot({ memory: 3, adapter: false, mask: () => half });
   const refined = await original.engine.refineWithUserCrops(sourceImage(), opaque, box);
   const image = await pixelsOf(refined);
   const left = alphaAt(image, 40, 40);
-  assert.ok(Math.abs(left - 77) <= 6, `crop region where the model said 0.3 is ${left}, wanted about 77 (quality), not 43 (fast)`);
+  assert.ok(
+    Math.abs(left - 77) <= 6,
+    `crop region where the model said 0.3 is ${left}, wanted about 77 (quality), not 43 (fast)`,
+  );
   assert.equal(provenanceOf(original)?.cropTransfer, "quality");
   assert.equal(provenanceOf(original)?.model, "isnet");
   assert.equal(count(original, "sigmoid"), 0);
@@ -1313,56 +1599,83 @@ test("C4 (c2): manual crops render with the quality transfer and no sigmoid", as
 });
 
 test("manual refine: an absorbable WebGPU load failure refines on WASM; two failures reject and set no memo", async () => {
-  const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], { type: "image/png" });
+  const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], {
+    type: "image/png",
+  });
   const box = [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }];
   const ok = await boot();
-  ok.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined);
+  ok.fx.loadFail = (_m, provider, n) =>
+    provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined;
   const refined = await ok.engine.refineWithUserCrops(sourceImage(), base, box);
   assert.ok(refined instanceof Blob);
-  assert.deepEqual(ok.fx.events.filter((e) => e.type === "load-model").map((e) => e.provider), ["webgpu", "wasm"]);
+  assert.deepEqual(
+    ok.fx.events.filter((e) => e.type === "load-model").map((e) => e.provider),
+    ["webgpu", "wasm"],
+  );
   assert.equal(ok.provider.webgpuLoadMemo(), "network");
 
   const bad = await boot();
   bad.fx.loadFail = () => FETCH_FAILURE();
-  await assert.rejects(bad.engine.refineWithUserCrops(sourceImage(), base, box), (e: Error) => e.name === "RemovalModelLoadError");
+  await assert.rejects(
+    bad.engine.refineWithUserCrops(sourceImage(), base, box),
+    (e: Error) => e.name === "RemovalModelLoadError",
+  );
   assert.equal(bad.provider.webgpuLoadMemo(), undefined);
 });
-
 
 test("S3-A-ENGINE-01: page device loss escapes without compat and later jobs require reload", async () => {
   const env = await boot();
   let lose!: (value: unknown) => void;
-  const lost = new Promise<unknown>((resolve) => { lose = resolve; });
-  (globalThis as unknown as { __fakeTf: { env: unknown } }).__fakeTf.env = { backends: { onnx: { webgpu: { device: { lost } } } } };
-  env.fx.processorHook = async () => { lose({ reason: "destroyed" }); await new Promise(() => {}); };
-  const deadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("page run wedged")), 100).unref());
-  await assert.rejects(Promise.race([env.engine.removeBackgroundLocal(sourceImage()), deadline]), { code: "removal-context-lost" });
-  await assert.rejects(env.engine.removeBackgroundLocal(sourceImage()), { code: "removal-context-lost" });
+  const lost = new Promise<unknown>((resolve) => {
+    lose = resolve;
+  });
+  (globalThis as unknown as { __fakeTf: { env: unknown } }).__fakeTf.env = {
+    backends: { onnx: { webgpu: { device: { lost } } } },
+  };
+  env.fx.processorHook = async () => {
+    lose({ reason: "destroyed" });
+    await new Promise(() => {});
+  };
+  const deadline = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("page run wedged")), 100).unref(),
+  );
+  await assert.rejects(Promise.race([env.engine.removeBackgroundLocal(sourceImage()), deadline]), {
+    code: "removal-context-lost",
+  });
+  await assert.rejects(env.engine.removeBackgroundLocal(sourceImage()), {
+    code: "removal-context-lost",
+  });
   assert.equal(modelLoads(env, "wasm"), 0, "no in-context compatibility inference");
 });
-
 
 test("C06: a real page job preempts stalled warmup instead of queuing behind it", async () => {
   const env = await boot();
   let started!: () => void;
-  const loading = new Promise<void>((resolve) => { started = resolve; });
+  const loading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   let loads = 0;
   env.fx.modelLoadHook = () => {
-    if (++loads === 1) { started(); return new Promise<void>(() => {}); }
+    if (++loads === 1) {
+      started();
+      return new Promise<void>(() => {});
+    }
   };
   const warmed = assert.rejects(env.engine.warmupBiRefNet(), { name: "AbortError" });
   await loading;
-  const deadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("job blocked by warmup")), 1000).unref());
+  const deadline = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("job blocked by warmup")), 1000).unref(),
+  );
   const result = await Promise.race([cut(env, { mode: "quick" }), deadline]);
   await warmed;
   assert.equal(result.result.provider, "webgpu");
   assert.equal(loads, 2);
 });
 
-
 test("S3-B-EVIDENCE-01: a damaged page model requests a fresh context with no compatibility load", async () => {
   const env = await boot();
-  env.fx.loadFail = () => new Error("Can't create a session. ERROR_CODE: 7, protobuf parsing failed");
+  env.fx.loadFail = () =>
+    new Error("Can't create a session. ERROR_CODE: 7, protobuf parsing failed");
   const first = await cut(env).catch((error: unknown) => error);
   assert.equal(Reflect.get(first as object, "code"), "removal-model-damaged");
   assert.match((first as Error).message, /damaged.*Delete.*reload/);
@@ -1371,7 +1684,6 @@ test("S3-B-EVIDENCE-01: a damaged page model requests a fresh context with no co
   assert.equal(modelLoads(env), 1);
 });
 
-
 test("RR1 warmup: supported Safari without AbortSignal.any can warm with a caller signal", async () => {
   const prior = Object.getOwnPropertyDescriptor(AbortSignal, "any");
   Object.defineProperty(AbortSignal, "any", { configurable: true, value: undefined });
@@ -1379,15 +1691,24 @@ test("RR1 warmup: supported Safari without AbortSignal.any can warm with a calle
     const env = await boot();
     await env.engine.warmupBiRefNet(undefined, new AbortController().signal);
     assert.equal(modelLoads(env), 1);
-  } finally { if (prior) Object.defineProperty(AbortSignal, "any", prior); }
+  } finally {
+    if (prior) Object.defineProperty(AbortSignal, "any", prior);
+  }
 });
 
 test("RR1 warmup: caller abort identity and sharing survive independent cancellation", async () => {
   const env = await boot();
   let start!: () => void;
   let finish!: () => void;
-  const started = new Promise<void>((resolve) => { start = resolve; });
-  env.fx.modelLoadHook = () => { start(); return new Promise<void>((resolve) => { finish = resolve; }); };
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  env.fx.modelLoadHook = () => {
+    start();
+    return new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  };
   const a = new AbortController();
   const reason = new Error("caller left");
   const first = env.engine.warmupBiRefNet(undefined, a.signal);
@@ -1403,35 +1724,47 @@ test("RR1 warmup: caller abort identity and sharing survive independent cancella
   assert.deepEqual(progress, [0.4, 1]);
 });
 
-for (const release of ["idle", "pagehide"] as const) test(`RR1 warmup: ${release} release requires fresh readiness and download progress`, async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const prior = Object.getOwnPropertyDescriptor(globalThis, "addEventListener");
-  let hide!: () => void;
-  Object.defineProperty(globalThis, "addEventListener", { configurable: true, value: (type: string, listener: () => void) => { if (type === "pagehide") hide = listener; } });
-  try {
-    const env = await boot();
-    await env.engine.warmupBiRefNet();
-    if (release === "idle") t.mock.timers.tick(60_000); else hide();
-    for (let i = 0; i < 40; i++) await Promise.resolve();
-    assert.equal(count(env, "dispose-model"), 1);
-    const progress: number[] = [];
-    await env.engine.warmupBiRefNet((value) => progress.push(value));
-    assert.equal(modelLoads(env), 2);
-    assert.deepEqual(progress, [0.4, 1]);
-    hide();
-    for (let i = 0; i < 40; i++) await Promise.resolve();
-    env.fx.loadFail = () => new Error("WebGPU session creation failed");
-    await assert.rejects(env.engine.warmupBiRefNet(), { name: "RemovalModelLoadError" });
-  } finally {
-    if (prior) Object.defineProperty(globalThis, "addEventListener", prior); else Reflect.deleteProperty(globalThis, "addEventListener");
-  }
-});
+for (const release of ["idle", "pagehide"] as const)
+  test(`RR1 warmup: ${release} release requires fresh readiness and download progress`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const prior = Object.getOwnPropertyDescriptor(globalThis, "addEventListener");
+    let hide!: () => void;
+    Object.defineProperty(globalThis, "addEventListener", {
+      configurable: true,
+      value: (type: string, listener: () => void) => {
+        if (type === "pagehide") hide = listener;
+      },
+    });
+    try {
+      const env = await boot();
+      await env.engine.warmupBiRefNet();
+      if (release === "idle") t.mock.timers.tick(60_000);
+      else hide();
+      for (let i = 0; i < 40; i++) await Promise.resolve();
+      assert.equal(count(env, "dispose-model"), 1);
+      const progress: number[] = [];
+      await env.engine.warmupBiRefNet((value) => progress.push(value));
+      assert.equal(modelLoads(env), 2);
+      assert.deepEqual(progress, [0.4, 1]);
+      hide();
+      for (let i = 0; i < 40; i++) await Promise.resolve();
+      env.fx.loadFail = () => new Error("WebGPU session creation failed");
+      await assert.rejects(env.engine.warmupBiRefNet(), { name: "RemovalModelLoadError" });
+    } finally {
+      if (prior) Object.defineProperty(globalThis, "addEventListener", prior);
+      else Reflect.deleteProperty(globalThis, "addEventListener");
+    }
+  });
 
 test("RR1 warmup: completed readiness cannot hide a fatal idle context", async () => {
   const env = await boot();
   let lose!: (value: unknown) => void;
-  const lost = new Promise<unknown>((resolve) => { lose = resolve; });
-  (globalThis as unknown as { __fakeTf: { env: unknown } }).__fakeTf.env = { backends: { onnx: { webgpu: { device: { lost } } } } };
+  const lost = new Promise<unknown>((resolve) => {
+    lose = resolve;
+  });
+  (globalThis as unknown as { __fakeTf: { env: unknown } }).__fakeTf.env = {
+    backends: { onnx: { webgpu: { device: { lost } } } },
+  };
   await env.engine.warmupBiRefNet();
   lose({});
   for (let i = 0; i < 30; i++) await Promise.resolve();
@@ -1439,36 +1772,61 @@ test("RR1 warmup: completed readiness cannot hide a fatal idle context", async (
   assert.equal(modelLoads(env), 1);
 });
 
-
 test("RR1 cache: actual ORT allocation failure follows standard provider recovery, without deletion", async () => {
   const prior = Object.getOwnPropertyDescriptor(globalThis, "caches");
   let deletes = 0;
-  Object.defineProperty(globalThis, "caches", { configurable: true, value: { async open() { return { async delete() { deletes++; return true; } }; } } });
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    value: {
+      async open() {
+        return {
+          async delete() {
+            deletes++;
+            return true;
+          },
+        };
+      },
+    },
+  });
   try {
     const env = await boot();
-    env.fx.loadFail = (_m, provider) => provider === "webgpu" ? new Error("Can't create a session. failed to allocate a buffer of size 268435456.") : undefined;
+    env.fx.loadFail = (_m, provider) =>
+      provider === "webgpu"
+        ? new Error("Can't create a session. failed to allocate a buffer of size 268435456.")
+        : undefined;
     const { result } = await cut(env, { mode: "quick" });
     assert.equal(result.provider, "wasm");
     assert.equal(deletes, 0);
     assert.equal(env.provider.readGpuFailure(null), false);
-    assert.deepEqual(env.fx.events.filter((event) => event.type === "load-model").map((event) => event.provider), ["webgpu", "wasm"]);
+    assert.deepEqual(
+      env.fx.events.filter((event) => event.type === "load-model").map((event) => event.provider),
+      ["webgpu", "wasm"],
+    );
     assert.equal((await cut(env, { mode: "quick" })).result.provider, "wasm");
     assert.equal(deletes, 0);
   } finally {
-    if (prior) Object.defineProperty(globalThis, "caches", prior); else Reflect.deleteProperty(globalThis, "caches");
+    if (prior) Object.defineProperty(globalThis, "caches", prior);
+    else Reflect.deleteProperty(globalThis, "caches");
   }
 });
-
 
 test("RR1 warmup: last caller cancellation releases a stalled load and removes its signal listener", async () => {
   const { EventEmitter } = await import("node:events");
   const env = await boot();
   let start!: () => void;
-  const started = new Promise<void>((resolve) => { start = resolve; });
-  env.fx.modelLoadHook = () => { start(); return new Promise(() => {}); };
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  env.fx.modelLoadHook = () => {
+    start();
+    return new Promise(() => {});
+  };
   const controller = new AbortController();
   const reason = new Error("warmup dismissed");
-  const rejected = assert.rejects(env.engine.warmupBiRefNet(undefined, controller.signal), (error) => error === reason);
+  const rejected = assert.rejects(
+    env.engine.warmupBiRefNet(undefined, controller.signal),
+    (error) => error === reason,
+  );
   await started;
   controller.abort(reason);
   await rejected;
@@ -1484,66 +1842,97 @@ test("RR1 warmup: last caller cancellation releases a stalled load and removes i
   assert.equal(modelLoads(env), 2);
 });
 
-
-for (const warmup of [false, true]) test(`RR2 cache interleaving: cancellation during deletion cannot admit another page model, warmup=${warmup}`, async () => {
-  const prior = Object.getOwnPropertyDescriptor(globalThis, "caches");
-  let started!: () => void;
-  let finish!: (value: boolean) => void;
-  const deletion = new Promise<boolean>((resolve) => { finish = resolve; });
-  const deleting = new Promise<void>((resolve) => { started = resolve; });
-  Object.defineProperty(globalThis, "caches", { configurable: true, value: {
-    async open() { return { async delete() { started(); return deletion; } }; },
-  } });
-  try {
-    const env = await boot();
-    env.fx.loadFail = () => new Error("Can't create a session. protobuf parsing failed");
-    const controller = new AbortController();
-    const reason = new Error("new image");
-    const first = warmup ? env.engine.warmupBiRefNet(undefined, controller.signal)
-      : env.engine.removeBackgroundLocal(sourceImage(), { mode: "quick", signal: controller.signal });
-    void first.catch(() => {});
-    await deleting;
-    if (!warmup) controller.abort(reason);
-    env.fx.loadFail = undefined;
-    const next = cut(env, { mode: "quick" }).catch((error: unknown) => error);
-    await assert.rejects(first, warmup ? { name: "AbortError" } : (error: unknown) => error === reason);
-    for (let i = 0; i < 60; i++) await Promise.resolve();
-    const before = modelLoads(env);
-    finish(true);
-    const failure = await next;
-    assert.equal(before, 1, "cancellation/preemption must not unquarantine the realm");
-    assert.equal(Reflect.get(failure as object, "code"), "removal-model-damaged");
-    assert.match((failure as Error).message, /has been removed/);
-    assert.equal(modelLoads(env), 1);
-  } finally {
-    finish(false);
-    if (prior) Object.defineProperty(globalThis, "caches", prior);
-    else Reflect.deleteProperty(globalThis, "caches");
-  }
-});
+for (const warmup of [false, true])
+  test(`RR2 cache interleaving: cancellation during deletion cannot admit another page model, warmup=${warmup}`, async () => {
+    const prior = Object.getOwnPropertyDescriptor(globalThis, "caches");
+    let started!: () => void;
+    let finish!: (value: boolean) => void;
+    const deletion = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    const deleting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    Object.defineProperty(globalThis, "caches", {
+      configurable: true,
+      value: {
+        async open() {
+          return {
+            async delete() {
+              started();
+              return deletion;
+            },
+          };
+        },
+      },
+    });
+    try {
+      const env = await boot();
+      env.fx.loadFail = () => new Error("Can't create a session. protobuf parsing failed");
+      const controller = new AbortController();
+      const reason = new Error("new image");
+      const first = warmup
+        ? env.engine.warmupBiRefNet(undefined, controller.signal)
+        : env.engine.removeBackgroundLocal(sourceImage(), {
+            mode: "quick",
+            signal: controller.signal,
+          });
+      void first.catch(() => {});
+      await deleting;
+      if (!warmup) controller.abort(reason);
+      env.fx.loadFail = undefined;
+      const next = cut(env, { mode: "quick" }).catch((error: unknown) => error);
+      await assert.rejects(
+        first,
+        warmup ? { name: "AbortError" } : (error: unknown) => error === reason,
+      );
+      for (let i = 0; i < 60; i++) await Promise.resolve();
+      const before = modelLoads(env);
+      finish(true);
+      const failure = await next;
+      assert.equal(before, 1, "cancellation/preemption must not unquarantine the realm");
+      assert.equal(Reflect.get(failure as object, "code"), "removal-model-damaged");
+      assert.match((failure as Error).message, /has been removed/);
+      assert.equal(modelLoads(env), 1);
+    } finally {
+      finish(false);
+      if (prior) Object.defineProperty(globalThis, "caches", prior);
+      else Reflect.deleteProperty(globalThis, "caches");
+    }
+  });
 
 test("S3-A-ENGINE-03: numeric ORT OOM gets memory copy and no same-target compatibility run", async () => {
-  const env = await boot({ adapter: false, mask: () => { throw 10023264; } });
+  const env = await boot({
+    adapter: false,
+    mask: () => {
+      throw 10023264;
+    },
+  });
   await assert.rejects(cut(env), (error) => {
     const failure = classifyError(error);
-    assert.equal(failure.code, "memory"); assert.equal(failure.retryable, false);
+    assert.equal(failure.code, "memory");
+    assert.equal(failure.retryable, false);
     return true;
   });
   assert.equal(count(env, "run"), 1);
 });
 
 function floodRecoverySource(): File {
-  const width = 160, height = 120;
+  const width = 160,
+    height = 120;
   const data = new Uint8ClampedArray(width * height * 4);
   let seed = 7;
   const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const i = (y * width + x) * 4;
-    if (x > 45 && x < 115 && y > 30 && y < 90) {
-      data[i] = Math.floor(rand() * 140); data[i + 1] = Math.floor(rand() * 140); data[i + 2] = Math.floor(rand() * 200);
-    } else data[i] = data[i + 1] = data[i + 2] = 250;
-    data[i + 3] = 255;
-  }
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (x > 45 && x < 115 && y > 30 && y < 90) {
+        data[i] = Math.floor(rand() * 140);
+        data[i + 1] = Math.floor(rand() * 140);
+        data[i + 2] = Math.floor(rand() * 200);
+      } else data[i] = data[i + 1] = data[i + 2] = 250;
+      data[i + 3] = 255;
+    }
   return new File([encodeRaw(width, height, data)], "photo.png", { type: "image/png" });
 }
 
@@ -1559,21 +1948,27 @@ test("C20: a flood recovery reports the method that produced its pixels", async 
 /** E01-O-02: a 24x20 subject (0.4 %) on a 400x300 textured photo the border flood cannot clear. */
 const TINY = { x0: 200, y0: 140, x1: 224, y1: 160 };
 function tinySubjectSource(): File {
-  const width = 400, height = 300;
+  const width = 400,
+    height = 300;
   const data = new Uint8ClampedArray(width * height * 4);
   let seed = 99173;
   const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const i = (y * width + x) * 4, n = rand() * 16, t = y / height;
-    if (x >= TINY.x0 && x < TINY.x1 && y >= TINY.y0 && y < TINY.y1) {
-      data[i] = 200 + n; data[i + 1] = 40 + n; data[i + 2] = 60 + n;
-    } else {
-      data[i] = 110 + t * 70 + n + 40 * Math.sin(x / 41) * Math.cos(y / 53);
-      data[i + 1] = 128 + t * 60 + n + 30 * Math.cos(x / 29);
-      data[i + 2] = 150 + t * 50 + n + 35 * Math.sin((x + y) / 47);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4,
+        n = rand() * 16,
+        t = y / height;
+      if (x >= TINY.x0 && x < TINY.x1 && y >= TINY.y0 && y < TINY.y1) {
+        data[i] = 200 + n;
+        data[i + 1] = 40 + n;
+        data[i + 2] = 60 + n;
+      } else {
+        data[i] = 110 + t * 70 + n + 40 * Math.sin(x / 41) * Math.cos(y / 53);
+        data[i + 1] = 128 + t * 60 + n + 30 * Math.cos(x / 29);
+        data[i + 2] = 150 + t * 50 + n + 35 * Math.sin((x + y) / 47);
+      }
+      data[i + 3] = 255;
     }
-    data[i + 3] = 255;
-  }
   return new File([encodeRaw(width, height, data)], "photo.png", { type: "image/png" });
 }
 /** A mask that is 1 on the source box [x0, x1) x [y0, y1) of the 400x300 frame, 0 elsewhere. */
@@ -1582,7 +1977,8 @@ const boxMask = (box: typeof TINY) => (u: number, v: number) =>
 async function tinyCut(mask: MaskSpec, options: { adapter?: boolean; webgpu?: MaskSpec } = {}) {
   const env = await boot({
     adapter: options.adapter ?? false,
-    mask: ({ provider }) => (provider === "webgpu" && options.webgpu !== undefined ? options.webgpu : mask),
+    mask: ({ provider }) =>
+      provider === "webgpu" && options.webgpu !== undefined ? options.webgpu : mask,
   });
   const { result } = await cut(env, { file: tinySubjectSource(), mode: "quick" });
   const pixels = await pixelsOf(result.blob);
@@ -1613,7 +2009,11 @@ test("E01-O-02: a weak tiny matte, even with one opaque peak, still takes the fl
       if (peak && Math.abs(u - 0.53) < 0.002 && Math.abs(v - 0.5) < 0.002) return 1;
       return boxMask(TINY)(u, v) ? 0.65 : 0;
     });
-    assert.equal(result.method, "flood", "a few uncertain cells do not establish a near-opaque core");
+    assert.equal(
+      result.method,
+      "flood",
+      "a few uncertain cells do not establish a near-opaque core",
+    );
     assert.ok(opaque > 400 * 300 * 0.5);
   }
 });
@@ -1631,16 +2031,23 @@ test("E01-O-02: a confident raw core erased by cleaning still takes the flood", 
     }
     return encode.call(this, callback, mime);
   };
-  t.after(() => { FakeCanvas.prototype.toBlob = encode; });
+  t.after(() => {
+    FakeCanvas.prototype.toBlob = encode;
+  });
   const subject = boxMask(TINY);
   let rawSolid = 0;
   const { result, opaque } = await tinyCut((u, v) => {
-    if (subject(u, v) && Math.floor(u * 512) % 2 === 0) { rawSolid += 1; return 1; }
+    if (subject(u, v) && Math.floor(u * 512) % 2 === 0) {
+      rawSolid += 1;
+      return 1;
+    }
     return 0;
   });
   assert.ok(rawSolid >= 128, "the raw model mask has a confident core");
-  assert.ok(cleaned && cleaned.visible > 0 && cleaned.solid < 400 * 300 / 2048,
-    `cleaning left a weak matte: ${JSON.stringify(cleaned)}`);
+  assert.ok(
+    cleaned && cleaned.visible > 0 && cleaned.solid < (400 * 300) / 2048,
+    `cleaning left a weak matte: ${JSON.stringify(cleaned)}`,
+  );
   assert.equal(result.method, "flood");
   assert.ok(opaque > 400 * 300 * 0.5);
 });
@@ -1650,14 +2057,23 @@ test("E01-O-02: a tiny WASM subject after a flat WebGPU mask is kept but records
   assert.deepEqual([result.provider, result.method, result.webgpuBroken], ["wasm", "model", false]);
   assert.ok(alphaAt(pixels, 212, 150) >= 240);
   assert.equal(alphaAt(pixels, 20, 20), 0);
-  assert.equal(env.provider.readGpuFailure(null), false, "a subject this small cannot confirm the GPU is broken");
+  assert.equal(
+    env.provider.readGpuFailure(null),
+    false,
+    "a subject this small cannot confirm the GPU is broken",
+  );
 });
 
 test("C21: cold manual refine emits download progress and terminal completion", async () => {
   const env = await boot({ adapter: false });
   const seen: ConsumerProgress[] = [];
   const base = sourceImage();
-  await env.engine.refineWithUserCrops(sourceImage(), base, [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }], { onProgress: (p) => seen.push(p) });
+  await env.engine.refineWithUserCrops(
+    sourceImage(),
+    base,
+    [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }],
+    { onProgress: (p) => seen.push(p) },
+  );
   assert.ok(seen.some((p) => p.stage === "loading" && p.progress > 0 && p.progress < 0.7));
   assert.equal(seen.at(-1)?.progress, 1);
   assert.ok(seen.every((p, i) => i === 0 || p.progress >= seen[i - 1]!.progress));
@@ -1674,35 +2090,69 @@ test("C24: failed manual refine records this job's route and absorb attempt; abo
   assert.equal(p.absorbAttempted, true);
   assert.deepEqual(p.compat, { attempted: false });
   assert.equal(p.ranOn, undefined, "neither load became ready");
-  const controller = new AbortController(); controller.abort(new Error("gone"));
-  await assert.rejects(env.engine.refineWithUserCrops(sourceImage(), sourceImage(), boxes, { signal: controller.signal }), (e) => e === controller.signal.reason);
+  const controller = new AbortController();
+  controller.abort(new Error("gone"));
+  await assert.rejects(
+    env.engine.refineWithUserCrops(sourceImage(), sourceImage(), boxes, {
+      signal: controller.signal,
+    }),
+    (e) => e === controller.signal.reason,
+  );
   assert.equal(provenanceOf(env), p, "an abort writes no record");
 });
 
 test("C25: an overlapping page passthrough cannot claim another job's provenance", async (t) => {
   const saved = Object.getOwnPropertyDescriptor(globalThis, "Worker");
   Object.defineProperty(globalThis, "Worker", { configurable: true, value: undefined });
-  t.after(() => { if (saved) Object.defineProperty(globalThis, "Worker", saved); else Reflect.deleteProperty(globalThis, "Worker"); });
+  t.after(() => {
+    if (saved) Object.defineProperty(globalThis, "Worker", saved);
+    else Reflect.deleteProperty(globalThis, "Worker");
+  });
   const env = await boot({ adapter: false });
-  const client = await import(`./removal-client.ts?case=${caseCounter}`) as typeof import("./removal-client.ts");
+  const client = (await import(
+    `./removal-client.ts?case=${caseCounter}`
+  )) as typeof import("./removal-client.ts");
   let releaseA!: () => void, startA!: () => void, releaseB!: () => void, startB!: () => void;
-  const aGate = new Promise<void>((r) => { releaseA = r; });
-  const aStarted = new Promise<void>((r) => { startA = r; });
-  const bGate = new Promise<void>((r) => { releaseB = r; });
-  const bStarted = new Promise<void>((r) => { startB = r; });
-  env.fx.processorHook = async ({ call }) => { if (call === 1) { startA(); await aGate; } };
-  const transparent = new File([encodeRaw(120, 80, new Uint8ClampedArray(120 * 80 * 4))], "empty.png", { type: "image/png" });
+  const aGate = new Promise<void>((r) => {
+    releaseA = r;
+  });
+  const aStarted = new Promise<void>((r) => {
+    startA = r;
+  });
+  const bGate = new Promise<void>((r) => {
+    releaseB = r;
+  });
+  const bStarted = new Promise<void>((r) => {
+    startB = r;
+  });
+  env.fx.processorHook = async ({ call }) => {
+    if (call === 1) {
+      startA();
+      await aGate;
+    }
+  };
+  const transparent = new File(
+    [encodeRaw(120, 80, new Uint8ClampedArray(120 * 80 * 4))],
+    "empty.png",
+    { type: "image/png" },
+  );
   const bitmap = globalThis.createImageBitmap;
   globalThis.createImageBitmap = (async (source: Blob, ...args: unknown[]) => {
-    if (source === transparent) { startB(); await bGate; }
+    if (source === transparent) {
+      startB();
+      await bGate;
+    }
     return (bitmap as any)(source, ...args);
   }) as typeof createImageBitmap;
-  t.after(() => { globalThis.createImageBitmap = bitmap; });
+  t.after(() => {
+    globalThis.createImageBitmap = bitmap;
+  });
   const a = client.removeBackgroundAuto(sourceImage(), { mode: "quick" });
   await aStarted;
   const b = client.removeBackgroundAuto(transparent);
   await bStarted;
-  releaseA(); await a;
+  releaseA();
+  await a;
   assert.equal((client.lastRemovalProvenance() as { model: string }).model, "birefnet");
   releaseB();
   assert.equal((await b).method, "passthrough");
@@ -1712,52 +2162,102 @@ test("C25: an overlapping page passthrough cannot claim another job's provenance
 test("C24 C25: a page-client refine failure exposes only its own fault handoff", async (t) => {
   const saved = Object.getOwnPropertyDescriptor(globalThis, "Worker");
   Object.defineProperty(globalThis, "Worker", { configurable: true, value: undefined });
-  t.after(() => { if (saved) Object.defineProperty(globalThis, "Worker", saved); else Reflect.deleteProperty(globalThis, "Worker"); });
+  t.after(() => {
+    if (saved) Object.defineProperty(globalThis, "Worker", saved);
+    else Reflect.deleteProperty(globalThis, "Worker");
+  });
   const env = await boot();
-  const client = await import(`./removal-client.ts?case=${caseCounter}`) as typeof import("./removal-client.ts");
+  const client = (await import(
+    `./removal-client.ts?case=${caseCounter}`
+  )) as typeof import("./removal-client.ts");
   env.fx.loadFail = () => FETCH_FAILURE();
-  await assert.rejects(client.refineCropsAuto(sourceImage(), sourceImage(), [{ x: 0.1, y: 0.1, width: 0.4, height: 0.4 }]));
+  await assert.rejects(
+    client.refineCropsAuto(sourceImage(), sourceImage(), [
+      { x: 0.1, y: 0.1, width: 0.4, height: 0.4 },
+    ]),
+  );
   assert.equal(client.lastRemovalProvenance(), env.runtime.provenance());
   assert.equal((client.lastRemovalProvenance() as { outcome: string }).outcome, "error");
-  assert.equal(await client.refineCropsAuto(sourceImage(), sourceImage(), [] ) instanceof Blob, true);
-  assert.equal(client.lastRemovalProvenance(), undefined, "a later no-op clears this client's prior fault");
+  assert.equal(
+    (await client.refineCropsAuto(sourceImage(), sourceImage(), [])) instanceof Blob,
+    true,
+  );
+  assert.equal(
+    client.lastRemovalProvenance(),
+    undefined,
+    "a later no-op clears this client's prior fault",
+  );
 });
 
 test("C30 ENGINE-07: compatibility download restarts below the failed run's high watermark", async () => {
-  const env = await boot({ mask: ({ provider }) => provider === "webgpu" ? 0.01 : SUBJECT });
+  const env = await boot({ mask: ({ provider }) => (provider === "webgpu" ? 0.01 : SUBJECT) });
   const { progress } = await cut(env, { mode: "quick" });
   const switchAt = progress.findIndex((p) => p.message === "Switching to compatibility mode");
   assert.ok(switchAt > 0);
-  assert.deepEqual(progress.slice(switchAt + 1).filter((p) => p.message === COPY_DOWNLOAD).map((p) => Math.round(p.progress * 1000) / 1000), [0.312, 0.66]);
+  assert.deepEqual(
+    progress
+      .slice(switchAt + 1)
+      .filter((p) => p.message === COPY_DOWNLOAD)
+      .map((p) => Math.round(p.progress * 1000) / 1000),
+    [0.312, 0.66],
+  );
 });
 const COPY_DOWNLOAD = "Preparing remover · only needed once";
 
 test("C30 TESTS-4: tensor assertion rejects a same-label leak hidden by a double disposal", async () => {
   const env = await boot();
   env.fx.events = [
-    { type: "tensor", label: "output", id: 1 }, { type: "tensor", label: "output", id: 2 },
-    { type: "dispose-tensor", label: "output", id: 2 }, { type: "dispose-tensor", label: "output", id: 2 },
+    { type: "tensor", label: "output", id: 1 },
+    { type: "tensor", label: "output", id: 2 },
+    { type: "dispose-tensor", label: "output", id: 2 },
+    { type: "dispose-tensor", label: "output", id: 2 },
   ];
   assert.throws(() => assertTensorsBalanced(env));
 });
 
 test("C30 TESTS-8: actual default factories pass pinned revisions and route dtypes", async () => {
   for (const route of [
-    { memory: 8, adapter: true, model: "birefnet", provider: "webgpu", dtype: "fp16", revision: "4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7" },
-    { memory: 8, adapter: false, model: "birefnet", provider: "wasm", dtype: "fp32", revision: "4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7" },
-    { memory: 4, adapter: false, model: "isnet", provider: "wasm", dtype: "fp16", revision: "440dea96dd4a3b06bbbf5abec3e26569dd7ec49f" },
+    {
+      memory: 8,
+      adapter: true,
+      model: "birefnet",
+      provider: "webgpu",
+      dtype: "fp16",
+      revision: "4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7",
+    },
+    {
+      memory: 8,
+      adapter: false,
+      model: "birefnet",
+      provider: "wasm",
+      dtype: "fp32",
+      revision: "4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7",
+    },
+    {
+      memory: 4,
+      adapter: false,
+      model: "isnet",
+      provider: "wasm",
+      dtype: "fp16",
+      revision: "440dea96dd4a3b06bbbf5abec3e26569dd7ec49f",
+    },
   ]) {
     const env = await boot(route);
     await env.engine.warmupBiRefNet();
     const proc = env.fx.events.find((e) => e.type === "load-processor")!;
     const model = env.fx.events.find((e) => e.type === "load-model")!;
     assert.deepEqual([proc.model, proc.revision], [route.model, route.revision]);
-    assert.deepEqual([model.model, model.provider, model.revision, model.dtype], [route.model, route.provider, route.revision, route.dtype]);
+    assert.deepEqual(
+      [model.model, model.provider, model.revision, model.dtype],
+      [route.model, route.provider, route.revision, route.dtype],
+    );
   }
 });
 
 test("C16: malformed WebGPU output is confirmed by WASM and later jobs skip GPU", async () => {
-  const env = await boot({ mask: ({ provider }) => provider === "webgpu" ? "malformed" : SUBJECT });
+  const env = await boot({
+    mask: ({ provider }) => (provider === "webgpu" ? "malformed" : SUBJECT),
+  });
   const first = await cut(env, { mode: "quick" });
   assert.equal(first.result.webgpuBroken, true);
   assert.equal(first.result.model, "birefnet");
@@ -1787,25 +2287,48 @@ test("E05-03: in a worker, a WebGPU session that would not start asks for a fres
     const env = await boot();
     env.fx.loadFail = (_m, provider) => (provider === "webgpu" ? SESSION_FAILURE() : undefined);
     const progress: ConsumerProgress[] = [];
-    const error = await env.engine.removeBackgroundLocal(sourceImage(), { onProgress: (p: ConsumerProgress) => progress.push(p) }).catch((e: unknown) => e);
+    const error = await env.engine
+      .removeBackgroundLocal(sourceImage(), {
+        onProgress: (p: ConsumerProgress) => progress.push(p),
+      })
+      .catch((e: unknown) => e);
     assert.equal(Reflect.get(error as object, "code"), "removal-webgpu-init-failed");
-    assert.equal(Reflect.get((error as Error).cause as object, "name"), "RemovalModelLoadError", "the load error rides as the cause");
+    assert.equal(
+      Reflect.get((error as Error).cause as object, "name"),
+      "RemovalModelLoadError",
+      "the load error rides as the cause",
+    );
     assert.equal(modelLoads(env, "wasm"), 0, "no WASM session in this context");
     assert.ok(!switching(progress));
     assert.equal(provenanceOf(env)?.outcome, "error");
-    assert.equal(env.provider.readGpuFailure(null), false, "nothing recorded: the fresh context decides");
+    assert.equal(
+      env.provider.readGpuFailure(null),
+      false,
+      "nothing recorded: the fresh context decides",
+    );
     const failure = classifyError(error);
     assert.deepEqual([failure.code, failure.retryable], ["model", true]);
-    assert.equal(failure.message, "The local remover couldn’t use this device’s graphics. Try again.");
+    assert.equal(
+      failure.message,
+      "The local remover couldn’t use this device’s graphics. Try again.",
+    );
 
-    const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], { type: "image/png" });
-    await assert.rejects(env.engine.refineWithUserCrops(sourceImage(), base, [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }]), { code: "removal-webgpu-init-failed" });
+    const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], {
+      type: "image/png",
+    });
+    await assert.rejects(
+      env.engine.refineWithUserCrops(sourceImage(), base, [
+        { x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+      ]),
+      { code: "removal-webgpu-init-failed" },
+    );
     await assert.rejects(env.engine.warmupBiRefNet(), { code: "removal-webgpu-init-failed" });
     assert.equal(modelLoads(env, "wasm"), 0);
 
     // A network-class WebGPU load failure is still absorbed on WASM in place: no fresh context.
     const network = await boot();
-    network.fx.loadFail = (_m, provider, n) => (provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined);
+    network.fx.loadFail = (_m, provider, n) =>
+      provider === "webgpu" && n === 1 ? FETCH_FAILURE() : undefined;
     assert.equal((await cut(network)).result.provider, "wasm");
   } finally {
     Reflect.deleteProperty(globalThis, "WorkerGlobalScope");
@@ -1818,12 +2341,15 @@ test("E05-03: in a worker, a WebGPU session that would not start asks for a fres
 
 test("E01-01: a cut is never more opaque than its source (a translucent patch, a transparent hole)", async () => {
   // A photo with a translucent patch and a transparent hole inside the subject, as an edited PNG has.
-  const width = 120, height = 80;
+  const width = 120,
+    height = 80;
   const photo = sourceImage(width, height);
   const { data } = decodeRaw(new Uint8Array(await photo.arrayBuffer()));
   const holed = data.slice();
-  for (let y = 30; y < 40; y += 1) for (let x = 50; x < 60; x += 1) holed[(y * width + x) * 4 + 3] = 128;
-  for (let y = 20; y < 26; y += 1) for (let x = 20; x < 26; x += 1) holed[(y * width + x) * 4 + 3] = 0;
+  for (let y = 30; y < 40; y += 1)
+    for (let x = 50; x < 60; x += 1) holed[(y * width + x) * 4 + 3] = 128;
+  for (let y = 20; y < 26; y += 1)
+    for (let x = 20; x < 26; x += 1) holed[(y * width + x) * 4 + 3] = 0;
   const file = new File([encodeRaw(width, height, holed)], "holed.png", { type: "image/png" });
   for (const mode of ["quick", "auto", "maximum"] as const) {
     const env = await boot({ mask: () => 1 });
@@ -1843,15 +2369,22 @@ for (const row of [
   { name: "flat source and flat WASM", white: true, wasm: 1, expected: false },
   { name: "flat source with hallucinated structure", white: true, wasm: SUBJECT, expected: false },
   { name: "nonflat photo and broken GPU", white: false, wasm: SUBJECT, expected: true },
-] as const) test(`E10-S memo: ${row.name}`, async () => {
-  const env = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? 0 : row.wasm) });
-  const pixels = new Uint8ClampedArray(120 * 80 * 4).fill(255);
-  const file = row.white ? new File([encodeRaw(120, 80, pixels)], "white.png", { type: "image/png" }) : sourceImage();
-  const { result } = await cut(env, { file, mode: "quick" });
-  assert.equal(result.provider, "wasm");
-  assert.equal(result.webgpuBroken, row.expected);
-  assert.equal(env.provider.readGpuFailure(null), row.expected, "the session memo follows the confirmation");
-});
+] as const)
+  test(`E10-S memo: ${row.name}`, async () => {
+    const env = await boot({ mask: (ctx) => (ctx.provider === "webgpu" ? 0 : row.wasm) });
+    const pixels = new Uint8ClampedArray(120 * 80 * 4).fill(255);
+    const file = row.white
+      ? new File([encodeRaw(120, 80, pixels)], "white.png", { type: "image/png" })
+      : sourceImage();
+    const { result } = await cut(env, { file, mode: "quick" });
+    assert.equal(result.provider, "wasm");
+    assert.equal(result.webgpuBroken, row.expected);
+    assert.equal(
+      env.provider.readGpuFailure(null),
+      row.expected,
+      "the session memo follows the confirmation",
+    );
+  });
 
 // E10-02 (M15): the decode that feeds the model applies the EXIF orientation.
 test("E10-S M15: model decode requests EXIF from-image", async () => {
@@ -1876,10 +2409,20 @@ test("fp32 device-creation load errors request a fresh WASM context for run, ref
   Object.defineProperty(globalThis, "WorkerGlobalScope", { configurable: true, value: class {} });
   try {
     const env = await boot({ adapter: "no-f16" });
-    env.fx.loadFail = (_model, provider) => provider === "webgpu" ? new Error("WebGPU device creation failed") : undefined;
-    await assert.rejects(env.engine.removeBackgroundLocal(sourceImage()), { code: "removal-webgpu-init-failed" });
-    const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], { type: "image/png" });
-    await assert.rejects(env.engine.refineWithUserCrops(sourceImage(), base, [{ x: 0.1, y: 0.1, width: 0.5, height: 0.5 }]), { code: "removal-webgpu-init-failed" });
+    env.fx.loadFail = (_model, provider) =>
+      provider === "webgpu" ? new Error("WebGPU device creation failed") : undefined;
+    await assert.rejects(env.engine.removeBackgroundLocal(sourceImage()), {
+      code: "removal-webgpu-init-failed",
+    });
+    const base = new Blob([encodeRaw(60, 40, new Uint8ClampedArray(60 * 40 * 4).fill(255))], {
+      type: "image/png",
+    });
+    await assert.rejects(
+      env.engine.refineWithUserCrops(sourceImage(), base, [
+        { x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+      ]),
+      { code: "removal-webgpu-init-failed" },
+    );
     await assert.rejects(env.engine.warmupBiRefNet(), { code: "removal-webgpu-init-failed" });
     assert.equal(modelLoads(env, "wasm"), 0, "never try WASM in the failed GPU realm");
   } finally {

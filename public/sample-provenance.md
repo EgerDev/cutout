@@ -44,12 +44,12 @@ Pass `--out <directory>` for a preview/reproduction and `--sample <jpg>` to read
 a sample outside `public/`. Only `--heic` needs macOS; consuming the committed
 HEIC fixture works on the supported test platforms through the bundled decoder.
 
-| File | Dimensions / bytes | SHA-256 |
-| --- | --- | --- |
-| `sample.jpg` | 1024 × 1365 / 120829 | `ef1850694f1ed3393856a3031a2018875fa1d6f91c29ac07de41f70f32ef7dc7` |
-| `sample-thumb.webp` | 72 × 72 / 1258 | `5b30aecbe4cb3f543a3222220da4109524b6f3bbf0efa5a60bbad82e0e27783a` |
-| `og.jpg` | 1200 × 630 / 42291 | `ed921fd90ec0154e5743ac5b072d92b30319fb2714d3445206cd8ddb63c8dcdc` |
-| Source-tree `scripts/fixtures/sample.heic` | 320 × 426 / 14915 | `7a2b01db364f7d2bc8d7375cc1b7a0b500c1ada90ac8c751a400ceb4efa49af0` |
+| File                                       | Dimensions / bytes   | SHA-256                                                            |
+| ------------------------------------------ | -------------------- | ------------------------------------------------------------------ |
+| `sample.jpg`                               | 1024 × 1365 / 120829 | `ef1850694f1ed3393856a3031a2018875fa1d6f91c29ac07de41f70f32ef7dc7` |
+| `sample-thumb.webp`                        | 72 × 72 / 1258       | `5b30aecbe4cb3f543a3222220da4109524b6f3bbf0efa5a60bbad82e0e27783a` |
+| `og.jpg`                                   | 1200 × 630 / 42291   | `ed921fd90ec0154e5743ac5b072d92b30319fb2714d3445206cd8ddb63c8dcdc` |
+| Source-tree `scripts/fixtures/sample.heic` | 320 × 426 / 14915    | `7a2b01db364f7d2bc8d7375cc1b7a0b500c1ada90ac8c751a400ceb4efa49af0` |
 
 The thumbnail/share-card bytes were reproduced independently from the same
 sample and actual result. The sample was checked through the real BiRefNet

@@ -17,11 +17,17 @@ export function bg0Specifiers(source: string, fileName = "fixture.tsx"): string[
   const found: string[] = [];
   if (fileName.endsWith(".css")) {
     // Tokenize comments and strings together so example text cannot become an import.
-    const tokens = source.match(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|@import\b|url\(|[^\s"'(){};]+|[(){};]/gi) ?? [];
+    const tokens =
+      source.match(
+        /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|@import\b|url\(|[^\s"'(){};]+|[(){};]/gi,
+      ) ?? [];
     let importing = false;
     for (const token of tokens) {
       if (token.startsWith("/*")) continue;
-      if (token.toLowerCase() === "@import") { importing = true; continue; }
+      if (token.toLowerCase() === "@import") {
+        importing = true;
+        continue;
+      }
       if (!importing || token.toLowerCase() === "url(") continue;
       const specifier = /^["']/.test(token) ? token.slice(1, -1) : token;
       if (RETIRED.test(specifier)) found.push(specifier);
@@ -29,9 +35,19 @@ export function bg0Specifiers(source: string, fileName = "fixture.tsx"): string[
     }
     return found;
   }
-  const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const file = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const check = (node: ts.Node | undefined) => {
-    if (node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && RETIRED.test(node.text))
+    if (
+      node &&
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+      RETIRED.test(node.text)
+    )
       found.push(node.text);
   };
   const visit = (node: ts.Node): void => {
@@ -42,7 +58,8 @@ export function bg0Specifiers(source: string, fileName = "fixture.tsx"): string[
     // import x = require("…")
     else if (ts.isExternalModuleReference(node)) check(node.expression);
     // typeof import("…"), import("…").Type
-    else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) check(node.argument.literal);
+    else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
+      check(node.argument.literal);
     // await import("…"), require("…"); whitespace, newlines and backtick quotes are irrelevant to the AST
     else if (
       ts.isCallExpression(node) &&
@@ -77,7 +94,7 @@ const FLAGGED: Record<string, string> = {
   "multi-line named clause": `import {\n  a,\n  b,\n} from\n  "@bg0/browser";`,
   "require call": `const m = require("@bg0/browser");`,
   "import equals": `import m = require("@bg0/browser");`,
-  "subpath": `import x from "@bg0/browser/deep";`,
+  subpath: `import x from "@bg0/browser/deep";`,
 };
 
 const NOT_FLAGGED: Record<string, string> = {
@@ -106,12 +123,14 @@ test("scanner self-check: mentions, comments and lookalikes are not flagged", ()
 // ---- the tree scan (only meaningful once the self-check above holds)
 
 const roots = [new URL("../", import.meta.url), new URL("../../server/", import.meta.url)];
-const files = roots.flatMap((url) => {
-  const root = fileURLToPath(url);
-  return readdirSync(root, { recursive: true, encoding: "utf8" })
-    .filter((path) => /\.(?:[cm]?[jt]sx?|css)$/.test(path) && !path.includes("node_modules"))
-    .map((path) => `${root}${path}`);
-}).sort();
+const files = roots
+  .flatMap((url) => {
+    const root = fileURLToPath(url);
+    return readdirSync(root, { recursive: true, encoding: "utf8" })
+      .filter((path) => /\.(?:[cm]?[jt]sx?|css)$/.test(path) && !path.includes("node_modules"))
+      .map((path) => `${root}${path}`);
+  })
+  .sort();
 
 test("src/ and server/ have source and stylesheets to scan", () => {
   assert.ok(files.length > 50, `expected the whole source tree, found ${files.length} files`);
@@ -128,7 +147,17 @@ test("no module or stylesheet under src/ or server/ imports @bg0/*", () => {
 });
 
 test("C28: stylesheet package imports are scanned without treating comments as imports", () => {
-  for (const source of ['@import "@bg0/browser/style.css";', '@import url("@bg0/browser/style.css");', '@import url(@bg0/browser/style.css);'])
+  for (const source of [
+    '@import "@bg0/browser/style.css";',
+    '@import url("@bg0/browser/style.css");',
+    "@import url(@bg0/browser/style.css);",
+  ])
     assert.deepEqual(bg0Specifiers(source, "style.css"), ["@bg0/browser/style.css"]);
-  assert.deepEqual(bg0Specifiers('/* @import "@bg0/browser/style.css"; */ .x::after { content: "@bg0/browser"; }', "style.css"), []);
+  assert.deepEqual(
+    bg0Specifiers(
+      '/* @import "@bg0/browser/style.css"; */ .x::after { content: "@bg0/browser"; }',
+      "style.css",
+    ),
+    [],
+  );
 });

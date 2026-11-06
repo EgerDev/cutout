@@ -78,7 +78,8 @@ async function download(id, revision, file) {
   const expected = expectedSha256(id, revision, file);
   const done = await stat(target).catch(() => null);
   // A same-size file is reused only when its bytes are right: browsers reject a wrong one.
-  if (done?.size === file.size && (!expected || (await sha256Of(target)) === expected)) return false;
+  if (done?.size === file.size && (!expected || (await sha256Of(target)) === expected))
+    return false;
   await mkdir(dirname(target), { recursive: true });
   const response = await fetch(`${HUB}/${id}/resolve/${revision}/${file.path}`);
   if (!response.ok || !response.body)

@@ -65,9 +65,20 @@ test("vectorizeRgba emits one filled path per colour and none for transparency",
     }
   const svg = vectorizeRgba(data, w, h, { colors: 4 });
   assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 48 48"/);
-  const fills = [...svg.matchAll(/fill="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => m.slice(1, 4).map(Number));
-  assert.ok(fills.some(([r, , b]) => r! > 180 && b! < 60), "red path");
-  assert.ok(fills.some(([r, , b]) => b! > 180 && r! < 60), "blue path");
-  assert.ok(!fills.some(([r, g, b]) => r! < 30 && g! < 30 && b! < 30), "no black (transparent) path");
+  const fills = [...svg.matchAll(/fill="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) =>
+    m.slice(1, 4).map(Number),
+  );
+  assert.ok(
+    fills.some(([r, , b]) => r! > 180 && b! < 60),
+    "red path",
+  );
+  assert.ok(
+    fills.some(([r, , b]) => b! > 180 && r! < 60),
+    "blue path",
+  );
+  assert.ok(
+    !fills.some(([r, g, b]) => r! < 30 && g! < 30 && b! < 30),
+    "no black (transparent) path",
+  );
   assert.ok(!/opacity="0"/.test(svg));
 });

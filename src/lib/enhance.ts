@@ -564,9 +564,10 @@ async function loadWorkerUpscaler(
                   });
                   try {
                     const copy = new Uint8ClampedArray(rgba);
-                    worker.postMessage({ type: "tile", id, rgba: copy.buffer, width: w, height: h }, [
-                      copy.buffer,
-                    ]);
+                    worker.postMessage(
+                      { type: "tile", id, rgba: copy.buffer, width: w, height: h },
+                      [copy.buffer],
+                    );
                   } catch {
                     fail("Enhance worker failed. Try again.");
                   }

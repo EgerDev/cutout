@@ -69,13 +69,20 @@ function applyEnv(o) {
       limits: {},
       // The fp16 BiRefNet route runs only on an adapter with shader-f16 (as transformers' gate requires).
       features: new Set(o.adapter === "no-f16" ? [] : ["shader-f16"]),
-      requestDevice: async () => ({ lost: new Promise(() => {}), addEventListener() {}, destroy() {} }),
+      requestDevice: async () => ({
+        lost: new Promise(() => {}),
+        addEventListener() {},
+        destroy() {},
+      }),
     };
     // "absent": no navigator.gpu at all; "null": requestAdapter resolves null; "fake": an adapter;
     // "no-f16": an adapter without shader-f16.
     const present = o.adapter === "fake" || o.adapter === "no-f16";
     Object.defineProperty(navigator, "gpu", {
-      value: o.adapter === "absent" ? undefined : { requestAdapter: async () => (present ? adapter : null) },
+      value:
+        o.adapter === "absent"
+          ? undefined
+          : { requestAdapter: async () => (present ? adapter : null) },
       configurable: true,
     });
   }
@@ -87,7 +94,11 @@ function fakeBody(cfgs) {
   const cfg = cfgs[ctx] ?? {};
   const state = {};
   let loseDevice;
-  const device = { lost: new Promise((resolve) => { loseDevice = resolve; }) };
+  const device = {
+    lost: new Promise((resolve) => {
+      loseDevice = resolve;
+    }),
+  };
   const counts = { loads: new Map(), deviceRuns: new Map(), processorRuns: 0, modelRuns: 0 };
   const onceKeys = new Set();
   const SIDES = { birefnet: 512, isnet: 1024 };
@@ -209,7 +220,12 @@ function fakeBody(cfgs) {
       if (override !== undefined) return override;
       const info = { model, side, srcWidth: image.width, srcHeight: image.height };
       return {
-        pixel_values: new FakeTensor(new Float32Array(3 * side * side), [1, 3, side, side], "pixel_values", info),
+        pixel_values: new FakeTensor(
+          new Float32Array(3 * side * side),
+          [1, 3, side, side],
+          "pixel_values",
+          info,
+        ),
       };
     };
     processor.dispose = async () => {
@@ -226,9 +242,16 @@ function fakeBody(cfgs) {
     const run = async (inputs) => {
       counts.modelRuns += 1;
       const n = counts.modelRuns;
-      emit("run", { phase: "model", model, device, n, inputName: Object.keys(inputs ?? {}).join(",") });
+      emit("run", {
+        phase: "model",
+        model,
+        device,
+        n,
+        inputName: Object.keys(inputs ?? {}).join(","),
+      });
       const input = inputs?.[INPUT[model]];
-      if (!(input instanceof FakeTensor)) throw new TypeError("fake model: missing " + INPUT[model]);
+      if (!(input instanceof FakeTensor))
+        throw new TypeError("fake model: missing " + INPUT[model]);
       const deviceKey = model + ":" + String(device);
       const deviceCall = (counts.deviceRuns.get(deviceKey) ?? 0) + 1;
       counts.deviceRuns.set(deviceKey, deviceCall);
@@ -251,7 +274,14 @@ function fakeBody(cfgs) {
       // "missing": the session returned no named output at all.
       if (spec === "missing") return {};
       const info = { model, side, srcWidth: input.info.srcWidth, srcHeight: input.info.srcHeight };
-      return { [OUTPUT[model]]: new FakeTensor(render(spec, side), [1, 1, side, side], OUTPUT[model], info) };
+      return {
+        [OUTPUT[model]]: new FakeTensor(
+          render(spec, side),
+          [1, 1, side, side],
+          OUTPUT[model],
+          info,
+        ),
+      };
     };
     run.dispose = async () => {
       emit("dispose", { target: "model", model, device, repeat: disposed });
@@ -278,9 +308,33 @@ function fakeBody(cfgs) {
         // A throwing consumer must not fail the load, as in the real loader.
       }
     };
-    emit("from_pretrained", { kind, id: String(id), model, device, dtype, revision: options.revision, file, attempt });
+    emit("from_pretrained", {
+      kind,
+      id: String(id),
+      model,
+      device,
+      dtype,
+      revision: options.revision,
+      file,
+      attempt,
+    });
     try {
-      await cfg.load?.({ kind, id: String(id), model, device, dtype, revision: options.revision, file, attempt, progress, state, emit }, h);
+      await cfg.load?.(
+        {
+          kind,
+          id: String(id),
+          model,
+          device,
+          dtype,
+          revision: options.revision,
+          file,
+          attempt,
+          progress,
+          state,
+          emit,
+        },
+        h,
+      );
     } catch (error) {
       emit("load-error", { kind, model, device, message: String(error?.message ?? error) });
       throw error;
@@ -310,7 +364,9 @@ function preludeBody(makeEmitterFn, applyEnvFn, o, wrapCreateImageBitmap) {
   const { emit } = makeEmitterFn();
   applyEnvFn(o);
   if (wrapCreateImageBitmap && typeof globalThis.createImageBitmap === "function") {
-    globalThis.createImageBitmap = wrapCreateImageBitmap(globalThis.createImageBitmap.bind(globalThis));
+    globalThis.createImageBitmap = wrapCreateImageBitmap(
+      globalThis.createImageBitmap.bind(globalThis),
+    );
   }
   emit("prelude", {
     deviceMemory: navigator.deviceMemory ?? null,
@@ -404,7 +460,9 @@ function fixtureFactory() {
             const n = rand() * 16;
             const t = y / height;
             const subject = x >= 400 && x < 440 && y >= 300 && y < 330;
-            image.data[i] = subject ? 200 + n : 110 + t * 70 + n + 40 * Math.sin(x / 41) * Math.cos(y / 53);
+            image.data[i] = subject
+              ? 200 + n
+              : 110 + t * 70 + n + 40 * Math.sin(x / 41) * Math.cos(y / 53);
             image.data[i + 1] = subject ? 40 + n : 128 + t * 60 + n + 30 * Math.cos(x / 29);
             image.data[i + 2] = subject ? 60 + n : 150 + t * 50 + n + 35 * Math.sin((x + y) / 47);
             image.data[i + 3] = 255;
@@ -503,7 +561,10 @@ export function transformersFake({ page = {}, worker = {} } = {}) {
  * are hoisted above this, but every navigator read happens at message-handling time.
  */
 export function workerPrelude(options = {}) {
-  const wrap = options.createImageBitmap == null ? "undefined" : `(${sourceOf(options.createImageBitmap, "createImageBitmap")})`;
+  const wrap =
+    options.createImageBitmap == null
+      ? "undefined"
+      : `(${sourceOf(options.createImageBitmap, "createImageBitmap")})`;
   return `(() => { const makeEmitter = ${makeEmitter}; (${preludeBody})(makeEmitter, ${applyEnv}, ${JSON.stringify(envOptions(options))}, ${wrap}); })();`;
 }
 
@@ -586,7 +647,8 @@ export function liveModels(sorted) {
     if (event.type === "model-ready") live[event.ctx] += 1;
     else if (event.type === "dispose" && event.target === "model" && !event.repeat) {
       live[event.ctx] = Math.max(0, live[event.ctx] - 1);
-    } else if (event.type === "terminate" && /removal-worker/.test(event.url ?? "")) live.worker = 0;
+    } else if (event.type === "terminate" && /removal-worker/.test(event.url ?? ""))
+      live.worker = 0;
     else continue;
     maxPage = Math.max(maxPage, live.page);
     maxWorker = Math.max(maxWorker, live.worker);

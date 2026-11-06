@@ -68,14 +68,21 @@ function installEnv({ memory, adapter, setItemThrows }) {
     limits: { maxStorageBufferBindingSize: 1 << 30 },
     // The fp16 BiRefNet route needs shader-f16; "no-f16" is an adapter without it.
     features: new Set(adapter === "no-f16" ? [] : ["shader-f16"]),
-    requestDevice: async () => ({ addEventListener() {}, lost: new Promise(() => {}), destroy() {} }),
+    requestDevice: async () => ({
+      addEventListener() {},
+      lost: new Promise(() => {}),
+      destroy() {},
+    }),
   };
   Object.defineProperty(navigator, "gpu", {
     configurable: true,
     value:
       adapter === "absent"
         ? undefined
-        : { requestAdapter: async () => (adapter === "fake" || adapter === "no-f16" ? fakeAdapter : null) },
+        : {
+            requestAdapter: async () =>
+              adapter === "fake" || adapter === "no-f16" ? fakeAdapter : null,
+          },
   });
   // A mutable offset the fake can bump, so the compatibility clock row needs no real sleep.
   globalThis.__perfOffset = 0;
@@ -91,7 +98,10 @@ function installEnv({ memory, adapter, setItemThrows }) {
       observed.add(this);
       this.addEventListener("message", ({ data }) => {
         if (data?.type === "done" && data.result?.provider)
-          globalThis.__workerOutcomes.push({ provider: data.result.provider, workerHadGpu: data.result.workerHadGpu });
+          globalThis.__workerOutcomes.push({
+            provider: data.result.provider,
+            workerHadGpu: data.result.workerHadGpu,
+          });
       });
     }
     globalThis.__posted.push({ type: data?.type, noWebgpu: data?.noWebgpu });
@@ -161,25 +171,34 @@ function installDriver() {
     code: error?.code,
     sameReason: error === reason,
     classified: classify
-      ? (({ code, retryable }) => ({ code, retryable }))((await import("/src/lib/errors.ts")).classifyError(error))
+      ? (({ code, retryable }) => ({ code, retryable }))(
+          (await import("/src/lib/errors.ts")).classifyError(error),
+        )
       : undefined,
   });
   async function snapshot() {
     const runtime = await import("/src/lib/removal-runtime.ts");
     const provider = await import("/src/lib/removal-provider.ts");
     return {
-      prov: typeof runtime.removalRuntime.provenance === "function" ? runtime.removalRuntime.provenance() : undefined,
+      prov:
+        typeof runtime.removalRuntime.provenance === "function"
+          ? runtime.removalRuntime.provenance()
+          : undefined,
       memo: provider.webgpuLoadMemo(),
       gpuFailure: provider.readGpuFailure(),
       keys: Object.keys(localStorage),
       record: localStorage.getItem("cutout:removal-webgpu-failure:v1"),
     };
   }
-  const collect = (progress) => (p) => progress.push({ stage: p.stage, progress: p.progress, message: p.message });
+  const collect = (progress) => (p) =>
+    progress.push({ stage: p.stage, progress: p.progress, message: p.message });
   // A missing client provenance API is reported as data (so the row can assert on it), never as a TypeError here.
   const clientProvenance = (client) => ({
     clientProvApi: typeof client?.lastRemovalProvenance,
-    clientProv: typeof client?.lastRemovalProvenance === "function" ? client.lastRemovalProvenance() : undefined,
+    clientProv:
+      typeof client?.lastRemovalProvenance === "function"
+        ? client.lastRemovalProvenance()
+        : undefined,
   });
 
   globalThis.__t = {
@@ -189,7 +208,12 @@ function installDriver() {
       return { transfer: engine.COMPAT_TRANSFER, edges: engine.COMPAT_EDGES_PROGRESS };
     },
     async budget(provider, memory, pixelsCount) {
-      return (await import("/src/lib/removal-budget.ts")).refinementBudget(provider, memory, 0, pixelsCount);
+      return (await import("/src/lib/removal-budget.ts")).refinementBudget(
+        provider,
+        memory,
+        0,
+        pixelsCount,
+      );
     },
     /** One page-engine job (removeBackgroundLocal). */
     async run(o = {}) {
@@ -241,7 +265,8 @@ function installDriver() {
       const out = { fractions: [] };
       const onProgress = (fraction) => out.fractions.push(fraction);
       try {
-        if (o.viaClient) await (await import("/src/lib/removal-client.ts")).warmupRemoval(onProgress);
+        if (o.viaClient)
+          await (await import("/src/lib/removal-client.ts")).warmupRemoval(onProgress);
         else await (await import("/src/lib/engine.ts")).warmupBiRefNet(onProgress);
         out.settled = true;
       } catch (error) {
@@ -251,16 +276,31 @@ function installDriver() {
     },
     /** One job through the client (the worker when it can, the page when it cannot). */
     async auto(o = {}) {
-      if (o.noWorker) Object.defineProperty(window, "Worker", { configurable: true, writable: true, value: undefined });
+      if (o.noWorker)
+        Object.defineProperty(window, "Worker", {
+          configurable: true,
+          writable: true,
+          value: undefined,
+        });
       const client = await import("/src/lib/removal-client.ts");
       // corrupt: a JPEG header with no image data behind it, which no decoder reads.
       const source = o.corrupt
-        ? new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])], { type: "image/jpeg" })
+        ? new Blob(
+            [
+              new Uint8Array([
+                0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+              ]),
+            ],
+            { type: "image/jpeg" },
+          )
         : await fixture(o.fixture ?? "gradient", o.width, o.height);
       const progress = [];
       const out = {};
       try {
-        const done = await client.removeBackgroundAuto(source, { mode: o.mode ?? "auto", onProgress: collect(progress) });
+        const done = await client.removeBackgroundAuto(source, {
+          mode: o.mode ?? "auto",
+          onProgress: collect(progress),
+        });
         out.provider = done.provider;
         out.method = done.method;
         out.model = done.model;
@@ -276,10 +316,18 @@ function installDriver() {
       const client = await import("/src/lib/removal-client.ts");
       const opts = { mode: "quick" };
       // All four sources first, so job 1 and the job queued behind it are posted back to back.
-      const blobs = [await fixture("gradient"), await fixture("gradient"), await fixture("gradient"), await fixture("gradient")];
+      const blobs = [
+        await fixture("gradient"),
+        await fixture("gradient"),
+        await fixture("gradient"),
+        await fixture("gradient"),
+      ];
       const first = client.removeBackgroundAuto(blobs[0], opts);
       const controller = new AbortController();
-      const cancelled = client.removeBackgroundAuto(blobs[1], { ...opts, signal: controller.signal });
+      const cancelled = client.removeBackgroundAuto(blobs[1], {
+        ...opts,
+        signal: controller.signal,
+      });
       cancelled.catch(() => {});
       const one = await first;
       controller.abort(); // the worker is mid-run on it: it stays in flight until the worker replies
@@ -293,7 +341,11 @@ function installDriver() {
     /** A gpu-mask record as an earlier version persisted it (E10-S-01: no longer written, still read). */
     async seedGpuRecord() {
       const provider = await import("/src/lib/removal-provider.ts");
-      const record = { version: 1, fingerprint: provider.REMOVAL_RUNTIME_FINGERPRINT, kind: "gpu-mask" };
+      const record = {
+        version: 1,
+        fingerprint: provider.REMOVAL_RUNTIME_FINGERPRINT,
+        kind: "gpu-mask",
+      };
       localStorage.setItem(provider.REMOVAL_FAILURE_KEY, JSON.stringify(record));
       return provider.readGpuFailure();
     },
@@ -432,7 +484,9 @@ async function openRow({
   await target.route(WORKER_ROUTE, async (route) => {
     const response = await route.fetch();
     const headers = Object.fromEntries(
-      Object.entries(response.headers()).filter(([name]) => !["content-encoding", "content-length"].includes(name)),
+      Object.entries(response.headers()).filter(
+        ([name]) => !["content-encoding", "content-length"].includes(name),
+      ),
     );
     await route.fulfill({ response, headers, body: `${prelude}\n${await response.text()}` });
   });
@@ -477,14 +531,18 @@ const where = (e, f) =>
   (f.model === undefined || e.model === f.model) &&
   (f.device === undefined || e.device === f.device) &&
   (f.dtype === undefined || e.dtype === f.dtype);
-const modelLoads = (log, f = {}) => log.filter((e) => e.type === "from_pretrained" && e.kind === "model" && where(e, f));
+const modelLoads = (log, f = {}) =>
+  log.filter((e) => e.type === "from_pretrained" && e.kind === "model" && where(e, f));
 const processorLoads = (log, f = {}) =>
-  log.filter((e) => e.type === "from_pretrained" && e.kind === "processor" && where(e, { ctx: f.ctx }));
+  log.filter(
+    (e) => e.type === "from_pretrained" && e.kind === "processor" && where(e, { ctx: f.ctx }),
+  );
 const loadsTotal = (log, f = {}) => modelLoads(log, f).length + processorLoads(log, f).length;
 const modelDisposes = (log, f = {}) =>
   log.filter((e) => e.type === "dispose" && e.target === "model" && !e.repeat && where(e, f));
 /** Model inferences only: the fake also logs a `run` for every processor() call. */
-const runsOf = (log, f = {}) => log.filter((e) => e.type === "run" && e.phase === "model" && where(e, f));
+const runsOf = (log, f = {}) =>
+  log.filter((e) => e.type === "run" && e.phase === "model" && where(e, f));
 const sigmoidsOf = (log) => log.filter((e) => e.type === "sigmoid");
 const indexOf = (log, predicate) => log.findIndex(predicate);
 const livePeak = (log) => {
@@ -495,9 +553,11 @@ const livePeak = (log) => {
 // progress analysis ------------------------------------------------------------------------------------
 
 const near = (a, b, tolerance = 1e-9) => Math.abs(a - b) <= tolerance;
-const hasProgress = (progress, stage, value) => progress.some((p) => p.stage === stage && near(p.progress, value));
+const hasProgress = (progress, stage, value) =>
+  progress.some((p) => p.stage === stage && near(p.progress, value));
 const hasSwitching = (progress) => progress.some((p) => p.message === SWITCHING);
-const firstAt = (progress, stage, value) => progress.findIndex((p) => p.stage === stage && near(p.progress, value));
+const firstAt = (progress, stage, value) =>
+  progress.findIndex((p) => p.stage === stage && near(p.progress, value));
 
 /** The state the failure rows keep asserting: nothing leaked into storage, no GPU record. */
 function assertNoGpuRecord(r, label = "") {
@@ -522,39 +582,74 @@ async function requireSmoke() {
 test("smoke 1: a route reaches the dedicated removal worker's module fetches (page.route, then context.route)", async () => {
   // fake-transformers.mjs tries both scopes and checks the worker's module-loaded and prelude events.
   const smoke = await runInterceptionSmoke(browser, appUrl, { deviceMemory: 6 });
-  assert.ok(smoke.intercepted, `neither scope intercepts dedicated-worker fetches: ${JSON.stringify(smoke.attempts)}`);
+  assert.ok(
+    smoke.intercepted,
+    `neither scope intercepts dedicated-worker fetches: ${JSON.stringify(smoke.attempts)}`,
+  );
   routeScope = smoke.intercepted;
 });
 
 test("smoke 2: this suite's own wiring reaches both contexts (prelude deviceMemory 4 gives the worker ISNet)", async () => {
   // Page memory 8, worker prelude memory 4, no adapters anywhere: the worker's low-memory route proves the
   // prelude is in effect, and module-loaded proves the fake served both contexts.
-  await withRow({ memory: 8, adapter: "null", workerEnv: { memory: 4, adapter: "null" } }, async (row) => {
-    const worker = await row.warm({ viaClient: true });
-    assert.equal(worker.settled, true, JSON.stringify(worker.error));
-    const page = await row.warm();
-    assert.equal(page.settled, true, JSON.stringify(page.error));
-    const log = await row.log();
-    assert.ok(log.some((e) => e.type === "module-loaded" && e.ctx === "worker"), "the worker imported the fake module");
-    assert.ok(log.some((e) => e.type === "module-loaded" && e.ctx === "page"), "the page imported the fake module");
-    assert.equal(log.find((e) => e.type === "prelude")?.deviceMemory, 4, "the prelude ran in the worker");
-    assert.equal(modelLoads(log, { ctx: "worker", model: "isnet", device: "wasm" }).length, 1, "worker: low memory -> ISNet");
-    assert.equal(modelLoads(log, { ctx: "page", model: "birefnet", device: "wasm" }).length, 1, "page: memory 8 -> BiRefNet");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", workerEnv: { memory: 4, adapter: "null" } },
+    async (row) => {
+      const worker = await row.warm({ viaClient: true });
+      assert.equal(worker.settled, true, JSON.stringify(worker.error));
+      const page = await row.warm();
+      assert.equal(page.settled, true, JSON.stringify(page.error));
+      const log = await row.log();
+      assert.ok(
+        log.some((e) => e.type === "module-loaded" && e.ctx === "worker"),
+        "the worker imported the fake module",
+      );
+      assert.ok(
+        log.some((e) => e.type === "module-loaded" && e.ctx === "page"),
+        "the page imported the fake module",
+      );
+      assert.equal(
+        log.find((e) => e.type === "prelude")?.deviceMemory,
+        4,
+        "the prelude ran in the worker",
+      );
+      assert.equal(
+        modelLoads(log, { ctx: "worker", model: "isnet", device: "wasm" }).length,
+        1,
+        "worker: low memory -> ISNet",
+      );
+      assert.equal(
+        modelLoads(log, { ctx: "page", model: "birefnet", device: "wasm" }).length,
+        1,
+        "page: memory 8 -> BiRefNet",
+      );
+    },
+  );
   smokeOk = true;
 });
 
 test("R2-C-01: the result names the model that ran, through the worker and on the page", async () => {
   await requireSmoke();
-  await withRow({ memory: 8, adapter: "null", workerEnv: { memory: 4, adapter: "null" } }, async (row) => {
-    const r = await row.auto();
-    assert.equal(r.error, undefined, JSON.stringify(r.error));
-    assert.deepEqual([r.provider, r.method, r.model], ["wasm", "model", "isnet"], "worker: low memory -> ISNet");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", workerEnv: { memory: 4, adapter: "null" } },
+    async (row) => {
+      const r = await row.auto();
+      assert.equal(r.error, undefined, JSON.stringify(r.error));
+      assert.deepEqual(
+        [r.provider, r.method, r.model],
+        ["wasm", "model", "isnet"],
+        "worker: low memory -> ISNet",
+      );
+    },
+  );
   await withRow({ memory: 8, adapter: "null" }, async (row) => {
     const r = await row.auto({ noWorker: true });
     assert.equal(r.error, undefined, JSON.stringify(r.error));
-    assert.deepEqual([r.provider, r.method, r.model], ["wasm", "model", "birefnet"], "page: memory 8 -> BiRefNet");
+    assert.deepEqual(
+      [r.provider, r.method, r.model],
+      ["wasm", "model", "birefnet"],
+      "page: memory 8 -> BiRefNet",
+    );
   });
 });
 
@@ -562,7 +657,13 @@ test("R2-C-01: the result names the model that ran, through the worker and on th
 
 test("Q1 (red on r2, N1): an opaque WebGPU inference throw is retryable and runs one compatibility attempt", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { mask: maskHook([{ match: { device: "webgpu" }, do: { throw: "ORT session run failed" } }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: {
+        mask: maskHook([{ match: { device: "webgpu" }, do: { throw: "ORT session run failed" } }]),
+      },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
@@ -586,9 +687,17 @@ test("Q1 (red on r3, F2): a WASM crash named Aborted() is never a cancellation",
     assert.ok(r.error, "the job rejects (no graphic to fall back to)");
     assert.equal(r.error.name, "RemovalInferenceError");
     assert.equal(r.error.code, "inference-failed");
-    assert.deepEqual(r.error.classified, { code: "model", retryable: true }, "classified model/retryable, never cancelled");
+    assert.deepEqual(
+      r.error.classified,
+      { code: "model", retryable: true },
+      "classified model/retryable, never cancelled",
+    );
     const log = await row.log();
-    assert.equal(modelLoads(log).length, 1, "one wasm session serves the primary and the same-target compatibility pass");
+    assert.equal(
+      modelLoads(log).length,
+      1,
+      "one wasm session serves the primary and the same-target compatibility pass",
+    );
     assert.equal(processorLoads(log).length, 1);
     assert.equal(runsOf(log).length, 2, "primary run, then exactly one compatibility run");
     assert.equal(r.prov.outcome, "error");
@@ -599,7 +708,11 @@ test("Q1 (red on r3, F2): a WASM crash named Aborted() is never a cancellation",
 
 test("Q2 (D1): a model that returns {} becomes the shape MaskError, one compatibility attempt, no record", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { mask: maskHook([{ match: { device: "webgpu" }, do: { missing: true } }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { mask: maskHook([{ match: { device: "webgpu" }, do: { missing: true } }]) },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
@@ -615,14 +728,22 @@ test("Q2 (D1): a model that returns {} becomes the shape MaskError, one compatib
 
 test("Q3: an ISNet load failure is not absorbed and has no compatibility pass", async () => {
   await withRow(
-    { memory: 3, adapter: "null", page: { load: loadHook([{ model: "isnet", message: FETCH_FAILURE }]) } },
+    {
+      memory: 3,
+      adapter: "null",
+      page: { load: loadHook([{ model: "isnet", message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const r = await row.run();
       assert.ok(r.error, "the job ends in tryGraphic/throw");
       assert.equal(r.error.name, "RemovalModelLoadError");
       const log = await row.log();
       assert.equal(modelLoads(log, { model: "isnet" }).length, 1, "ISNet is attempted once");
-      assert.equal(modelLoads(log, { model: "birefnet" }).length, 0, "no absorb and no compatibility BiRefNet");
+      assert.equal(
+        modelLoads(log, { model: "birefnet" }).length,
+        0,
+        "no absorb and no compatibility BiRefNet",
+      );
       assert.equal(hasSwitching(r.progress), false);
       assert.equal(r.memo, undefined);
     },
@@ -633,7 +754,11 @@ test("Q3: an ISNet load failure is not absorbed and has no compatibility pass", 
 
 test("Q4 (m): a persistent WebGPU init failure is compatibility-shaped for jobs 2+ without a new WebGPU attempt", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", message: INIT_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", message: INIT_FAILURE }]) },
+    },
     async (row) => {
       const { transfer, edges } = await row.consts();
       const first = await row.run();
@@ -648,9 +773,19 @@ test("Q4 (m): a persistent WebGPU init failure is compatibility-shaped for jobs 
         const job = await row.run();
         const slice = await row.since();
         assert.equal(job.error, undefined, `${name} job: ${JSON.stringify(job.error)}`);
-        assert.ok(hasSwitching(job.progress), `${name} job keeps the compatibility shape (transition present)`);
-        assert.equal(firstAt(job.progress, "cutting", 0.7), -1, `${name} job has no processing 0.7`);
-        assert.ok(hasProgress(job.progress, "finishing", edges), `${name} job emits the 0.92 fingerprint`);
+        assert.ok(
+          hasSwitching(job.progress),
+          `${name} job keeps the compatibility shape (transition present)`,
+        );
+        assert.equal(
+          firstAt(job.progress, "cutting", 0.7),
+          -1,
+          `${name} job has no processing 0.7`,
+        );
+        assert.ok(
+          hasProgress(job.progress, "finishing", edges),
+          `${name} job emits the 0.92 fingerprint`,
+        );
         assert.equal(job.prov.shape, "compat", `${name} job provenance shape (job ${index + 2})`);
         assert.equal(job.prov.compat.attempted, true);
         assert.equal(job.prov.globalTransfer, transfer);
@@ -660,8 +795,16 @@ test("Q4 (m): a persistent WebGPU init failure is compatibility-shaped for jobs 
         assert.equal(job.memo, "init");
       }
       const before = await row.log();
-      assert.equal(modelLoads(before, { device: "webgpu" }).length, 1, "one WebGPU attempt over three jobs");
-      assert.equal(modelLoads(before, { device: "wasm" }).length, 1, "one wasm model over three jobs");
+      assert.equal(
+        modelLoads(before, { device: "webgpu" }).length,
+        1,
+        "one WebGPU attempt over three jobs",
+      );
+      assert.equal(
+        modelLoads(before, { device: "wasm" }).length,
+        1,
+        "one wasm model over three jobs",
+      );
       assertNoGpuRecord(await row.state(), "(m)");
       // Delete resets the memo: the next job attempts WebGPU exactly once more.
       await row.clearRecords();
@@ -669,7 +812,11 @@ test("Q4 (m): a persistent WebGPU init failure is compatibility-shaped for jobs 
       const fourth = await row.run();
       const slice = await row.since();
       assert.equal(fourth.error, undefined, JSON.stringify(fourth.error));
-      assert.equal(modelLoads(slice, { device: "webgpu" }).length, 1, "a fourth job attempts WebGPU once more");
+      assert.equal(
+        modelLoads(slice, { device: "webgpu" }).length,
+        1,
+        "a fourth job attempts WebGPU once more",
+      );
       const all = await row.log();
       assert.ok(livePeak(all).perContext <= 1, "never more than one live model");
     },
@@ -678,7 +825,11 @@ test("Q4 (m): a persistent WebGPU init failure is compatibility-shaped for jobs 
 
 test("Q4 (n, pins D5, default unchanged): a persistent network-class failure is absorbed once, then served from the wasm session", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const first = await row.run();
       assert.equal(first.error, undefined, JSON.stringify(first.error));
@@ -701,9 +852,17 @@ test("Q4 (n, pins D5, default unchanged): a persistent network-class failure is 
       const third = await row.run();
       const after = await row.since();
       assert.equal(third.error, undefined, JSON.stringify(third.error));
-      assert.equal(modelDisposes(after).length, 1, "job 3 releases the wasm model before the WebGPU attempt");
+      assert.equal(
+        modelDisposes(after).length,
+        1,
+        "job 3 releases the wasm model before the WebGPU attempt",
+      );
       assert.equal(modelLoads(after, { device: "webgpu" }).length, 1);
-      assert.equal(modelLoads(after, { device: "wasm" }).length, 1, "wasm model count 2 over the run");
+      assert.equal(
+        modelLoads(after, { device: "wasm" }).length,
+        1,
+        "wasm model count 2 over the run",
+      );
       const log = await row.log();
       assert.equal(modelLoads(log, { device: "webgpu" }).length, 2);
       assert.equal(modelLoads(log, { device: "wasm" }).length, 2);
@@ -715,7 +874,11 @@ test("Q4 (n, pins D5, default unchanged): a persistent network-class failure is 
 test("Q4 (o): the first network-class load failure is recovered in the same job in primary shape", async () => {
   // 503 text: parity-consistent with the registered weight-503 run (no D5 pin).
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", to: 1, message: NETWORK_503 }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", to: 1, message: NETWORK_503 }]) },
+    },
     async (row) => {
       const first = await row.run();
       assert.equal(first.error, undefined, JSON.stringify(first.error));
@@ -726,7 +889,11 @@ test("Q4 (o): the first network-class load failure is recovered in the same job 
       assert.ok(hasProgress(first.progress, "finishing", 0.94));
       assert.equal(firstAt(first.progress, "finishing", 0.92), -1, "no 0.92 fingerprint");
       const log = await row.log();
-      assert.deepEqual(modelLoads(log).map((e) => e.device), ["webgpu", "wasm"], "loads are [webgpu, wasm]");
+      assert.deepEqual(
+        modelLoads(log).map((e) => e.device),
+        ["webgpu", "wasm"],
+        "loads are [webgpu, wasm]",
+      );
       assert.ok(processorLoads(log).length >= 1);
       assert.equal(first.memo, "network");
       assertNoGpuRecord(first, "(o)");
@@ -735,7 +902,10 @@ test("Q4 (o): the first network-class load failure is recovered in the same job 
       assert.equal(first.prov.absorbAttempted, true);
       assert.equal(first.prov.compat.attempted, false);
       assert.equal(first.prov.globalTransfer, "quality");
-      assert.equal(first.prov.cropBudget, await row.page.evaluate(() => globalThis.__t.budget("wasm", 8, 120 * 80)));
+      assert.equal(
+        first.prov.cropBudget,
+        await row.page.evaluate(() => globalThis.__t.budget("wasm", 8, 120 * 80)),
+      );
       await row.mark();
       const second = await row.run();
       const slice = await row.since();
@@ -772,19 +942,36 @@ test("Q4 (p, job-2 tail pins D5, default unchanged): a second consecutive load f
       const at92 = firstAt(first.progress, "finishing", edges);
       const at94 = firstAt(first.progress, "finishing", 0.94);
       assert.ok(at92 >= 0 && at94 > at92, "finishing 0.92 then 0.94");
-      assert.equal(modelLoads(await row.log(), { device: "wasm" }).length, 2, "the pool evicts the rejected entry: wasm count 2");
+      assert.equal(
+        modelLoads(await row.log(), { device: "wasm" }).length,
+        2,
+        "the pool evicts the rejected entry: wasm count 2",
+      );
       assert.equal(first.memo, undefined, "double failure sets no memo");
       // Job 2 with WebGPU still failing: dispose(wasm) before the WebGPU attempt, absorbed, memo set.
       await row.mark();
       const second = await row.run();
       const slice = await row.since();
       assert.equal(second.error, undefined, JSON.stringify(second.error));
-      const disposeAt = indexOf(slice, (e) => e.type === "dispose" && e.target === "model" && !e.repeat);
-      const webgpuAt = indexOf(slice, (e) => e.type === "from_pretrained" && e.kind === "model" && e.device === "webgpu");
-      assert.ok(disposeAt >= 0 && webgpuAt > disposeAt, "dispose(wasm) precedes the second WebGPU attempt");
+      const disposeAt = indexOf(
+        slice,
+        (e) => e.type === "dispose" && e.target === "model" && !e.repeat,
+      );
+      const webgpuAt = indexOf(
+        slice,
+        (e) => e.type === "from_pretrained" && e.kind === "model" && e.device === "webgpu",
+      );
+      assert.ok(
+        disposeAt >= 0 && webgpuAt > disposeAt,
+        "dispose(wasm) precedes the second WebGPU attempt",
+      );
       const log = await row.log();
       assert.equal(modelLoads(log, { device: "webgpu" }).length, 2);
-      assert.equal(modelLoads(log, { device: "wasm" }).length, 3, "job 2 is absorbed: wasm model count 3");
+      assert.equal(
+        modelLoads(log, { device: "wasm" }).length,
+        3,
+        "job 2 is absorbed: wasm model count 3",
+      );
       assert.equal(second.memo, "network");
       assert.ok(livePeak(log).perContext <= 1);
       assertNoGpuRecord(second, "(p)");
@@ -797,7 +984,12 @@ test("Q4 (p variant, fault provenance): every load rejects, nothing to fall back
     {
       memory: 8,
       adapter: "fake",
-      page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }, { device: "wasm", message: FETCH_FAILURE }]) },
+      page: {
+        load: loadHook([
+          { device: "webgpu", message: FETCH_FAILURE },
+          { device: "wasm", message: FETCH_FAILURE },
+        ]),
+      },
     },
     async (row) => {
       const { transfer } = await row.consts();
@@ -814,24 +1006,37 @@ test("Q4 (p variant, fault provenance): every load rejects, nothing to fall back
 });
 
 for (const [name, setup, expected] of [
-  ["(t, pins D5, default unchanged) a cancel inside the absorbed run phase keeps the network memo", FETCH_FAILURE, "network"],
+  [
+    "(t, pins D5, default unchanged) a cancel inside the absorbed run phase keeps the network memo",
+    FETCH_FAILURE,
+    "network",
+  ],
   ["(u) a cancel inside the compatibility run phase keeps the init memo", INIT_FAILURE, "init"],
 ]) {
   test(`Q4 ${name}`, async () => {
     await withRow(
-      { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", message: setup }]), run: RUN_PHASE_HOOK } },
+      {
+        memory: 8,
+        adapter: "fake",
+        page: { load: loadHook([{ device: "webgpu", message: setup }]), run: RUN_PHASE_HOOK },
+      },
       async (row) => {
         // The hook fires on the first processor() call, i.e. in the replacement engine's run phase (never on
         // model-ready: that abort lands in subscriberWait and is a pre-ready cancel, Q4 q7).
         await row.page.evaluate(() => {
           globalThis.__hookSaw = "unset";
           globalThis.__runPhaseHook = async () => {
-            globalThis.__hookSaw = (await import("/src/lib/removal-provider.ts")).webgpuLoadMemo() ?? "none";
+            globalThis.__hookSaw =
+              (await import("/src/lib/removal-provider.ts")).webgpuLoadMemo() ?? "none";
             globalThis.__abortJob();
           };
         });
         const first = await row.run({ exposeAbort: true });
-        assert.equal(await row.page.evaluate(() => globalThis.__hookSaw), expected, "the memo is already set when the run phase starts");
+        assert.equal(
+          await row.page.evaluate(() => globalThis.__hookSaw),
+          expected,
+          "the memo is already set when the run phase starts",
+        );
         assert.ok(first.error, "job 1 rejects");
         assert.equal(first.error.sameReason, true, "with the exact abort reason");
         assert.equal(first.memo, expected);
@@ -851,7 +1056,11 @@ for (const [name, setup, expected] of [
 
 test("Q4 (v): no adapter, one WASM-primary load failure takes the single compatibility pass", async () => {
   await withRow(
-    { memory: 8, adapter: "null", page: { load: loadHook([{ device: "wasm", to: 1, message: FETCH_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "null",
+      page: { load: loadHook([{ device: "wasm", to: 1, message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const { transfer, edges } = await row.consts();
       const r = await row.run();
@@ -859,7 +1068,10 @@ test("Q4 (v): no adapter, one WASM-primary load failure takes the single compati
       assert.equal(r.provider, "wasm");
       assert.equal(r.method, "model");
       assert.ok(hasSwitching(r.progress), "transition present");
-      assert.ok(firstAt(r.progress, "finishing", edges) >= 0 && firstAt(r.progress, "finishing", 0.94) > firstAt(r.progress, "finishing", edges));
+      assert.ok(
+        firstAt(r.progress, "finishing", edges) >= 0 &&
+          firstAt(r.progress, "finishing", 0.94) > firstAt(r.progress, "finishing", edges),
+      );
       assert.equal(firstAt(r.progress, "cutting", 0.7), -1, "no processing 0.7");
       assert.equal(r.prov.shape, "primary", "the route's shape");
       assert.equal(r.prov.absorbAttempted, false);
@@ -879,7 +1091,11 @@ test("Q4 (v): no adapter, one WASM-primary load failure takes the single compati
 
 test("Q4 (w): no adapter, both WASM loads reject", async () => {
   await withRow(
-    { memory: 8, adapter: "null", page: { load: loadHook([{ device: "wasm", message: FETCH_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "null",
+      page: { load: loadHook([{ device: "wasm", message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const { transfer } = await row.consts();
       const r = await row.run();
@@ -900,57 +1116,83 @@ test("Q4 (w): no adapter, both WASM loads reject", async () => {
 // ---- Q5: the slow worker drains before the page loads a model ---------------------------------------
 
 for (const adapter of ["fake", "no-f16"]) {
-test(`Q5: a slow worker drains before the page model loads (${adapter})`, async () => {
-  await requireSmoke();
-  await withRow(
-    {
-      memory: 8,
-      adapter, // either page route is faster than a worker with no adapter
-      workerEnv: { adapter: "null" },
-      worker: { mask: maskHook([{ match: { call: 2 }, do: { hold: 800 } }]) }, // the cancelled job's run outlives job 1
-    },
-    async (row) => {
-      const { providers } = await row.drain();
-      assert.equal(providers[0], "wasm", "job 1 ran in the worker on wasm");
-      assert.equal(providers[2], "webgpu", "job 3 ran on the page, on WebGPU");
-      const log = await row.log();
-      const posted = await row.posted();
-      assert.equal(log.filter((e) => e.type === "worker-created").length, 1, "jobs 1 and 2 shared one worker");
-      assert.equal(log.filter((e) => e.type === "terminate").length, 1, "terminated once, after the drain");
-      assert.equal(posted.filter((m) => m.type === "run").length >= 3, true);
-      const terminateAt = indexOf(log, (e) => e.type === "terminate");
-      const pageLoadAt = indexOf(log, (e) => e.type === "from_pretrained" && e.kind === "model" && e.ctx === "page");
-      assert.ok(terminateAt >= 0 && pageLoadAt > terminateAt, "the page's from_pretrained comes after the worker terminate");
-      assert.ok(livePeak(log).across <= 1, "never a worker model next to a page model");
-    },
-  );
-});
+  test(`Q5: a slow worker drains before the page model loads (${adapter})`, async () => {
+    await requireSmoke();
+    await withRow(
+      {
+        memory: 8,
+        adapter, // either page route is faster than a worker with no adapter
+        workerEnv: { adapter: "null" },
+        worker: { mask: maskHook([{ match: { call: 2 }, do: { hold: 800 } }]) }, // the cancelled job's run outlives job 1
+      },
+      async (row) => {
+        const { providers } = await row.drain();
+        assert.equal(providers[0], "wasm", "job 1 ran in the worker on wasm");
+        assert.equal(providers[2], "webgpu", "job 3 ran on the page, on WebGPU");
+        const log = await row.log();
+        const posted = await row.posted();
+        assert.equal(
+          log.filter((e) => e.type === "worker-created").length,
+          1,
+          "jobs 1 and 2 shared one worker",
+        );
+        assert.equal(
+          log.filter((e) => e.type === "terminate").length,
+          1,
+          "terminated once, after the drain",
+        );
+        assert.equal(posted.filter((m) => m.type === "run").length >= 3, true);
+        const terminateAt = indexOf(log, (e) => e.type === "terminate");
+        const pageLoadAt = indexOf(
+          log,
+          (e) => e.type === "from_pretrained" && e.kind === "model" && e.ctx === "page",
+        );
+        assert.ok(
+          terminateAt >= 0 && pageLoadAt > terminateAt,
+          "the page's from_pretrained comes after the worker terminate",
+        );
+        assert.ok(livePeak(log).across <= 1, "never a worker model next to a page model");
+      },
+    );
+  });
 }
 
 for (const adapter of ["fake", "no-f16", "null"]) {
-test(`worker GPU capability matches the runtime and retains WASM fallback (${adapter})`, async () => {
-  await requireSmoke();
-  await withRow({ memory: 8, adapter,
-    worker: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) },
-  }, async (row) => {
-    for (const job of [1, 2]) {
-      const result = await row.auto();
-      assert.equal(result.error, undefined, JSON.stringify(result.error));
-      assert.equal(result.provider, "wasm", `job ${job}`);
-    }
-    const outcomes = await row.page.evaluate(() => globalThis.__workerOutcomes);
-    assert.deepEqual(outcomes, [1, 2].map(() => ({ provider: "wasm", workerHadGpu: adapter !== "null" })));
-    const log = await row.log();
-    assert.equal(log.filter((e) => e.type === "worker-created").length, 1);
-    assert.equal(log.filter((e) => e.type === "terminate").length, 0);
-    assert.equal(loadsTotal(log, { ctx: "page" }), 0);
-    assert.ok(livePeak(log).across <= 1);
-    if (adapter !== "null") {
-      assert.equal(modelLoads(log, { device: "webgpu" }).length, 1, "mask failure memo skips later GPU attempts");
-      assert.equal((await row.posted()).filter((m) => m.type === "run").at(-1).noWebgpu, true);
-    }
+  test(`worker GPU capability matches the runtime and retains WASM fallback (${adapter})`, async () => {
+    await requireSmoke();
+    await withRow(
+      {
+        memory: 8,
+        adapter,
+        worker: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) },
+      },
+      async (row) => {
+        for (const job of [1, 2]) {
+          const result = await row.auto();
+          assert.equal(result.error, undefined, JSON.stringify(result.error));
+          assert.equal(result.provider, "wasm", `job ${job}`);
+        }
+        const outcomes = await row.page.evaluate(() => globalThis.__workerOutcomes);
+        assert.deepEqual(
+          outcomes,
+          [1, 2].map(() => ({ provider: "wasm", workerHadGpu: adapter !== "null" })),
+        );
+        const log = await row.log();
+        assert.equal(log.filter((e) => e.type === "worker-created").length, 1);
+        assert.equal(log.filter((e) => e.type === "terminate").length, 0);
+        assert.equal(loadsTotal(log, { ctx: "page" }), 0);
+        assert.ok(livePeak(log).across <= 1);
+        if (adapter !== "null") {
+          assert.equal(
+            modelLoads(log, { device: "webgpu" }).length,
+            1,
+            "mask failure memo skips later GPU attempts",
+          );
+          assert.equal((await row.posted()).filter((m) => m.type === "run").at(-1).noWebgpu, true);
+        }
+      },
+    );
   });
-});
 }
 
 // ---- Q6: what persists -------------------------------------------------------------------------------
@@ -958,21 +1200,32 @@ test(`worker GPU capability matches the runtime and retains WASM fallback (${ada
 test("Q6 (D6 expectation): a WebGPU device loss at load writes no record", async () => {
   // At 5522 the page wrote the failure key on every absorbed load failure; the owned engine never does (D6).
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", message: "WebGPU device lost" }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", message: "WebGPU device lost" }]) },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
       assert.equal(r.provider, "wasm");
       assert.ok(!r.webgpuBroken, "webgpuBroken is falsy");
       assertNoGpuRecord(r, "(device lost at load)");
-      assert.deepEqual(modelLoads(await row.log()).map((e) => e.device), ["webgpu", "wasm"]);
+      assert.deepEqual(
+        modelLoads(await row.log()).map((e) => e.device),
+        ["webgpu", "wasm"],
+      );
     },
   );
 });
 
 test("Q6: a flat GPU mask that WASM resolves sets the session memo; no record is written (E10-S-01)", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
@@ -1001,7 +1254,11 @@ test("Q6: a flat GPU mask with an empty WASM result writes no record", async () 
 
 test("Q6/Q8 (F5): a persisted record is honoured after a reload (pins persisted-read, not the flag)", async () => {
   await withRow({ memory: 8, adapter: "fake" }, async (row) => {
-    assert.equal(await row.page.evaluate(() => globalThis.__t.seedGpuRecord()), true, "the earlier version's record is read");
+    assert.equal(
+      await row.page.evaluate(() => globalThis.__t.seedGpuRecord()),
+      true,
+      "the earlier version's record is read",
+    );
     await row.page.reload(); // clears the in-process flag
     const r = await row.run();
     assert.equal(r.error, undefined, JSON.stringify(r.error));
@@ -1017,7 +1274,12 @@ test("Q6/Q8 (F5): a persisted record is honoured after a reload (pins persisted-
 
 test("Q7: a storage throw inside the compatibility pass keeps the cut", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", setItemThrows: true, page: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      setItemThrows: true,
+      page: { mask: maskHook([{ match: { device: "webgpu" }, do: { flat: 0.01 } }]) },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
@@ -1047,9 +1309,17 @@ test("Q7: after a worker result with webgpuBroken, the next worker request carri
       const second = await row.auto();
       assert.equal(second.error, undefined, JSON.stringify(second.error));
       const posted = (await row.posted()).filter((m) => m.type === "run");
-      assert.deepEqual(posted.map((m) => Boolean(m.noWebgpu)), [false, true], "the second request carries noWebgpu");
+      assert.deepEqual(
+        posted.map((m) => Boolean(m.noWebgpu)),
+        [false, true],
+        "the second request carries noWebgpu",
+      );
       const slice = await row.since();
-      assert.equal(modelLoads(slice, { ctx: "worker", device: "webgpu" }).length, 0, "no WebGPU load for the second job");
+      assert.equal(
+        modelLoads(slice, { ctx: "worker", device: "webgpu" }).length,
+        0,
+        "no WebGPU load for the second job",
+      );
       assert.ok(runsOf(slice, { ctx: "worker" }).every((e) => e.device === "wasm"));
     },
   );
@@ -1064,7 +1334,10 @@ test("Q10: no adapter loads BiRefNet/WASM fp32 only, with no fp16 and no transit
     assert.equal(hasSwitching(r.progress), false);
     assert.equal(r.prov.shape, "primary");
     const log = await row.log();
-    assert.deepEqual(modelLoads(log).map((e) => [e.model, e.device, e.dtype]), [["birefnet", "wasm", "fp32"]]);
+    assert.deepEqual(
+      modelLoads(log).map((e) => [e.model, e.device, e.dtype]),
+      [["birefnet", "wasm", "fp32"]],
+    );
     assert.equal(modelLoads(log, { dtype: "fp16" }).length, 0);
     // The same route for warmup and manual refine: the one cached entry serves them (no second load).
     await row.mark();
@@ -1077,12 +1350,20 @@ test("Q10: no adapter loads BiRefNet/WASM fp32 only, with no fp16 and no transit
   await withRow({ memory: 8, adapter: "null" }, async (row) => {
     const warm = await row.warm();
     assert.equal(warm.settled, true);
-    assert.deepEqual(modelLoads(await row.log()).map((e) => [e.model, e.device, e.dtype]), [["birefnet", "wasm", "fp32"]], "warmup alone");
+    assert.deepEqual(
+      modelLoads(await row.log()).map((e) => [e.model, e.device, e.dtype]),
+      [["birefnet", "wasm", "fp32"]],
+      "warmup alone",
+    );
   });
   await withRow({ memory: 8, adapter: "null" }, async (row) => {
     const refined = await row.refine();
     assert.equal(refined.error, undefined, JSON.stringify(refined.error));
-    assert.deepEqual(modelLoads(await row.log()).map((e) => [e.model, e.device, e.dtype]), [["birefnet", "wasm", "fp32"]], "manual refine alone");
+    assert.deepEqual(
+      modelLoads(await row.log()).map((e) => [e.model, e.device, e.dtype]),
+      [["birefnet", "wasm", "fp32"]],
+      "manual refine alone",
+    );
   });
 });
 
@@ -1093,7 +1374,10 @@ test("Q10 (worker warmup): the worker loads one BiRefNet/WASM fp32 pair and the 
     assert.equal(warm.settled, true, JSON.stringify(warm.error));
     const log = await row.log();
     const workerLoads = modelLoads(log, { ctx: "worker" });
-    assert.deepEqual(workerLoads.map((e) => [e.model, e.device, e.dtype]), [["birefnet", "wasm", "fp32"]]);
+    assert.deepEqual(
+      workerLoads.map((e) => [e.model, e.device, e.dtype]),
+      [["birefnet", "wasm", "fp32"]],
+    );
     assert.equal(processorLoads(log, { ctx: "worker" }).length, 1);
     assert.equal(loadsTotal(log, { ctx: "page" }), 0, "the page loads nothing");
     await row.mark();
@@ -1113,10 +1397,16 @@ test("S3-A-ENGINE-02: no-f16 adapters use WebGPU fp32 for page, refine and worke
     assert.equal(r.prov.onnxFile, "model.onnx");
     assert.equal(r.prov.cropBudget, 1, "fp32 keeps the former WASM crop budget");
     assert.equal(hasSwitching(r.progress), false);
-    assert.deepEqual([r.prov.shape, r.prov.globalTransfer, r.prov.compat.attempted], ["primary", "quality", false]);
+    assert.deepEqual(
+      [r.prov.shape, r.prov.globalTransfer, r.prov.compat.attempted],
+      ["primary", "quality", false],
+    );
     const refined = await row.refine();
     assert.equal(refined.error, undefined, JSON.stringify(refined.error));
-    assert.deepEqual(modelLoads(await row.log()).map((e) => [e.device, e.dtype]), [["webgpu", "fp32"]]);
+    assert.deepEqual(
+      modelLoads(await row.log()).map((e) => [e.device, e.dtype]),
+      [["webgpu", "fp32"]],
+    );
   });
   await withRow({ memory: 8, adapter: "no-f16" }, async (row) => {
     for (const job of [1, 2]) {
@@ -1127,13 +1417,19 @@ test("S3-A-ENGINE-02: no-f16 adapters use WebGPU fp32 for page, refine and worke
       assert.equal(r.clientProv?.shape, "primary");
     }
     const log = await row.log();
-    assert.deepEqual(modelLoads(log).map((e) => [e.ctx, e.model, e.device, e.dtype]), [["worker", "birefnet", "webgpu", "fp32"]]);
+    assert.deepEqual(
+      modelLoads(log).map((e) => [e.ctx, e.model, e.device, e.dtype]),
+      [["worker", "birefnet", "webgpu", "fp32"]],
+    );
     assert.equal(log.filter((e) => e.type === "terminate").length, 0);
   });
 });
 
 test("no-f16 WebGPU fp32 init failure recovers in a fresh WASM worker", async () => {
-  for (const message of ["webgpu execution provider initialization failed", "WebGPU device creation failed"]) {
+  for (const message of [
+    "webgpu execution provider initialization failed",
+    "WebGPU device creation failed",
+  ]) {
     const fail = { load: loadHook([{ device: "webgpu", message }]) };
     await withRow({ memory: 8, adapter: "no-f16", worker: fail }, async (row) => {
       const r = await row.auto();
@@ -1141,7 +1437,13 @@ test("no-f16 WebGPU fp32 init failure recovers in a fresh WASM worker", async ()
       assert.equal(r.provider, "wasm");
       const log = await row.log();
       assert.ok(log.some((e) => e.type === "terminate"));
-      assert.deepEqual(modelLoads(log).map((e) => [e.ctx, e.device, e.dtype]), [["worker", "webgpu", "fp32"], ["worker", "wasm", "fp32"]]);
+      assert.deepEqual(
+        modelLoads(log).map((e) => [e.ctx, e.device, e.dtype]),
+        [
+          ["worker", "webgpu", "fp32"],
+          ["worker", "wasm", "fp32"],
+        ],
+      );
     });
   }
 });
@@ -1150,11 +1452,19 @@ test("Q10: an adapter whose WebGPU init fails: warmup rejects and resets (C09), 
   const fail = { load: loadHook([{ device: "webgpu", message: INIT_FAILURE }]) };
   await withRow({ memory: 8, adapter: "fake", page: fail }, async (row) => {
     const first = await row.warm();
-    assert.equal(first.error?.name, "RemovalModelLoadError", "warmup reports the non-absorbable failure");
+    assert.equal(
+      first.error?.name,
+      "RemovalModelLoadError",
+      "warmup reports the non-absorbable failure",
+    );
     assert.equal(first.memo, undefined, "no memo");
     const second = await row.warm();
     assert.equal(second.error?.name, "RemovalModelLoadError");
-    assert.equal(modelLoads(await row.log(), { device: "webgpu" }).length, 2, "the failed warmup promise reset: a second attempt");
+    assert.equal(
+      modelLoads(await row.log(), { device: "webgpu" }).length,
+      2,
+      "the failed warmup promise reset: a second attempt",
+    );
   });
   await withRow({ memory: 8, adapter: "fake", page: fail }, async (row) => {
     const refined = await row.refine();
@@ -1171,23 +1481,33 @@ test("C09 (worker): a warmup reports its download as it goes; a load failure rej
     assert.equal(warm.settled, true, JSON.stringify(warm.error));
     assert.deepEqual(warm.fractions, [0.5, 1], "the .onnx download, through the worker");
   });
-  await withRow({ memory: 8, adapter: "null", worker: { load: loadHook([{ message: FETCH_FAILURE }]) } }, async (row) => {
-    const warm = await row.warm({ viaClient: true });
-    assert.equal(warm.error?.name, "RemovalModelLoadError", JSON.stringify(warm));
-    const log = await row.log();
-    assert.ok(modelLoads(log, { ctx: "worker" }).length > 0, "the worker tried");
-    assert.equal(loadsTotal(log, { ctx: "page" }), 0, "no page warmup after a real load failure");
-    assert.equal(log.filter((e) => e.type === "terminate").length, 0, "the worker is kept");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", worker: { load: loadHook([{ message: FETCH_FAILURE }]) } },
+    async (row) => {
+      const warm = await row.warm({ viaClient: true });
+      assert.equal(warm.error?.name, "RemovalModelLoadError", JSON.stringify(warm));
+      const log = await row.log();
+      assert.ok(modelLoads(log, { ctx: "worker" }).length > 0, "the worker tried");
+      assert.equal(loadsTotal(log, { ctx: "page" }), 0, "no page warmup after a real load failure");
+      assert.equal(log.filter((e) => e.type === "terminate").length, 0, "the worker is kept");
+    },
+  );
 });
 
 test("Q10 (warmup absorb, pins D5, default unchanged): a network failure warms BiRefNet/WASM instead", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", to: 1, message: FETCH_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", to: 1, message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const warm = await row.warm();
       assert.equal(warm.settled, true, JSON.stringify(warm.error));
-      assert.deepEqual(modelLoads(await row.log()).map((e) => e.device), ["webgpu", "wasm"]);
+      assert.deepEqual(
+        modelLoads(await row.log()).map((e) => e.device),
+        ["webgpu", "wasm"],
+      );
       assert.equal(warm.memo, "network");
       await row.mark();
       const job = await row.run();
@@ -1199,20 +1519,32 @@ test("Q10 (warmup absorb, pins D5, default unchanged): a network failure warms B
 
 test("Q10 (manual-refine absorb, pins D5, default unchanged): a network failure refines on wasm; a double failure rejects", async () => {
   await withRow(
-    { memory: 8, adapter: "fake", page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }]) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }]) },
+    },
     async (row) => {
       const refined = await row.refine();
       assert.equal(refined.error, undefined, JSON.stringify(refined.error));
       assert.equal(refined.sameBase, false, "a refined Blob");
       assert.equal(refined.memo, "network");
-      assert.deepEqual(modelLoads(await row.log()).map((e) => e.device), ["webgpu", "wasm"]);
+      assert.deepEqual(
+        modelLoads(await row.log()).map((e) => e.device),
+        ["webgpu", "wasm"],
+      );
     },
   );
   await withRow(
     {
       memory: 8,
       adapter: "fake",
-      page: { load: loadHook([{ device: "webgpu", message: FETCH_FAILURE }, { device: "wasm", message: FETCH_FAILURE }]) },
+      page: {
+        load: loadHook([
+          { device: "webgpu", message: FETCH_FAILURE },
+          { device: "wasm", message: FETCH_FAILURE },
+        ]),
+      },
     },
     async (row) => {
       const refined = await row.refine();
@@ -1234,20 +1566,29 @@ test("Q11: download progress is monotonic, bounded to [0.08, 0.74] and ignores n
     { status: "progress", file: "onnx/model.onnx", progress: 10 },
     { status: "progress", file: "config.json", progress: 100 },
   ];
-  await withRow({ memory: 8, adapter: "null", page: { load: progressLoadHook(events) } }, async (row) => {
-    const r = await row.run();
-    assert.equal(r.error, undefined, JSON.stringify(r.error));
-    const values = r.progress.map((p) => p.progress);
-    for (let i = 1; i < values.length; i += 1) assert.ok(values[i] >= values[i - 1], `non-decreasing at ${i}`);
-    const downloads = r.progress.filter((p) => p.message === "Preparing remover · only needed once").map((p) => p.progress);
-    assert.ok(downloads.length > 0, "download progress reached the consumer");
-    assert.ok(downloads.every((v) => v >= 0.08 - 1e-9 && v <= 0.74 + 1e-9), "bounded to [0.08, 0.74]");
-    for (const percent of [25, 50, 100])
+  await withRow(
+    { memory: 8, adapter: "null", page: { load: progressLoadHook(events) } },
+    async (row) => {
+      const r = await row.run();
+      assert.equal(r.error, undefined, JSON.stringify(r.error));
+      const values = r.progress.map((p) => p.progress);
+      for (let i = 1; i < values.length; i += 1)
+        assert.ok(values[i] >= values[i - 1], `non-decreasing at ${i}`);
+      const downloads = r.progress
+        .filter((p) => p.message === "Preparing remover · only needed once")
+        .map((p) => p.progress);
+      assert.ok(downloads.length > 0, "download progress reached the consumer");
       assert.ok(
-        downloads.some((v) => near(v, 0.08 + (percent / 100) * 0.58)),
-        `onnx ${percent}% is reported (the .json 100% did not count)`,
+        downloads.every((v) => v >= 0.08 - 1e-9 && v <= 0.74 + 1e-9),
+        "bounded to [0.08, 0.74]",
       );
-  });
+      for (const percent of [25, 50, 100])
+        assert.ok(
+          downloads.some((v) => near(v, 0.08 + (percent / 100) * 0.58)),
+          `onnx ${percent}% is reported (the .json 100% did not count)`,
+        );
+    },
+  );
 });
 
 test("C10: after a WebGPU download fails at 100 %, the absorbing WASM download's progress is shown", async () => {
@@ -1260,10 +1601,14 @@ test("C10: after a WebGPU download fails at 100 %, the absorbing WASM download's
     const r = await row.run();
     assert.equal(r.error, undefined, JSON.stringify(r.error));
     assert.equal(r.provider, "wasm");
-    const downloads = r.progress.filter((p) => p.message === "Preparing remover · only needed once").map((p) => p.progress);
+    const downloads = r.progress
+      .filter((p) => p.message === "Preparing remover · only needed once")
+      .map((p) => p.progress);
     // WebGPU's 100 % (0.66), then WASM's 50 % (0.37) and 100 %: the restart is not held to the failed mark.
     assert.equal(downloads.length, 3, `downloads: ${downloads.join(", ")}`);
-    [0.66, 0.37, 0.66].forEach((want, i) => assert.ok(near(downloads[i], want), `tick ${i}: ${downloads[i]}`));
+    [0.66, 0.37, 0.66].forEach((want, i) =>
+      assert.ok(near(downloads[i], want), `tick ${i}: ${downloads[i]}`),
+    );
   });
 });
 
@@ -1272,15 +1617,26 @@ test("Q11: the compatibility compute clock excludes the load", async () => {
   // load, the 12 s global-inference rule would zero the crop budget; it must stay at Auto/wasm's 1.
   const rules = [
     { match: { device: "webgpu" }, do: { flat: 0.01 } },
-    { match: { device: "wasm", deviceCall: 1 }, do: { rect: [0.333, 0.375, 0.433, 0.625], inside: 1, outside: 0 } },
+    {
+      match: { device: "wasm", deviceCall: 1 },
+      do: { rect: [0.333, 0.375, 0.433, 0.625], inside: 1, outside: 0 },
+    },
   ];
   await withRow(
-    { memory: 8, adapter: "fake", page: { mask: maskHook(rules), load: progressLoadHook([], 13_000) } },
+    {
+      memory: 8,
+      adapter: "fake",
+      page: { mask: maskHook(rules), load: progressLoadHook([], 13_000) },
+    },
     async (row) => {
       const r = await row.run();
       assert.equal(r.error, undefined, JSON.stringify(r.error));
       assert.equal(r.prov.compat.attempted, true);
-      assert.equal(r.prov.cropBudget, 1, "the budget is Auto/wasm's, not the detected crop count and not zero");
+      assert.equal(
+        r.prov.cropBudget,
+        1,
+        "the budget is Auto/wasm's, not the detected crop count and not zero",
+      );
     },
   );
 });
@@ -1293,7 +1649,11 @@ async function assertWorkerRetained(row, r, name) {
   assert.equal(r.error.name, name);
   const log = await row.log();
   assert.equal(loadsTotal(log, { ctx: "page" }), 0, "zero page from_pretrained");
-  assert.equal(log.filter((e) => e.type === "terminate").length, 0, "the worker is retained (no terminate)");
+  assert.equal(
+    log.filter((e) => e.type === "terminate").length,
+    0,
+    "the worker is retained (no terminate)",
+  );
   return log;
 }
 
@@ -1309,9 +1669,19 @@ test("Q12: a worker terminal load failure (init class) replaces the worker once,
       assert.equal(loadsTotal(log, { ctx: "page" }), 0, "zero page from_pretrained");
       // E05-03: a WebGPU session that would not start poisons its worker; the fresh one skips WebGPU and
       // keeps its own primary and compatibility attempt. It is retained after that engine error.
-      assert.equal(log.filter((e) => e.type === "terminate").length, 1, "only the poisoned worker is retired");
-      assert.deepEqual(modelLoads(log, { ctx: "worker" }).map((e) => e.device), ["webgpu", "wasm", "wasm"]);
-      assert.deepEqual((await row.posted()).filter((p) => p.type === "run").map((p) => p.noWebgpu), [false, true]);
+      assert.equal(
+        log.filter((e) => e.type === "terminate").length,
+        1,
+        "only the poisoned worker is retired",
+      );
+      assert.deepEqual(
+        modelLoads(log, { ctx: "worker" }).map((e) => e.device),
+        ["webgpu", "wasm", "wasm"],
+      );
+      assert.deepEqual(
+        (await row.posted()).filter((p) => p.type === "run").map((p) => p.noWebgpu),
+        [false, true],
+      );
     },
   );
 });
@@ -1323,7 +1693,11 @@ test("Q12: a worker terminal load failure (network class) makes three loads and 
     async (row) => {
       const r = await row.auto();
       const log = await assertWorkerRetained(row, r, "RemovalModelLoadError");
-      assert.deepEqual(modelLoads(log, { ctx: "worker" }).map((e) => e.device), ["webgpu", "wasm", "wasm"], "webgpu, absorb wasm, compatibility wasm");
+      assert.deepEqual(
+        modelLoads(log, { ctx: "worker" }).map((e) => e.device),
+        ["webgpu", "wasm", "wasm"],
+        "webgpu, absorb wasm, compatibility wasm",
+      );
     },
   );
 });
@@ -1365,47 +1739,76 @@ test("Q12: a worker WebGPU flat mask with a failed compatibility load surfaces t
 
 test("Q12: a worker processor throw surfaces as RemovalInputError", async () => {
   await requireSmoke();
-  await withRow({ memory: 8, adapter: "null", worker: { run: PROCESSOR_THROW_HOOK } }, async (row) => {
-    const r = await row.auto();
-    await assertWorkerRetained(row, r, "RemovalInputError");
-    assert.equal(r.error.message, "Processor exploded", "a processor throw keeps its message verbatim");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", worker: { run: PROCESSOR_THROW_HOOK } },
+    async (row) => {
+      const r = await row.auto();
+      await assertWorkerRetained(row, r, "RemovalInputError");
+      assert.equal(
+        r.error.message,
+        "Processor exploded",
+        "a processor throw keeps its message verbatim",
+      );
+    },
+  );
 });
 
 test("Q12: a worker processor returning an invalid tensor surfaces as RemovalInputError 'Image preprocessing failed'", async () => {
   await requireSmoke();
-  await withRow({ memory: 8, adapter: "null", worker: { run: INVALID_PROCESSOR_TENSOR_HOOK } }, async (row) => {
-    const r = await row.auto();
-    await assertWorkerRetained(row, r, "RemovalInputError"); // worker retained, zero page loads
-    assert.equal(r.error.message, "Image preprocessing failed");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", worker: { run: INVALID_PROCESSOR_TENSOR_HOOK } },
+    async (row) => {
+      const r = await row.auto();
+      await assertWorkerRetained(row, r, "RemovalInputError"); // worker retained, zero page loads
+      assert.equal(r.error.message, "Image preprocessing failed");
+    },
+  );
 });
 
 test("Q12 (N1): a worker raw inference throw is retried on the one session and surfaces as RemovalInferenceError", async () => {
   await requireSmoke();
   await withRow(
-    { memory: 8, adapter: "null", worker: { mask: maskHook([{ do: { throw: "ORT session run failed" } }]) } },
+    {
+      memory: 8,
+      adapter: "null",
+      worker: { mask: maskHook([{ do: { throw: "ORT session run failed" } }]) },
+    },
     async (row) => {
       const r = await row.auto();
       const log = await assertWorkerRetained(row, r, "RemovalInferenceError");
       assert.equal(r.error.code, "inference-failed");
       assert.equal(modelLoads(log, { ctx: "worker" }).length, 1, "one processor+model pair");
       assert.equal(processorLoads(log, { ctx: "worker" }).length, 1);
-      assert.equal(runsOf(log, { ctx: "worker" }).length, 2, "exactly two model runs (primary, then same-target compatibility)");
+      assert.equal(
+        runsOf(log, { ctx: "worker" }).length,
+        2,
+        "exactly two model runs (primary, then same-target compatibility)",
+      );
     },
   );
 });
 
 test("Q12 control: a worker decode failure still reruns the job on the page", async () => {
   await requireSmoke();
-  await withRow({ memory: 8, adapter: "null", workerEnv: { createImageBitmap: DECODE_FAILURE } }, async (row) => {
-    const r = await row.auto();
-    assert.equal(r.error, undefined, JSON.stringify(r.error));
-    assert.equal(r.method, "model");
-    const log = await row.log();
-    assert.equal(log.filter((e) => e.type === "terminate").length, 1, "the broken worker is terminated");
-    assert.equal(modelLoads(log, { ctx: "page", model: "birefnet", device: "wasm" }).length, 1, "the page ran the job");
-  });
+  await withRow(
+    { memory: 8, adapter: "null", workerEnv: { createImageBitmap: DECODE_FAILURE } },
+    async (row) => {
+      const r = await row.auto();
+      assert.equal(r.error, undefined, JSON.stringify(r.error));
+      assert.equal(r.method, "model");
+      const log = await row.log();
+      assert.equal(
+        log.filter((e) => e.type === "terminate").length,
+        1,
+        "the broken worker is terminated",
+      );
+      assert.equal(
+        modelLoads(log, { ctx: "page", model: "birefnet", device: "wasm" }).length,
+        1,
+        "the page ran the job",
+      );
+    },
+  );
 });
 
 test("C07: a corrupt photo fails as a decode error with no model load; the worker is kept for the next cut", async () => {
@@ -1421,14 +1824,26 @@ test("C07: a corrupt photo fails as a decode error with no model load; the worke
     assert.equal(good.error, undefined, JSON.stringify(good.error));
     assert.equal(good.method, "model");
     log = await row.log();
-    assert.equal(log.filter((e) => e.type === "worker-created").length, 1, "one worker for both cuts");
-    assert.deepEqual(modelLoads(log).map((e) => e.ctx), ["worker"], "the next cut runs in that worker");
+    assert.equal(
+      log.filter((e) => e.type === "worker-created").length,
+      1,
+      "one worker for both cuts",
+    );
+    assert.deepEqual(
+      modelLoads(log).map((e) => e.ctx),
+      ["worker"],
+      "the next cut runs in that worker",
+    );
   });
 });
 
 // ---- C4 (a): global transfer mapping on returned pixels ----------------------------------------------
 
-const BAND_POINTS = [[20, 40], [60, 40], [100, 40]];
+const BAND_POINTS = [
+  [20, 40],
+  [60, 40],
+  [100, 40],
+];
 const bandRules = (values) => [
   { match: { call: 1 }, do: { bands: values } },
   { match: { callFrom: 2 }, do: { throw: "crop off" } }, // crops neutralised: the pixels are the global cut
@@ -1444,7 +1859,9 @@ test("C4 (a) calibration control: near-0.5 raw bands [0.497, 0.5, 0.503] return 
       const r = await row.run({ mode: "auto", points: BAND_POINTS });
       assert.equal(r.error, undefined, JSON.stringify(r.error));
       assert.equal(r.provider, "webgpu", "the route is fixed to BiRefNet/WebGPU");
-      r.alphas.forEach((alpha) => assert.ok(Math.abs(alpha - 128) <= 2, `raw ~0.5 -> 128 +-2, got ${alpha}`));
+      r.alphas.forEach((alpha) =>
+        assert.ok(Math.abs(alpha - 128) <= 2, `raw ~0.5 -> 128 +-2, got ${alpha}`),
+      );
       assert.equal(sigmoidsOf(await row.log()).length, 0);
     },
   );
@@ -1464,8 +1881,17 @@ for (const [row, mode, memory, expected, transfer] of [
         const result = await r.run({ mode, points: BAND_POINTS });
         assert.equal(result.error, undefined, JSON.stringify(result.error));
         assert.equal(result.provider, "webgpu", "the route is fixed to BiRefNet/WebGPU");
-        result.alphas.forEach((alpha, i) => assert.ok(Math.abs(alpha - expected[i]) <= 2, `${row} band ${i}: expected ${expected[i]} +-2, got ${alpha}`));
-        assert.equal(sigmoidsOf(await r.log()).length, 0, "raw values are consumed without a sigmoid");
+        result.alphas.forEach((alpha, i) =>
+          assert.ok(
+            Math.abs(alpha - expected[i]) <= 2,
+            `${row} band ${i}: expected ${expected[i]} +-2, got ${alpha}`,
+          ),
+        );
+        assert.equal(
+          sigmoidsOf(await r.log()).length,
+          0,
+          "raw values are consumed without a sigmoid",
+        );
         assert.ok(result.prov, "C3 provenance is returned (S5)");
         assert.equal(result.prov.globalTransfer, transfer);
       },
@@ -1484,22 +1910,34 @@ test("C4 (c1): on the compatibility path under a fast global, crops still use th
       // The raw-empty sampler (engine.ts: stride 4*61 over 120x80, 158 samples) must see the wasm subject: the
       // 12x20 rect used before got 0 hits, so rawEmpty was true and webgpuBroken correctly false (W3-G4-verify F2).
       // x 40-64, y 24-56 (768 px) is hit 13 times and still leaves the padding room diagnostics need for a crop.
-      { match: { device: "wasm", deviceCall: 1 }, do: { rect: [0.333, 0.3, 0.533, 0.7], inside: 1, outside: 0 } },
+      {
+        match: { device: "wasm", deviceCall: 1 },
+        do: { rect: [0.333, 0.3, 0.533, 0.7], inside: 1, outside: 0 },
+      },
       { match: { device: "wasm", deviceCallFrom: 2 }, do: { halves: [0.3, 1.0] } },
     ];
-    await withRow({ memory: 8, adapter: "fake", host: own, page: { mask: maskHook(rules) } }, async (row) => {
-      const { transfer } = await row.consts();
-      const r = await row.run({ mode: "auto", hist: [43, 77] });
-      assert.equal(r.error, undefined, JSON.stringify(r.error));
-      assert.ok(r.prov, "C3 provenance is returned (S5)");
-      assert.equal(r.prov.globalTransfer, transfer);
-      assert.equal(r.prov.globalTransfer, "fast");
-      assert.equal(r.prov.cropTransfer, "quality");
-      assert.ok(r.prov.cropInferences >= 1, `at least one crop inference, got ${r.prov.cropInferences}`);
-      assert.equal(r.webgpuBroken, true);
-      const [fast43, quality77] = r.hist;
-      assert.ok(quality77 >= 10 && quality77 > fast43, `crop alpha follows quality (77: ${quality77}) not fast (43: ${fast43})`);
-    });
+    await withRow(
+      { memory: 8, adapter: "fake", host: own, page: { mask: maskHook(rules) } },
+      async (row) => {
+        const { transfer } = await row.consts();
+        const r = await row.run({ mode: "auto", hist: [43, 77] });
+        assert.equal(r.error, undefined, JSON.stringify(r.error));
+        assert.ok(r.prov, "C3 provenance is returned (S5)");
+        assert.equal(r.prov.globalTransfer, transfer);
+        assert.equal(r.prov.globalTransfer, "fast");
+        assert.equal(r.prov.cropTransfer, "quality");
+        assert.ok(
+          r.prov.cropInferences >= 1,
+          `at least one crop inference, got ${r.prov.cropInferences}`,
+        );
+        assert.equal(r.webgpuBroken, true);
+        const [fast43, quality77] = r.hist;
+        assert.ok(
+          quality77 >= 10 && quality77 > fast43,
+          `crop alpha follows quality (77: ${quality77}) not fast (43: ${fast43})`,
+        );
+      },
+    );
   } finally {
     await own.close();
   }
@@ -1507,12 +1945,19 @@ test("C4 (c1): on the compatibility path under a fast global, crops still use th
 
 test("C4 (c2): manual refine keeps the quality transfer (ISNet route)", async () => {
   await withRow(
-    { memory: 3, adapter: "null", page: { mask: maskHook([{ match: { model: "isnet" }, do: { halves: [0.3, 1.0] } }]) } },
+    {
+      memory: 3,
+      adapter: "null",
+      page: { mask: maskHook([{ match: { model: "isnet" }, do: { halves: [0.3, 1.0] } }]) },
+    },
     async (row) => {
       const r = await row.refine({ hist: [43, 77] });
       assert.equal(r.error, undefined, JSON.stringify(r.error));
       const [fast43, quality77] = r.hist;
-      assert.ok(quality77 >= 50 && quality77 > 3 * fast43, `crop-region alpha ~ 77 (${quality77}), not ~ 43 (${fast43})`);
+      assert.ok(
+        quality77 >= 50 && quality77 > 3 * fast43,
+        `crop-region alpha ~ 77 (${quality77}), not ~ 43 (${fast43})`,
+      );
       assert.ok(r.prov, "C3 provenance is returned (S5)");
       assert.equal(r.prov.cropTransfer, "quality");
       assert.ok(r.prov.cropInferences >= 1);
@@ -1582,25 +2027,33 @@ test("large sources are preprocessed to twice the model side before the processo
 
 test("the whole job holds one lease: no model is disposed before the crops finish", async () => {
   const smallSubjectFirst = [{ match: { call: 1 }, do: { rect: [0.333, 0.375, 0.433, 0.625] } }];
-  await withRow({ memory: 8, adapter: "fake", page: { mask: maskHook(smallSubjectFirst) } }, async (row) => {
-    const r = await row.run();
-    assert.equal(r.error, undefined, JSON.stringify(r.error));
-    assert.ok(r.prov.cropInferences >= 1, "crops ran");
-    const log = await row.log();
-    assert.ok(runsOf(log).length >= 2, "the global pass and at least one crop");
-    assert.equal(modelDisposes(log).length, 0, "model dispose count is 0 through the whole job");
-  });
+  await withRow(
+    { memory: 8, adapter: "fake", page: { mask: maskHook(smallSubjectFirst) } },
+    async (row) => {
+      const r = await row.run();
+      assert.equal(r.error, undefined, JSON.stringify(r.error));
+      assert.ok(r.prov.cropInferences >= 1, "crops ran");
+      const log = await row.log();
+      assert.ok(runsOf(log).length >= 2, "the global pass and at least one crop");
+      assert.equal(modelDisposes(log).length, 0, "model dispose count is 0 through the whole job");
+    },
+  );
 });
 
 // ---- G1, behavioural half: the retired package is never requested -------------------------------------------
 
 test("G1 (behavioural half): no request in any row, worker rows included, mentions the retired package", async () => {
   assert.ok(allRequests.length > 0, "the collector saw this run's requests");
-  assert.ok(allRequests.some((url) => url.includes("/src/lib/engine.ts")), "and the app's own engine among them");
+  assert.ok(
+    allRequests.some((url) => url.includes("/src/lib/engine.ts")),
+    "and the app's own engine among them",
+  );
   // Static half: src/lib/no-bg0-import.test.ts. G1 passes only when both pass.
-  assert.deepEqual(allRequests.filter((url) => /@bg0[/_]/.test(url)), []);
+  assert.deepEqual(
+    allRequests.filter((url) => /@bg0[/_]/.test(url)),
+    [],
+  );
 });
-
 
 test("S3-A-ENGINE-01: device loss respawns the worker once; the page requires reload", async () => {
   const run = async (call, h) => {
@@ -1610,25 +2063,29 @@ test("S3-A-ENGINE-01: device loss respawns the worker once; the page requires re
     }
   };
   for (const adapter of ["fake", "no-f16"]) {
-  await withRow({ adapter, worker: { run } }, async (row) => {
-    const result = await row.auto();
-    assert.equal(result.provider, "wasm");
-    assert.equal(result.error, undefined);
-    const log = await row.log();
-    assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
-    assert.equal(log.filter((event) => event.type === "terminate").length, 1);
-    assert.equal((await row.state()).record, null);
-  });
-  await withRow({ adapter, page: { run } }, async (row) => {
-    const first = await row.run();
-    assert.equal(first.error?.code, "removal-context-lost");
-    assert.match(first.error?.message, /Reload/);
-    assert.equal((await row.run()).error?.code, "removal-context-lost");
-    assert.equal((await row.log()).filter((event) => event.type === "from_pretrained" && event.device === "wasm").length, 0);
-  });
+    await withRow({ adapter, worker: { run } }, async (row) => {
+      const result = await row.auto();
+      assert.equal(result.provider, "wasm");
+      assert.equal(result.error, undefined);
+      const log = await row.log();
+      assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
+      assert.equal(log.filter((event) => event.type === "terminate").length, 1);
+      assert.equal((await row.state()).record, null);
+    });
+    await withRow({ adapter, page: { run } }, async (row) => {
+      const first = await row.run();
+      assert.equal(first.error?.code, "removal-context-lost");
+      assert.match(first.error?.message, /Reload/);
+      assert.equal((await row.run()).error?.code, "removal-context-lost");
+      assert.equal(
+        (await row.log()).filter(
+          (event) => event.type === "from_pretrained" && event.device === "wasm",
+        ).length,
+        0,
+      );
+    });
   }
 });
-
 
 test("C06: page and worker warmups yield a stalled download to a real job", async () => {
   const load = async (call) => {
@@ -1640,7 +2097,9 @@ test("C06: page and worker warmups yield a stalled download to a real job", asyn
   for (const viaClient of [false, true]) {
     await withRow({ adapter: "fake", page: { load }, worker: { load } }, async (row) => {
       const warmup = row.warm({ viaClient });
-      await row.page.waitForFunction(() => globalThis.__fakeTf?.some((event) => event.type === "warmup-stalled"));
+      await row.page.waitForFunction(() =>
+        globalThis.__fakeTf?.some((event) => event.type === "warmup-stalled"),
+      );
       const job = viaClient ? await row.auto() : await row.run();
       assert.equal(job.error, undefined);
       assert.equal(job.provider, "webgpu");
@@ -1654,20 +2113,27 @@ test("C08: pagehide releases the page engine and the next job reloads it", async
     const first = await row.run();
     assert.equal(first.error, undefined);
     await row.page.evaluate(() => dispatchEvent(new Event("pagehide")));
-    await row.page.waitForFunction(() => globalThis.__fakeTf.some((event) => event.type === "dispose" && event.target === "model"));
+    await row.page.waitForFunction(() =>
+      globalThis.__fakeTf.some((event) => event.type === "dispose" && event.target === "model"),
+    );
     const next = await row.run();
     assert.equal(next.error, undefined);
     assert.equal(next.digest, first.digest);
-    assert.equal((await row.log()).filter((event) => event.type === "from_pretrained" && event.kind === "model").length, 2);
+    assert.equal(
+      (await row.log()).filter(
+        (event) => event.type === "from_pretrained" && event.kind === "model",
+      ).length,
+      2,
+    );
   });
 });
-
 
 test("S3-B-EVIDENCE-01: junk 200 weight is evicted; a fresh worker downloads a healthy replacement", async () => {
   // Real fetch + Cache Storage with the captured ORT parse error at the model boundary.
   const load = async (call) => {
     if (call.kind !== "model" || call.device !== "webgpu") return;
-    const url = "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx";
+    const url =
+      "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/onnx/model_fp16.onnx";
     const cache = await caches.open("transformers-cache");
     let response = await cache.match(url);
     if (!response) {
@@ -1683,25 +2149,37 @@ test("S3-B-EVIDENCE-01: junk 200 weight is evicted; a fresh worker downloads a h
         call.emit("cache-delete-done");
         return removed;
       };
-      throw new Error("Can't create a session. ERROR_CODE: 7, ERROR_MESSAGE: Failed to load model because protobuf parsing failed.");
+      throw new Error(
+        "Can't create a session. ERROR_CODE: 7, ERROR_MESSAGE: Failed to load model because protobuf parsing failed.",
+      );
     }
   };
   for (const viaWorker of [true, false]) {
     await withRow({ adapter: "fake", page: { load }, worker: { load } }, async (row) => {
       let downloads = 0;
       let releaseDeletion;
-      const gate = new Promise((resolve) => { releaseDeletion = resolve; });
+      const gate = new Promise((resolve) => {
+        releaseDeletion = resolve;
+      });
       await row.context.route("**/__rr2_cache_delete", async (route) => {
         await gate;
         await route.fulfill({ status: 200, body: "continue" });
       });
-      await row.context.route("**/onnx/model_fp16.onnx", (route) => route.fulfill({
-        status: 200, headers: { "access-control-allow-origin": "*", "content-type": "application/octet-stream" },
-        body: Buffer.alloc(1024, ++downloads === 1 ? 7 : 1),
-      }));
+      await row.context.route("**/onnx/model_fp16.onnx", (route) =>
+        route.fulfill({
+          status: 200,
+          headers: {
+            "access-control-allow-origin": "*",
+            "content-type": "application/octet-stream",
+          },
+          body: Buffer.alloc(1024, ++downloads === 1 ? 7 : 1),
+        }),
+      );
       if (viaWorker) {
         const pending = row.auto();
-        await row.page.waitForFunction(() => globalThis.__fakeTf.some((event) => event.type === "cache-delete-start"));
+        await row.page.waitForFunction(() =>
+          globalThis.__fakeTf.some((event) => event.type === "cache-delete-start"),
+        );
         const duringDeletion = await row.log();
         releaseDeletion();
         const first = await pending;
@@ -1714,10 +2192,15 @@ test("S3-B-EVIDENCE-01: junk 200 weight is evicted; a fresh worker downloads a h
         const log = await row.log();
         assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
         assert.equal(log.filter((event) => event.type === "terminate").length, 1);
-        assert.equal(log.filter((event) => event.type === "from_pretrained" && event.device === "wasm").length, 0);
+        assert.equal(
+          log.filter((event) => event.type === "from_pretrained" && event.device === "wasm").length,
+          0,
+        );
       } else {
         const pending = row.run();
-        await row.page.waitForFunction(() => globalThis.__fakeTf.some((event) => event.type === "cache-delete-start"));
+        await row.page.waitForFunction(() =>
+          globalThis.__fakeTf.some((event) => event.type === "cache-delete-start"),
+        );
         releaseDeletion();
         const first = await pending;
         assert.equal(first.error?.code, "removal-model-damaged");
@@ -1735,7 +2218,6 @@ test("S3-B-EVIDENCE-01: junk 200 weight is evicted; a fresh worker downloads a h
   }
 });
 
-
 test("RR1 S3-A-ENGINE-01: loss during session loading retires the worker and poisons the page", async () => {
   const load = async (call, h) => {
     if (call.kind === "model" && call.device === "webgpu") {
@@ -1744,46 +2226,59 @@ test("RR1 S3-A-ENGINE-01: loss during session loading retires the worker and poi
     }
   };
   for (const adapter of ["fake", "no-f16"]) {
-  await withRow({ adapter, worker: { load } }, async (row) => {
-    const result = await row.auto();
-    assert.equal(result.error, undefined);
-    assert.equal(result.provider, "wasm");
-    const log = await row.log();
-    assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
-    assert.equal(log.filter((event) => event.type === "terminate").length, 1);
-    assert.equal((await row.state()).record, null);
-  });
-  await withRow({ adapter, page: { load } }, async (row) => {
-    const first = await row.run();
-    assert.equal(first.error?.code, "removal-context-lost");
-    assert.match(first.error?.message, /Reload/);
-    assert.equal((await row.run()).error?.code, "removal-context-lost");
-    assert.equal((await row.log()).filter((event) => event.type === "from_pretrained" && event.device === "wasm").length, 0);
-  });
+    await withRow({ adapter, worker: { load } }, async (row) => {
+      const result = await row.auto();
+      assert.equal(result.error, undefined);
+      assert.equal(result.provider, "wasm");
+      const log = await row.log();
+      assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
+      assert.equal(log.filter((event) => event.type === "terminate").length, 1);
+      assert.equal((await row.state()).record, null);
+    });
+    await withRow({ adapter, page: { load } }, async (row) => {
+      const first = await row.run();
+      assert.equal(first.error?.code, "removal-context-lost");
+      assert.match(first.error?.message, /Reload/);
+      assert.equal((await row.run()).error?.code, "removal-context-lost");
+      assert.equal(
+        (await row.log()).filter(
+          (event) => event.type === "from_pretrained" && event.device === "wasm",
+        ).length,
+        0,
+      );
+    });
   }
 });
 
-
 test("RR1 C08: warmup downloads again after pagehide release and surfaces a later load failure", async () => {
   for (const failReload of [false, true]) {
-    const load = failReload ? (call) => {
-      if (call.kind === "model" && call.attempt > 1) throw new Error("WebGPU session creation failed");
-    } : undefined;
+    const load = failReload
+      ? (call) => {
+          if (call.kind === "model" && call.attempt > 1)
+            throw new Error("WebGPU session creation failed");
+        }
+      : undefined;
     await withRow({ adapter: "fake", page: { load } }, async (row) => {
       assert.equal((await row.warm()).error, undefined);
       await row.page.evaluate(() => dispatchEvent(new Event("pagehide")));
-      await row.page.waitForFunction(() => globalThis.__fakeTf.some((event) => event.type === "dispose" && event.target === "model"));
+      await row.page.waitForFunction(() =>
+        globalThis.__fakeTf.some((event) => event.type === "dispose" && event.target === "model"),
+      );
       const next = await row.warm();
       if (failReload) assert.equal(next.error?.name, "RemovalModelLoadError");
       else {
         assert.equal(next.error, undefined);
         assert.deepEqual(next.fractions, [0.5, 1]);
       }
-      assert.equal((await row.log()).filter((event) => event.type === "from_pretrained" && event.kind === "model").length, 2);
+      assert.equal(
+        (await row.log()).filter(
+          (event) => event.type === "from_pretrained" && event.kind === "model",
+        ).length,
+        2,
+      );
     });
   }
 });
-
 
 test("RR2 S3-B-EVIDENCE-01: cancelling during cache deletion keeps the page realm quarantined", async () => {
   const load = async (call) => {
@@ -1791,7 +2286,9 @@ test("RR2 S3-B-EVIDENCE-01: cancelling during cache deletion keeps the page real
     const remove = Cache.prototype.delete;
     Cache.prototype.delete = async function (...args) {
       call.emit("cache-delete-start");
-      await new Promise((resolve) => { globalThis.__finishCacheDeletion = resolve; });
+      await new Promise((resolve) => {
+        globalThis.__finishCacheDeletion = resolve;
+      });
       return remove.apply(this, args);
     };
     throw new Error("protobuf parsing failed");
@@ -1799,59 +2296,88 @@ test("RR2 S3-B-EVIDENCE-01: cancelling during cache deletion keeps the page real
   await withRow({ adapter: "fake", page: { load } }, async (row) => {
     const first = row.run({ exposeAbort: true, mode: "quick" });
     await row.page.waitForFunction(() => typeof globalThis.__finishCacheDeletion === "function");
-    await row.page.evaluate(() => { globalThis.__abortJob(); globalThis.__abortJob = undefined; });
+    await row.page.evaluate(() => {
+      globalThis.__abortJob();
+      globalThis.__abortJob = undefined;
+    });
     assert.equal((await first).error?.sameReason, true);
     const next = row.run({ exposeAbort: true, mode: "quick" });
     await row.page.waitForFunction(() => typeof globalThis.__abortJob === "function");
     const before = await row.log();
     await row.page.evaluate(() => globalThis.__finishCacheDeletion());
     const failure = await next;
-    assert.equal(before.filter((event) => event.type === "from_pretrained" && event.kind === "model").length, 1);
+    assert.equal(
+      before.filter((event) => event.type === "from_pretrained" && event.kind === "model").length,
+      1,
+    );
     assert.equal(failure.error?.code, "removal-model-damaged");
     assert.match(failure.error?.message, /has been removed/);
-    assert.equal((await row.log()).filter((event) => event.type === "from_pretrained" && event.kind === "model").length, 1);
+    assert.equal(
+      (await row.log()).filter(
+        (event) => event.type === "from_pretrained" && event.kind === "model",
+      ).length,
+      1,
+    );
     assert.equal((await row.state()).record, null);
   });
 });
 
-
 test("C29: a source over the processing side limit is resized before inference", async () => {
   await withRow({ adapter: "null", memory: 8 }, async (row) => {
     const result = await row.page.evaluate(async () => {
-      const canvas = document.createElement("canvas"); canvas.width = 20000; canvas.height = 8;
+      const canvas = document.createElement("canvas");
+      canvas.width = 20000;
+      canvas.height = 8;
       const ctx = canvas.getContext("2d");
       const pixels = ctx.createImageData(canvas.width, canvas.height);
       for (let i = 0; i < pixels.data.length; i += 4) {
         const x = (i / 4) % canvas.width;
-        pixels.data[i] = 40 + x % 170; pixels.data[i + 1] = 60 + x % 130; pixels.data[i + 2] = 90 + x % 90; pixels.data[i + 3] = 255;
+        pixels.data[i] = 40 + (x % 170);
+        pixels.data[i + 1] = 60 + (x % 130);
+        pixels.data[i + 2] = 90 + (x % 90);
+        pixels.data[i + 3] = 255;
       }
       ctx.putImageData(pixels, 0, 0);
       const source = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       const { removeBackgroundLocal } = await import("/src/lib/engine.ts");
       const progress = [];
-      const result = await removeBackgroundLocal(source, { mode: "quick", onProgress: (p) => progress.push(p) });
+      const result = await removeBackgroundLocal(source, {
+        mode: "quick",
+        onProgress: (p) => progress.push(p),
+      });
       const bitmap = await createImageBitmap(result.blob);
-      const dims = [bitmap.width, bitmap.height]; bitmap.close();
+      const dims = [bitmap.width, bitmap.height];
+      bitmap.close();
       return { dims, declared: [result.width, result.height], progress };
     });
     assert.deepEqual(result.dims, [16384, 7]);
     assert.deepEqual(result.declared, result.dims);
     assert.ok(result.progress.some((p) => p.message === "Preparing at 16384×7 to fit memory"));
     assert.equal(result.progress.at(-1).progress, 1);
-    assert.ok((await row.log()).filter((e) => e.type === "run").length > 0, "the resized source reaches the actual owned model path");
+    assert.ok(
+      (await row.log()).filter((e) => e.type === "run").length > 0,
+      "the resized source reaches the actual owned model path",
+    );
   });
 });
 
 test("C30 TESTS-6: an absent worker GPU API reaches the no-adapter path", async () => {
   await requireSmoke();
-  await withRow({ adapter: "absent", workerEnv: { adapter: "absent" }, worker: {
-    run: `(call) => { if (globalThis.navigator.gpu !== undefined) throw new Error("worker GPU API was not absent"); }`,
-  } }, async (row) => {
-    const r = await row.auto();
-    assert.equal(r.error, undefined, JSON.stringify(r.error));
-    assert.equal(r.provider, "wasm");
-    assert.ok((await row.log()).some((e) => e.ctx === "worker" && e.type === "run"));
-  });
+  await withRow(
+    {
+      adapter: "absent",
+      workerEnv: { adapter: "absent" },
+      worker: {
+        run: `(call) => { if (globalThis.navigator.gpu !== undefined) throw new Error("worker GPU API was not absent"); }`,
+      },
+    },
+    async (row) => {
+      const r = await row.auto();
+      assert.equal(r.error, undefined, JSON.stringify(r.error));
+      assert.equal(r.provider, "wasm");
+      assert.ok((await row.log()).some((e) => e.ctx === "worker" && e.type === "run"));
+    },
+  );
 });
 
 // ---- ENG fix batch (engine-check FIX-PLAN-2) -----------------------------------------------------------
@@ -1864,7 +2390,9 @@ test("E05-03: a worker whose WebGPU session would not start finishes on a fresh 
     if (call.kind !== "model") return;
     if (call.state.poison) throw call.state.poison;
     if (call.device === "webgpu") {
-      call.state.poison = new Error("no available backend found. ERR: [webgpu] OperationError: The requested device could not be created.");
+      call.state.poison = new Error(
+        "no available backend found. ERR: [webgpu] OperationError: The requested device could not be created.",
+      );
       throw call.state.poison;
     }
   };
@@ -1872,13 +2400,19 @@ test("E05-03: a worker whose WebGPU session would not start finishes on a fresh 
     const first = await row.auto({ mode: "quick" });
     assert.equal(first.error, undefined, JSON.stringify(first.error));
     assert.equal(first.provider, "wasm");
-    assert.ok(!first.progress.some((p) => p.message === SWITCHING), "no compatibility pass in the poisoned worker");
+    assert.ok(
+      !first.progress.some((p) => p.message === SWITCHING),
+      "no compatibility pass in the poisoned worker",
+    );
     const second = await row.auto({ mode: "quick" });
     assert.equal(second.provider, "wasm");
     const log = await row.log();
     assert.equal(log.filter((event) => event.type === "worker-created").length, 2);
     assert.equal(log.filter((event) => event.type === "terminate").length, 1);
-    assert.deepEqual((await row.posted()).filter((p) => p.type === "run").map((p) => p.noWebgpu), [false, true, true]);
+    assert.deepEqual(
+      (await row.posted()).filter((p) => p.type === "run").map((p) => p.noWebgpu),
+      [false, true, true],
+    );
     assert.equal((await row.state()).record, null, "session-only: nothing persisted");
   });
   // The page has no fresh context: one compatibility attempt, then a retryable model error; no loop.
@@ -1894,7 +2428,8 @@ test("E05-01: a captive portal's HTML 200 for a hub JSON is cleared from the cac
   // Real fetch + Cache Storage, as transformers' hub.js does it: the bytes are stored, then parsed.
   const load = async (call) => {
     if (call.kind !== "processor") return;
-    const url = "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/preprocessor_config.json";
+    const url =
+      "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7/preprocessor_config.json";
     const cache = await caches.open("transformers-cache");
     let response = await cache.match(url);
     if (!response) {
@@ -1913,7 +2448,10 @@ test("E05-01: a captive portal's HTML 200 for a hub JSON is cleared from the cac
           const html = portal && (portalStays || downloads === 1);
           return route.fulfill({
             status: 200,
-            headers: { "access-control-allow-origin": "*", "content-type": html ? "text/html" : "application/json" },
+            headers: {
+              "access-control-allow-origin": "*",
+              "content-type": html ? "text/html" : "application/json",
+            },
             body: html ? "<html><body>captive portal login</body></html>" : "{}",
           });
         });
@@ -1921,13 +2459,19 @@ test("E05-01: a captive portal's HTML 200 for a hub JSON is cleared from the cac
         const first = await job();
         const cached = await row.page.evaluate(async () => {
           const cache = await caches.open("transformers-cache");
-          return Promise.all((await cache.keys()).map(async (request) => (await cache.match(request)).text()));
+          return Promise.all(
+            (await cache.keys()).map(async (request) => (await cache.match(request)).text()),
+          );
         });
         if (!portalStays) {
           assert.equal(first.error, undefined, JSON.stringify(first.error));
           assert.equal(downloads, 2, "fetched again after the clean, once");
           assert.deepEqual(cached, ["{}"], "the portal page is gone from the cache");
-          assert.equal((await row.log()).filter((event) => event.type === "worker-created").length, viaWorker ? 1 : 0, "no worker churn");
+          assert.equal(
+            (await row.log()).filter((event) => event.type === "worker-created").length,
+            viaWorker ? 1 : 0,
+            "no worker churn",
+          );
           return;
         }
         assert.equal(first.error?.code, "removal-model-damaged");
@@ -1937,7 +2481,11 @@ test("E05-01: a captive portal's HTML 200 for a hub JSON is cleared from the cac
         assert.equal(downloads, viaWorker ? 4 : 2);
         portal = false;
         const next = await job();
-        assert.equal(next.error, undefined, "the context is not quarantined: the next try loads fresh");
+        assert.equal(
+          next.error,
+          undefined,
+          "the context is not quarantined: the next try loads fresh",
+        );
       });
     }
   }
@@ -1949,7 +2497,9 @@ test("E03-01: the first worker crash is replaced and the job finishes in the new
   const crashing = async () => {
     const n = Number(await (await fetch(new URL("/__e03_crash", location.href))).text());
     if (n <= Number(await (await fetch(new URL("/__e03_crashes", location.href))).text())) {
-      setTimeout(() => { throw new Error("E03 worker crash"); });
+      setTimeout(() => {
+        throw new Error("E03 worker crash");
+      });
       await new Promise(() => {});
     }
     return (u, v) => (u >= 0.25 && u < 0.75 && v >= 0.2 && v < 0.8 ? 20 : -20);
@@ -1957,14 +2507,22 @@ test("E03-01: the first worker crash is replaced and the job finishes in the new
   for (const crashes of [1, 2]) {
     await withRow({ adapter: "fake", worker: { mask: crashing } }, async (row) => {
       let runs = 0;
-      await row.context.route("**/__e03_crash", (route) => route.fulfill({ status: 200, body: String(++runs) }));
-      await row.context.route("**/__e03_crashes", (route) => route.fulfill({ status: 200, body: String(crashes) }));
+      await row.context.route("**/__e03_crash", (route) =>
+        route.fulfill({ status: 200, body: String(++runs) }),
+      );
+      await row.context.route("**/__e03_crashes", (route) =>
+        route.fulfill({ status: 200, body: String(crashes) }),
+      );
       const first = await row.auto({ mode: "quick" });
       assert.equal(first.error, undefined, JSON.stringify(first.error));
       const second = await row.auto({ mode: "quick" });
       assert.equal(second.error, undefined);
       const log = await row.log();
-      assert.equal(log.filter((event) => event.type === "worker-created").length, 2, "one respawn, never a third worker");
+      assert.equal(
+        log.filter((event) => event.type === "worker-created").length,
+        2,
+        "one respawn, never a third worker",
+      );
       const pageRuns = log.filter((event) => event.ctx === "page" && event.type === "run").length;
       if (crashes === 1) assert.equal(pageRuns, 0, "both jobs ran in the replacement worker");
       else assert.ok(pageRuns > 0, "the second crash moved the session to the page");

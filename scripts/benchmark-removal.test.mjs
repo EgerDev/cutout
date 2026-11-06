@@ -34,11 +34,14 @@ const sha = "a".repeat(64);
 
 test("forces WASM Chrome process controls into a page and same-origin module worker", async (t) => {
   const server = http.createServer((request, response) => {
-    response.writeHead(200, { "content-type": request.url === "/adapter-worker.mjs" ? "application/javascript" : "text/html" });
+    response.writeHead(200, {
+      "content-type":
+        request.url === "/adapter-worker.mjs" ? "application/javascript" : "text/html",
+    });
     response.end(
       request.url === "/adapter-worker.mjs"
         ? "const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null; postMessage(Boolean(adapter));"
-        : "<!doctype html><script type=\"module\">try { window.__adapter = Boolean(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (error) { window.__adapterError = String(error); }</script>",
+        : '<!doctype html><script type="module">try { window.__adapter = Boolean(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (error) { window.__adapterError = String(error); }</script>',
     );
   });
   server.listen(0, "127.0.0.1");
@@ -69,23 +72,26 @@ test("forces WASM Chrome process controls into a page and same-origin module wor
             throw new Error(`page adapter probe rejected: ${window.__adapterError}`);
           return window.__adapter;
         }),
-        worker: await page.evaluate(() => new Promise((resolve, reject) => {
-          const worker = new Worker("/adapter-worker.mjs", { type: "module" });
-          const timeout = window.setTimeout(() => {
-            worker.terminate();
-            reject(new Error("module worker adapter probe timed out"));
-          }, 5_000);
-          worker.onmessage = (event) => {
-            window.clearTimeout(timeout);
-            worker.terminate();
-            resolve(event.data);
-          };
-          worker.onerror = (event) => {
-            window.clearTimeout(timeout);
-            worker.terminate();
-            reject(new Error(event.message));
-          };
-        })),
+        worker: await page.evaluate(
+          () =>
+            new Promise((resolve, reject) => {
+              const worker = new Worker("/adapter-worker.mjs", { type: "module" });
+              const timeout = window.setTimeout(() => {
+                worker.terminate();
+                reject(new Error("module worker adapter probe timed out"));
+              }, 5_000);
+              worker.onmessage = (event) => {
+                window.clearTimeout(timeout);
+                worker.terminate();
+                resolve(event.data);
+              };
+              worker.onerror = (event) => {
+                window.clearTimeout(timeout);
+                worker.terminate();
+                reject(new Error(event.message));
+              };
+            }),
+        ),
       };
     } finally {
       await context?.close();
@@ -132,21 +138,35 @@ test("rejects an alpha annotation whose decoded dimensions do not match its inpu
   await mkdir(join(directory, "input"));
   const inputPath = join(directory, "input", "fixture.png");
   const alphaPath = join(directory, "input", "fixture-alpha.png");
-  await sharp({ create: { width: 1, height: 1, channels: 4, background: "white" } }).png().toFile(inputPath);
-  await sharp({ create: { width: 2, height: 1, channels: 3, background: "white" } }).png().toFile(alphaPath);
-  const digest = async (path) => createHash("sha256").update(await readFile(path)).digest("hex");
+  await sharp({ create: { width: 1, height: 1, channels: 4, background: "white" } })
+    .png()
+    .toFile(inputPath);
+  await sharp({ create: { width: 2, height: 1, channels: 3, background: "white" } })
+    .png()
+    .toFile(alphaPath);
+  const digest = async (path) =>
+    createHash("sha256")
+      .update(await readFile(path))
+      .digest("hex");
   const manifest = {
     schemaVersion: 1,
     heldoutState: "locked",
-    fixtures: [{
-      id: "fixture",
-      split: "smoke",
-      category: "synthetic-boundary",
-      evaluation: "known-alpha",
-      input: { path: "input/fixture.png", sha256: await digest(inputPath), width: 1, height: 1 },
-      alpha: { path: "input/fixture-alpha.png", sha256: await digest(alphaPath), width: 2, height: 1 },
-      provenance: { sourceUrl: "generated:fixture", license: "CC0-1.0" },
-    }],
+    fixtures: [
+      {
+        id: "fixture",
+        split: "smoke",
+        category: "synthetic-boundary",
+        evaluation: "known-alpha",
+        input: { path: "input/fixture.png", sha256: await digest(inputPath), width: 1, height: 1 },
+        alpha: {
+          path: "input/fixture-alpha.png",
+          sha256: await digest(alphaPath),
+          width: 2,
+          height: 1,
+        },
+        provenance: { sourceUrl: "generated:fixture", license: "CC0-1.0" },
+      },
+    ],
   };
   await writeFile(join(directory, "manifest.json"), JSON.stringify(manifest));
   await assert.rejects(loadCorpus(join(directory, "manifest.json"), "smoke"), /alpha.*dimensions/i);
@@ -202,12 +222,18 @@ test("records real encoded bytes, chunked completion, and browser cache source f
     }
     if (request.url === "/cache") {
       cacheRequests += 1;
-      response.writeHead(200, { "cache-control": "public, max-age=3600", "content-type": "text/plain" });
+      response.writeHead(200, {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain",
+      });
       response.end("cacheable");
       return;
     }
     if (request.url === "/sw.js") {
-      response.writeHead(200, { "content-type": "application/javascript", "service-worker-allowed": "/" });
+      response.writeHead(200, {
+        "content-type": "application/javascript",
+        "service-worker-allowed": "/",
+      });
       response.end(`
         self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()));
         self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -220,7 +246,9 @@ test("records real encoded bytes, chunked completion, and browser cache source f
     }
     if (request.url === "/worker.js") {
       response.writeHead(200, { "content-type": "application/javascript" });
-      response.end(`self.onmessage = () => fetch("/worker-chunked").then((response) => response.text()).then(() => postMessage("done"));`);
+      response.end(
+        `self.onmessage = () => fetch("/worker-chunked").then((response) => response.text()).then(() => postMessage("done"));`,
+      );
       return;
     }
     if (request.url === "/worker-chunked") {
@@ -256,13 +284,19 @@ test("records real encoded bytes, chunked completion, and browser cache source f
     await page.evaluate(() => fetch("/chunked").then((response) => response.text()));
     await telemetry.waitForSettled("chunked", 2_000);
     fixtureId = "service-worker-setup";
-    await page.evaluate(() => navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready));
+    await page.evaluate(() =>
+      navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready),
+    );
     await page.reload();
     fixtureId = "cache-hit";
     await page.evaluate(() => fetch("/cache").then((response) => response.text()));
     await telemetry.waitForSettled("cache-hit", 2_000);
-    const chunked = summarizeNetwork(telemetry.entriesFor("chunked").filter((entry) => entry.url.endsWith("/chunked")));
-    const cached = summarizeNetwork(telemetry.entriesFor("cache-hit").filter((entry) => entry.url.endsWith("/cache")));
+    const chunked = summarizeNetwork(
+      telemetry.entriesFor("chunked").filter((entry) => entry.url.endsWith("/chunked")),
+    );
+    const cached = summarizeNetwork(
+      telemetry.entriesFor("cache-hit").filter((entry) => entry.url.endsWith("/cache")),
+    );
     assert.equal(chunked.completedCount, 1);
     assert.equal(chunked.failedCount, 0);
     assert.equal(chunked.incompleteCount, 0);
@@ -271,19 +305,25 @@ test("records real encoded bytes, chunked completion, and browser cache source f
     assert.equal(cacheRequests, 0);
     assert.equal(cached.cache.fromServiceWorker > 0, true);
     fixtureId = "worker-fetch";
-    await page.evaluate(() => new Promise((resolve, reject) => {
-      const worker = new Worker("/worker.js");
-      window.__networkProbeWorker = worker;
-      worker.onmessage = resolve;
-      worker.onerror = reject;
-      worker.postMessage("start");
-    }));
+    await page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const worker = new Worker("/worker.js");
+          window.__networkProbeWorker = worker;
+          worker.onmessage = resolve;
+          worker.onerror = reject;
+          worker.postMessage("start");
+        }),
+    );
     await contextTelemetry.waitForSettled("worker-fetch", 2_000);
     const combined = combinedNetworkSummary(
       telemetry.entriesFor("worker-fetch"),
       contextTelemetry.entriesFor("worker-fetch"),
     );
-    assert.equal(combined.browserContext.entries.some((entry) => entry.url.endsWith("/worker-chunked")), true);
+    assert.equal(
+      combined.browserContext.entries.some((entry) => entry.url.endsWith("/worker-chunked")),
+      true,
+    );
     assert.equal(combined.completeEncodedCoverage, false);
     assert.equal(combined.workerEncodedDataLength.value, null);
     assert.match(combined.workerEncodedDataLength.reason, /do not expose/);
@@ -316,8 +356,30 @@ test("rejects fallback when WebGPU was explicitly requested", () => {
 
 test("rejects malformed and incomplete paired run artifacts", () => {
   const valid = [
-    { pair: 0, order: 0, variant: "baseline", fixtureId: "one", status: "completed", method: "model", requestedProvider: "wasm", actualProvider: "wasm", completeMs: 10, outputSha256: sha },
-    { pair: 0, order: 1, variant: "candidate", fixtureId: "one", status: "completed", method: "model", requestedProvider: "wasm", actualProvider: "wasm", completeMs: 9, outputSha256: sha },
+    {
+      pair: 0,
+      order: 0,
+      variant: "baseline",
+      fixtureId: "one",
+      status: "completed",
+      method: "model",
+      requestedProvider: "wasm",
+      actualProvider: "wasm",
+      completeMs: 10,
+      outputSha256: sha,
+    },
+    {
+      pair: 0,
+      order: 1,
+      variant: "candidate",
+      fixtureId: "one",
+      status: "completed",
+      method: "model",
+      requestedProvider: "wasm",
+      actualProvider: "wasm",
+      completeMs: 9,
+      outputSha256: sha,
+    },
   ];
   assert.doesNotThrow(() => validateCompletedRuns(valid, ["one"], 1));
   assert.throws(() => validateCompletedRuns(valid.slice(0, 1), ["one"], 1), /missing candidate/);
@@ -337,8 +399,32 @@ test("rejects malformed and incomplete paired run artifacts", () => {
 
 test("paired statistics are deterministic and preserve pair identity", () => {
   const rows = Array.from({ length: 30 }, (_, pair) => [
-    { pair, order: pair % 2, variant: "baseline", fixtureId: "one", category: "products", status: "completed", method: "model", requestedProvider: "wasm", actualProvider: "wasm", completeMs: 100 + pair, outputSha256: sha },
-    { pair, order: 1 - (pair % 2), variant: "candidate", fixtureId: "one", category: "products", status: "completed", method: "model", requestedProvider: "wasm", actualProvider: "wasm", completeMs: 90 + pair, outputSha256: sha },
+    {
+      pair,
+      order: pair % 2,
+      variant: "baseline",
+      fixtureId: "one",
+      category: "products",
+      status: "completed",
+      method: "model",
+      requestedProvider: "wasm",
+      actualProvider: "wasm",
+      completeMs: 100 + pair,
+      outputSha256: sha,
+    },
+    {
+      pair,
+      order: 1 - (pair % 2),
+      variant: "candidate",
+      fixtureId: "one",
+      category: "products",
+      status: "completed",
+      method: "model",
+      requestedProvider: "wasm",
+      actualProvider: "wasm",
+      completeMs: 90 + pair,
+      outputSha256: sha,
+    },
   ]).flat();
   validateCompletedRuns(rows, ["one"], 30);
   const first = pairedLatency(rows, 2_000, 730_241);
@@ -374,7 +460,16 @@ test("paired statistics are deterministic and preserve pair identity", () => {
 
 /** Rows for one paired observation: baseline then candidate, in the AB/BA order of the pair. */
 function pairRows(pair, fixtureId, category, baselineMs, candidateMs) {
-  const row = { pair, fixtureId, category, status: "completed", method: "model", requestedProvider: "wasm", actualProvider: "wasm", outputSha256: hashOf(fixtureId) };
+  const row = {
+    pair,
+    fixtureId,
+    category,
+    status: "completed",
+    method: "model",
+    requestedProvider: "wasm",
+    actualProvider: "wasm",
+    outputSha256: hashOf(fixtureId),
+  };
   return [
     { ...row, order: pair % 2, variant: "baseline", completeMs: baselineMs },
     { ...row, order: 1 - (pair % 2), variant: "candidate", completeMs: candidateMs },
@@ -493,8 +588,14 @@ test("blocks with equal medians of their own still give a gate interval when poo
   // resample that mixes the two shapes pools rows whose medians differ, so the gate
   // quantity varies and its interval must be published.
   const shapes = [
-    [[1, 2], [3, 2]],
-    [[10, 5], [10, 15]],
+    [
+      [1, 2],
+      [3, 2],
+    ],
+    [
+      [10, 5],
+      [10, 15],
+    ],
   ];
   const rows = Array.from({ length: 4 }, (_, pair) =>
     shapes[pair % 2].flatMap(([baselineMs, candidateMs], index) =>
@@ -527,7 +628,9 @@ test("latency uses model runs only and reports what it left out and why (C53)", 
       actualProvider: "fallback",
     })),
     ...pairRows(1, "art", "logos", 2, 1).map((row) =>
-      row.variant === "candidate" ? { ...row, method: "passthrough", actualProvider: "fallback" } : row,
+      row.variant === "candidate"
+        ? { ...row, method: "passthrough", actualProvider: "fallback" }
+        : row,
     ),
   ];
   // Non-model runs stay valid parity and quality evidence, with the provider they report.
@@ -535,8 +638,14 @@ test("latency uses model runs only and reports what it left out and why (C53)", 
   const latency = pairedLatency(rows, 100);
   assert.equal(latency.observations, 2);
   assert.equal(latency.ratioOfMedians, 92.5 / 105);
-  assert.deepEqual(latency.byFixture.map((fixture) => fixture.fixtureId), ["photo"]);
-  assert.deepEqual(latency.byCategory.map((category) => category.category), ["products"]);
+  assert.deepEqual(
+    latency.byFixture.map((fixture) => fixture.fixtureId),
+    ["photo"],
+  );
+  assert.deepEqual(
+    latency.byCategory.map((category) => category.category),
+    ["products"],
+  );
   assert.deepEqual(latency.exclusions, {
     inputRows: 8,
     includedRows: 4,
@@ -578,7 +687,10 @@ test("latency uses model runs only and reports what it left out and why (C53)", 
 test("a model run off the requested provider, or a run with no provider, is rejected (C53)", () => {
   const rows = pairRows(0, "photo", "products", 100, 90);
   const flipped = [{ ...rows[0], actualProvider: "webgpu" }, rows[1]];
-  assert.throws(() => validateCompletedRuns(flipped, ["photo"], 1), /requested wasm.*reported webgpu/);
+  assert.throws(
+    () => validateCompletedRuns(flipped, ["photo"], 1),
+    /requested wasm.*reported webgpu/,
+  );
   assert.throws(() => pairedLatency(flipped, 100), /requested wasm.*reported webgpu/);
   const unrecorded = [{ ...rows[0], actualProvider: undefined }, rows[1]];
   assert.throws(() => validateCompletedRuns(unrecorded, ["photo"], 1), /no actualProvider/);
@@ -603,7 +715,10 @@ test("every contract error from a run names its fixture, variant and pair and ke
   const flipped = captured(() =>
     pairedLatency([{ ...rows[0], actualProvider: "webgpu" }, rows[1]], 10),
   );
-  assert.match(flipped.message, /^photo baseline pair 0: Run requested wasm but production reported webgpu$/);
+  assert.match(
+    flipped.message,
+    /^photo baseline pair 0: Run requested wasm but production reported webgpu$/,
+  );
   assert.equal(flipped.row.actualProvider, "webgpu");
 });
 
@@ -612,22 +727,43 @@ function hashOf(text) {
 }
 
 test("every run records its output hash, and a later pair must reproduce pair 0's (C55)", () => {
-  const rows = [...pairRows(0, "photo", "products", 100, 90), ...pairRows(1, "photo", "products", 101, 91)];
+  const rows = [
+    ...pairRows(0, "photo", "products", 100, 90),
+    ...pairRows(1, "photo", "products", 101, 91),
+  ];
   validateCompletedRuns(rows, ["photo"], 2);
   assert.deepEqual(outputIdentity(rows), { rows: 4, references: 2, nondeterministic: [] });
 
-  const unhashed = rows.map((row, index) => (index === 3 ? { ...row, outputSha256: undefined } : row));
-  assert.match(captured(() => validateCompletedRuns(unhashed, ["photo"], 2)).message, /^photo candidate pair 1: no outputSha256 recorded/);
+  const unhashed = rows.map((row, index) =>
+    index === 3 ? { ...row, outputSha256: undefined } : row,
+  );
+  assert.match(
+    captured(() => validateCompletedRuns(unhashed, ["photo"], 2)).message,
+    /^photo candidate pair 1: no outputSha256 recorded/,
+  );
 
   // Pair 1's candidate returned other bytes for the same input.
-  const changed = rows.map((row) => (row.pair === 1 && row.variant === "candidate" ? { ...row, outputSha256: hashOf("other") } : row));
+  const changed = rows.map((row) =>
+    row.pair === 1 && row.variant === "candidate" ? { ...row, outputSha256: hashOf("other") } : row,
+  );
   const error = captured(() => validateCompletedRuns(changed, ["photo"], 2));
-  assert.match(error.message, /^photo candidate pair 1: output sha256 [0-9a-f]{64} differs from pair 0's [0-9a-f]{64}/);
+  assert.match(
+    error.message,
+    /^photo candidate pair 1: output sha256 [0-9a-f]{64} differs from pair 0's [0-9a-f]{64}/,
+  );
   assert.equal(error.row.outputSha256, hashOf("other"));
-  const recorded = { fixtureId: "photo", variant: "candidate", pair: 1, outputSha256: hashOf("other"), pair0OutputSha256: hashOf("photo") };
+  const recorded = {
+    fixtureId: "photo",
+    variant: "candidate",
+    pair: 1,
+    outputSha256: hashOf("other"),
+    pair0OutputSha256: hashOf("photo"),
+  };
   assert.deepEqual(outputIdentity(changed).nondeterministic, [recorded]);
   // A lane that declares nondeterminism acceptable records it instead of failing.
-  assert.doesNotThrow(() => validateCompletedRuns(changed, ["photo"], 2, { allowNondeterministicOutputs: true }));
+  assert.doesNotThrow(() =>
+    validateCompletedRuns(changed, ["photo"], 2, { allowNondeterministicOutputs: true }),
+  );
 });
 
 /** The error a function throws (assert.throws returns nothing). */
@@ -715,17 +851,35 @@ window.__cutoutTest = {
 `;
 
 async function git(cwd, ...args) {
-  return (await run("git", ["-c", "user.name=bench", "-c", "user.email=bench@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd })).stdout.trim();
+  return (
+    await run(
+      "git",
+      [
+        "-c",
+        "user.name=bench",
+        "-c",
+        "user.email=bench@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd },
+    )
+  ).stdout.trim();
 }
 
 /** A temp git checkout whose .output/public holds the fake app's build. */
 async function fakeCheckout(t, name) {
   const dir = await mkdtemp(join(tmpdir(), `cutout-fake-${name}-`));
-  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS) t.after(() => rm(dir, { force: true, recursive: true }));
+  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS)
+    t.after(() => rm(dir, { force: true, recursive: true }));
   await writeFile(join(dir, ".gitignore"), ".output/\n");
   await writeFile(join(dir, "README"), `${name}\n`);
   // Also usable as a clean runner checkout, independent of edits in the real worktree.
-  await writeFile(join(dir, "package-lock.json"), await readFile(join(repoRoot, "package-lock.json")));
+  await writeFile(
+    join(dir, "package-lock.json"),
+    await readFile(join(repoRoot, "package-lock.json")),
+  );
   await git(dir, "init", "-q");
   await git(dir, "add", ".");
   await git(dir, "commit", "-q", "-m", name);
@@ -737,7 +891,9 @@ async function fakeCheckout(t, name) {
     '<!doctype html><meta charset="utf-8"><title>fake app</title><input type="file" aria-label="Choose files"><script type="module" src="/assets/app-1.js"></script>',
   );
   await writeFile(join(publicDir, "assets/app-1.js"), fakeAppScript);
-  await writeFile(join(publicDir, "assets/removal-worker-1.js"), `
+  await writeFile(
+    join(publicDir, "assets/removal-worker-1.js"),
+    `
 self.onmessage = ({ data }) => {
   const progress = (stage, message) => postMessage({ type: "progress", id: data.id, progress: { stage, message, progress: 0.7 } });
   progress("cutting", "Finding subject");
@@ -745,7 +901,8 @@ self.onmessage = ({ data }) => {
   progress("cutting", "Finding subject");
   postMessage({ type: "done", id: data.id, result: { method: data.method, provider: data.provider, workerHadGpu: true } });
 };
-`);
+`,
+  );
   await writeFile(join(publicDir, "version.json"), JSON.stringify({ version: "0.1.0", commit }));
   return { dir, commit, publicDir };
 }
@@ -764,7 +921,9 @@ async function fakeApp(t, name, { files = {}, provider = "wasm", swap, onBlock }
       if (state.blocks === state.swap?.atBlock)
         for (const [path, body] of Object.entries(state.swap.served)) state.served.set(path, body);
       response.writeHead(200, { "content-type": types.json, "cache-control": "no-store" });
-      response.end(JSON.stringify({ block: state.blocks, provider: state.provider, files: state.files }));
+      response.end(
+        JSON.stringify({ block: state.blocks, provider: state.provider, files: state.files }),
+      );
       return;
     }
     const file = pathname === "/" ? "index.html" : pathname.slice(1);
@@ -776,7 +935,10 @@ async function fakeApp(t, name, { files = {}, provider = "wasm", swap, onBlock }
       response.end();
       return;
     }
-    response.writeHead(200, { "content-type": types[file.split(".").at(-1)] ?? "application/octet-stream", "cache-control": "no-store" });
+    response.writeHead(200, {
+      "content-type": types[file.split(".").at(-1)] ?? "application/octet-stream",
+      "cache-control": "no-store",
+    });
     response.end(body);
   });
   server.listen(0, "127.0.0.1");
@@ -791,9 +953,13 @@ async function fakeApp(t, name, { files = {}, provider = "wasm", swap, onBlock }
 /** A three-fixture smoke corpus of generated 4×4 RGBA PNGs (two scored, one visual-only). */
 async function fakeCorpus(t) {
   const dir = await mkdtemp(join(tmpdir(), "cutout-fake-corpus-"));
-  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS) t.after(() => rm(dir, { force: true, recursive: true }));
+  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS)
+    t.after(() => rm(dir, { force: true, recursive: true }));
   await mkdir(join(dir, "input"));
-  const digest = async (path) => createHash("sha256").update(await readFile(path)).digest("hex");
+  const digest = async (path) =>
+    createHash("sha256")
+      .update(await readFile(path))
+      .digest("hex");
   const fixtures = [];
   for (const [index, [id, category, evaluation]] of [
     ["photo-a", "products", "known-alpha"],
@@ -802,9 +968,14 @@ async function fakeCorpus(t) {
   ].entries()) {
     const pixels = Buffer.alloc(4 * 4 * 4);
     for (let pixel = 0; pixel < 16; pixel += 1)
-      pixels.set([60 * index, 20 * pixel, 255 - 10 * pixel, pixel % 4 === 0 ? 0 : 17 * pixel], pixel * 4);
+      pixels.set(
+        [60 * index, 20 * pixel, 255 - 10 * pixel, pixel % 4 === 0 ? 0 : 17 * pixel],
+        pixel * 4,
+      );
     const inputPath = join(dir, "input", `${id}.png`);
-    await sharp(pixels, { raw: { width: 4, height: 4, channels: 4 } }).png().toFile(inputPath);
+    await sharp(pixels, { raw: { width: 4, height: 4, channels: 4 } })
+      .png()
+      .toFile(inputPath);
     const fixture = {
       id,
       split: "smoke",
@@ -816,13 +987,23 @@ async function fakeCorpus(t) {
     if (evaluation !== "visual-only") {
       const alphaPath = join(dir, "input", `${id}-alpha.png`);
       const alpha = Buffer.from(Array.from({ length: 16 }, (_, pixel) => pixels[pixel * 4 + 3]));
-      await sharp(alpha, { raw: { width: 4, height: 4, channels: 1 } }).png().toFile(alphaPath);
-      fixture.alpha = { path: `input/${id}-alpha.png`, sha256: await digest(alphaPath), width: 4, height: 4 };
+      await sharp(alpha, { raw: { width: 4, height: 4, channels: 1 } })
+        .png()
+        .toFile(alphaPath);
+      fixture.alpha = {
+        path: `input/${id}-alpha.png`,
+        sha256: await digest(alphaPath),
+        width: 4,
+        height: 4,
+      };
     }
     fixtures.push(fixture);
   }
   const manifestPath = join(dir, "manifest.json");
-  await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, heldoutState: "locked", fixtures }));
+  await writeFile(
+    manifestPath,
+    JSON.stringify({ schemaVersion: 1, heldoutState: "locked", fixtures }),
+  );
   return { dir, manifestPath, fileOf: (id) => `${id}.png` };
 }
 
@@ -832,29 +1013,59 @@ async function scoreLane(output, extra = []) {
     ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
     (error) => ({ code: error.code, stdout: error.stdout, stderr: error.stderr }),
   );
-  if (process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS) await appendFile(join(dirname(output), "scorer-invocations.jsonl"), `${JSON.stringify({ command: process.execPath, args: [qualityScript, "--benchmark", output, ...extra], ...result })}\n`);
+  if (process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS)
+    await appendFile(
+      join(dirname(output), "scorer-invocations.jsonl"),
+      `${JSON.stringify({ command: process.execPath, args: [qualityScript, "--benchmark", output, ...extra], ...result })}\n`,
+    );
   return { ...result, report: JSON.parse(await readFile(join(output, "quality.json"), "utf8")) };
 }
 
 /** Runs the benchmark CLI as Task B does (plus --allow-dirty), and reads what it wrote. */
-async function runLane(t, { baseline, candidate, corpus, pairs = 1, warmups = 0, extra = [], cwd = repoRoot, allowDirty = true, provider = "wasm" }) {
+async function runLane(
+  t,
+  {
+    baseline,
+    candidate,
+    corpus,
+    pairs = 1,
+    warmups = 0,
+    extra = [],
+    cwd = repoRoot,
+    allowDirty = true,
+    provider = "wasm",
+  },
+) {
   const parent = await mkdtemp(join(tmpdir(), "cutout-fake-lane-"));
-  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS) t.after(() => rm(parent, { force: true, recursive: true }));
+  if (!process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS)
+    t.after(() => rm(parent, { force: true, recursive: true }));
   const output = join(parent, "lane");
   const args = [
     benchmarkScript,
-    "--baseline-url", baseline.url,
-    "--candidate-url", candidate.url,
-    "--baseline-commit", baseline.commit,
-    "--candidate-commit", candidate.commit,
-    "--provider", provider,
-    "--mode", "auto",
-    "--split", "smoke",
-    "--pairs", String(pairs),
-    "--warmups", String(warmups),
-    "--timeout-ms", "20000",
-    "--manifest", corpus.manifestPath,
-    "--output", output,
+    "--baseline-url",
+    baseline.url,
+    "--candidate-url",
+    candidate.url,
+    "--baseline-commit",
+    baseline.commit,
+    "--candidate-commit",
+    candidate.commit,
+    "--provider",
+    provider,
+    "--mode",
+    "auto",
+    "--split",
+    "smoke",
+    "--pairs",
+    String(pairs),
+    "--warmups",
+    String(warmups),
+    "--timeout-ms",
+    "20000",
+    "--manifest",
+    corpus.manifestPath,
+    "--output",
+    output,
     ...(allowDirty ? ["--allow-dirty"] : []),
     ...extra,
   ];
@@ -862,10 +1073,32 @@ async function runLane(t, { baseline, candidate, corpus, pairs = 1, warmups = 0,
     ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
     (error) => ({ code: error.code, stdout: error.stdout, stderr: error.stderr }),
   );
-  if (process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS) await writeFile(join(parent, "invocation.json"), JSON.stringify({
-    command: process.execPath, args, cwd, code: result.code, stdout: result.stdout, stderr: result.stderr,
-    env: Object.fromEntries(["TMPDIR", "npm_config_cache", "npm_config_logs_dir", "GIT_OPTIONAL_LOCKS", "APP_URL", "DEV_URL"].map((key) => [key, process.env[key]])),
-  }, null, 2));
+  if (process.env.CUTOUT_BENCHMARK_KEEP_ARTIFACTS)
+    await writeFile(
+      join(parent, "invocation.json"),
+      JSON.stringify(
+        {
+          command: process.execPath,
+          args,
+          cwd,
+          code: result.code,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          env: Object.fromEntries(
+            [
+              "TMPDIR",
+              "npm_config_cache",
+              "npm_config_logs_dir",
+              "GIT_OPTIONAL_LOCKS",
+              "APP_URL",
+              "DEV_URL",
+            ].map((key) => [key, process.env[key]]),
+          ),
+        },
+        null,
+        2,
+      ),
+    );
   const json = (name) => readFile(join(output, name), "utf8").then(JSON.parse, () => null);
   const runs = await readFile(join(output, "runs.jsonl"), "utf8").catch(() => "");
   return {
@@ -873,7 +1106,12 @@ async function runLane(t, { baseline, candidate, corpus, pairs = 1, warmups = 0,
     output,
     manifest: await json("manifest.json"),
     failure: await json("failure.json"),
-    rows: runs.trim() ? runs.trim().split("\n").map((line) => JSON.parse(line)) : [],
+    rows: runs.trim()
+      ? runs
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line))
+      : [],
   };
 }
 
@@ -889,13 +1127,23 @@ test("a lane against two stand-in apps completes and records every run (end to e
   for (const row of lane.rows) {
     assert.equal(row.requestedProvider, "wasm");
     assert.equal(row.actualProvider, row.fixtureId === "art-c" ? "fallback" : "wasm");
-    assert.equal(row.outputPath !== null, row.pair === 0, `${row.fixtureId} ${row.variant} ${row.pair}`);
+    assert.equal(
+      row.outputPath !== null,
+      row.pair === 0,
+      `${row.fixtureId} ${row.variant} ${row.pair}`,
+    );
     // C55: every measured run carries the sha256 the page computed from its result blob.
     const input = await readFile(join(corpus.dir, "input", corpus.fileOf(row.fixtureId)));
     assert.equal(row.outputSha256, hashOf(input), `${row.fixtureId} ${row.variant} ${row.pair}`);
-    if (row.outputPath) assert.equal(hashOf(await readFile(join(lane.output, row.outputPath))), row.outputSha256);
+    if (row.outputPath)
+      assert.equal(hashOf(await readFile(join(lane.output, row.outputPath))), row.outputSha256);
   }
-  assert.deepEqual(lane.manifest.outputIdentity, { rows: 12, references: 6, nondeterministic: [], allowed: false });
+  assert.deepEqual(lane.manifest.outputIdentity, {
+    rows: 12,
+    references: 6,
+    nondeterministic: [],
+    allowed: false,
+  });
   // C53 at the runner: the illustration fixture is a valid row but not latency.
   assert.deepEqual(lane.manifest.latency.exclusions.fixtureIds, ["art-c"]);
   assert.equal(lane.manifest.latency.observations, 4);
@@ -916,7 +1164,10 @@ test("a provider flip mid-block names the run, keeps the block's finished rows a
   });
   const lane = await runLane(t, { baseline, candidate, corpus });
   assert.equal(lane.code, 1);
-  assert.match(lane.stderr, /photo-b candidate pair 0: .*requested wasm but production reported webgpu/);
+  assert.match(
+    lane.stderr,
+    /photo-b candidate pair 0: .*requested wasm but production reported webgpu/,
+  );
   // Rows reach runs.jsonl as they complete: the whole baseline block, and the candidate's
   // first fixture, which finished before the flip.
   assert.deepEqual(
@@ -947,13 +1198,28 @@ test("a later pair whose output differs from pair 0 fails the lane, or is record
     pairs: 2,
   });
   assert.equal(strict.code, 1);
-  assert.match(strict.stderr, /photo-a candidate pair 1: output sha256 [0-9a-f]{64} differs from pair 0's/);
-  assert.deepEqual(strict.failure.error.run, { fixtureId: "photo-a", variant: "candidate", pair: 1 });
+  assert.match(
+    strict.stderr,
+    /photo-a candidate pair 1: output sha256 [0-9a-f]{64} differs from pair 0's/,
+  );
+  assert.deepEqual(strict.failure.error.run, {
+    fixtureId: "photo-a",
+    variant: "candidate",
+    pair: 1,
+  });
   const offending = strict.failure.error.offendingRow;
-  assert.notEqual(offending.outputSha256, strict.rows.find((row) => row.pair === 0 && row.variant === "candidate" && row.fixtureId === "photo-a").outputSha256);
+  assert.notEqual(
+    offending.outputSha256,
+    strict.rows.find(
+      (row) => row.pair === 0 && row.variant === "candidate" && row.fixtureId === "photo-a",
+    ).outputSha256,
+  );
   // The differing output is kept next to pair 0's, under its pair.
   assert.equal(offending.outputPath, "outputs/candidate/pair-1/photo-a.png");
-  assert.equal(hashOf(await readFile(join(strict.output, offending.outputPath))), offending.outputSha256);
+  assert.equal(
+    hashOf(await readFile(join(strict.output, offending.outputPath))),
+    offending.outputSha256,
+  );
   // Pair 1 runs candidate first (BA): nothing of it reached runs.jsonl.
   assert.equal(strict.rows.length, 6);
 
@@ -968,7 +1234,9 @@ test("a later pair whose output differs from pair 0 fails the lane, or is record
   assert.equal(allowed.manifest.protocol.allowNondeterministicOutputs, true);
   assert.equal(allowed.rows.length, 12);
   assert.deepEqual(
-    allowed.manifest.outputIdentity.nondeterministic.map(({ fixtureId, variant, pair }) => `${fixtureId} ${variant} ${pair}`),
+    allowed.manifest.outputIdentity.nondeterministic.map(
+      ({ fixtureId, variant, pair }) => `${fixtureId} ${variant} ${pair}`,
+    ),
     ["photo-a candidate 1"],
   );
   // The scorer honours what the lane declared, and reports it.
@@ -985,13 +1253,21 @@ test("served bytes must be the checkout's build, at a clean checkout of the name
   assert.equal(served.checkout.head, app.commit);
   assert.deepEqual(served.checkout.dirtyPaths, []);
   // The client and worker builds: every file under .output/public/assets, plus the page.
-  assert.deepEqual(served.checkout.files, ["/", "/assets/app-1.js", "/assets/removal-worker-1.js", "/version.json"]);
+  assert.deepEqual(served.checkout.files, [
+    "/",
+    "/assets/app-1.js",
+    "/assets/removal-worker-1.js",
+    "/version.json",
+  ]);
   assert.match(served.checkout.sha256, /^[0-9a-f]{64}$/);
   assert.deepEqual(await servedBuild(app.url, options), served);
 
   // A server answering with other worker bytes than its checkout built.
   app.state.served.set("/assets/removal-worker-1.js", "postMessage(2);\n");
-  await assert.rejects(servedBuild(app.url, options), /\/assets\/removal-worker-1\.js \(bytes differ\)/);
+  await assert.rejects(
+    servedBuild(app.url, options),
+    /\/assets\/removal-worker-1\.js \(bytes differ\)/,
+  );
   app.state.served.clear();
   // A built file the server does not serve.
   await writeFile(join(app.publicDir, "assets/lazy-2.js"), "export {};\n");
@@ -1004,7 +1280,10 @@ test("served bytes must be the checkout's build, at a clean checkout of the name
   assert.deepEqual((await servedBuild(app.url, options)).checkout.files, served.checkout.files);
 
   // The checkout must be the named commit, and clean unless dirt is allowed (then recorded).
-  await assert.rejects(servedBuild(app.url, { ...options, expectedCommit: "f".repeat(40) }), /HEAD .* is not f{40}/);
+  await assert.rejects(
+    servedBuild(app.url, { ...options, expectedCommit: "f".repeat(40) }),
+    /HEAD .* is not f{40}/,
+  );
   await writeFile(join(app.dir, "stray.txt"), "edit\n");
   await assert.rejects(servedBuild(app.url, options), /checkout .* is dirty: \?\? stray\.txt/);
   const dirty = await servedBuild(app.url, { ...options, allowDirty: true });
@@ -1014,7 +1293,9 @@ test("served bytes must be the checkout's build, at a clean checkout of the name
   const bare = await servedBuild(app.url, { timeoutMs: 5_000 });
   assert.equal(bare.checkout, null);
   app.state.served.set("/version.json", JSON.stringify({ version: "0.2.0", commit: app.commit }));
-  assert.deepEqual(servedBuildChanges(bare, await servedBuild(app.url, { timeoutMs: 5_000 })), ["/version.json"]);
+  assert.deepEqual(servedBuildChanges(bare, await servedBuild(app.url, { timeoutMs: 5_000 })), [
+    "/version.json",
+  ]);
 });
 
 test("a lane verifies served bytes against each checkout, and fails if a server changes before it ends (C54)", async (t) => {
@@ -1044,18 +1325,27 @@ test("a lane verifies served bytes against each checkout, and fails if a server 
   // block has started fails the lane at the end, with every row kept.
   const swapped = await runLane(t, {
     baseline: await fakeApp(t, "baseline"),
-    candidate: await fakeApp(t, "candidate", { swap: { atBlock: 1, served: { "/": "<!doctype html>other build" } } }),
+    candidate: await fakeApp(t, "candidate", {
+      swap: { atBlock: 1, served: { "/": "<!doctype html>other build" } },
+    }),
     corpus,
   });
   assert.equal(swapped.code, 1);
-  assert.match(swapped.stderr, /candidate \(lane end\): the served build changed during the lane: \//);
+  assert.match(
+    swapped.stderr,
+    /candidate \(lane end\): the served build changed during the lane: \//,
+  );
   assert.deepEqual(swapped.failure.error.run, { variant: "candidate", phase: "lane end" });
   assert.equal(swapped.rows.length, 6);
   assert.equal(swapped.failure.sources.servedBytesVerified, false);
   assert.equal(swapped.failure.sources.releaseEligible, false);
 
   // A mistyped flag fails instead of silently skipping the check.
-  const typo = await run(process.execPath, [benchmarkScript, "--candidate-dirs", candidate.dir]).catch((error) => error);
+  const typo = await run(process.execPath, [
+    benchmarkScript,
+    "--candidate-dirs",
+    candidate.dir,
+  ]).catch((error) => error);
   assert.equal(typo.code, 1);
   assert.match(typo.stderr, /Unknown option --candidate-dirs/);
 });
@@ -1069,7 +1359,11 @@ for (const allowDirty of [false, true]) {
       onBlock: () => writeFile(join(runner.dir, "package-lock.json"), "{}\n"),
     });
     const lane = await runLane(t, {
-      baseline, candidate, corpus, cwd: runner.dir, allowDirty,
+      baseline,
+      candidate,
+      corpus,
+      cwd: runner.dir,
+      allowDirty,
       extra: ["--baseline-dir", baseline.dir, "--candidate-dir", candidate.dir],
     });
     assert.equal(lane.code, 0, lane.stderr);
@@ -1090,7 +1384,14 @@ test("a worker-only swap without checkout flags cannot produce a release-eligibl
   const candidate = await fakeApp(t, "candidate", {
     swap: { atBlock: 1, served: { "/assets/removal-worker-1.js": "postMessage(99);\n" } },
   });
-  const lane = await runLane(t, { baseline, candidate, corpus, pairs: 2, cwd: baseline.dir, allowDirty: false });
+  const lane = await runLane(t, {
+    baseline,
+    candidate,
+    corpus,
+    pairs: 2,
+    cwd: baseline.dir,
+    allowDirty: false,
+  });
   assert.equal(lane.code, 0, lane.stderr);
   assert.equal(lane.manifest.status, "completed");
   assert.equal(lane.rows.length, 12);
@@ -1100,15 +1401,29 @@ test("a worker-only swap without checkout flags cannot produce a release-eligibl
   for (const variant of ["baseline", "candidate"]) {
     const served = lane.manifest.sources[variant].served;
     assert.equal(served.recheckedAtLaneEnd, true);
-    assert.deepEqual(servedBuildChanges(served, await servedBuild(
-      variant === "baseline" ? baseline.url : candidate.url, { timeoutMs: 5_000 },
-    )), []);
+    assert.deepEqual(
+      servedBuildChanges(
+        served,
+        await servedBuild(variant === "baseline" ? baseline.url : candidate.url, {
+          timeoutMs: 5_000,
+        }),
+      ),
+      [],
+    );
   }
-  await assert.rejects(servedBuild(candidate.url, {
-    checkoutDir: candidate.dir, expectedCommit: candidate.commit, timeoutMs: 5_000,
-  }), /removal-worker-1\.js \(bytes differ\)/);
+  await assert.rejects(
+    servedBuild(candidate.url, {
+      checkoutDir: candidate.dir,
+      expectedCommit: candidate.commit,
+      timeoutMs: 5_000,
+    }),
+    /removal-worker-1\.js \(bytes differ\)/,
+  );
   assert.equal(lane.manifest.sources.releaseEligible, false);
-  assert.deepEqual(lane.manifest.sources.releaseIneligibleReasons, ["baseline-checkout-unverified", "candidate-checkout-unverified"]);
+  assert.deepEqual(lane.manifest.sources.releaseIneligibleReasons, [
+    "baseline-checkout-unverified",
+    "candidate-checkout-unverified",
+  ]);
 });
 
 test("both checkout flags are required for release eligibility (C54)", async (t) => {
@@ -1118,7 +1433,11 @@ test("both checkout flags are required for release eligibility (C54)", async (t)
   for (const verified of ["baseline", "candidate"]) {
     const app = verified === "baseline" ? baseline : candidate;
     const lane = await runLane(t, {
-      baseline, candidate, corpus, cwd: baseline.dir, allowDirty: false,
+      baseline,
+      candidate,
+      corpus,
+      cwd: baseline.dir,
+      allowDirty: false,
       extra: [`--${verified}-dir`, app.dir],
     });
     assert.equal(lane.code, 0, lane.stderr);
@@ -1138,33 +1457,90 @@ test("help documents the checkout flags required for release eligibility (C54)",
 });
 
 // Quality policies authorize a fixture/path from the pinned corpus, never from row claims.
-function qualityPolicyRecord(fixtures, { mode = "maximum", manifestSha256 = sha, baselineCommit = "b".repeat(40), candidateCommit = "c".repeat(40) } = {}) {
-  const policy = { schemaVersion: 1, purpose: "known-alpha-quality-capture", corpusManifestSha256: manifestSha256,
-    baselineCommit, candidateCommit, split: "smoke", mode, requestedProvider: "webgpu",
-    expectations: [{ fixtureId: fixtures[0].id, method: "model", actualProvider: "wasm", route: "primary-processing-then-compatibility" }] };
+function qualityPolicyRecord(
+  fixtures,
+  {
+    mode = "maximum",
+    manifestSha256 = sha,
+    baselineCommit = "b".repeat(40),
+    candidateCommit = "c".repeat(40),
+  } = {},
+) {
+  const policy = {
+    schemaVersion: 1,
+    purpose: "known-alpha-quality-capture",
+    corpusManifestSha256: manifestSha256,
+    baselineCommit,
+    candidateCommit,
+    split: "smoke",
+    mode,
+    requestedProvider: "webgpu",
+    expectations: [
+      {
+        fixtureId: fixtures[0].id,
+        method: "model",
+        actualProvider: "wasm",
+        route: "primary-processing-then-compatibility",
+      },
+    ],
+  };
   const json = JSON.stringify(policy);
   return { json, sha256: hashOf(json) };
 }
 
 function qualityBinding(record, fixtures) {
   const policy = JSON.parse(record.json);
-  return { expectedSha256: record.sha256, manifestSha256: sha, fixtures, split: "smoke", mode: "maximum",
-    requestedProvider: "webgpu", baselineCommit: policy.baselineCommit, candidateCommit: policy.candidateCommit };
+  return {
+    expectedSha256: record.sha256,
+    manifestSha256: sha,
+    fixtures,
+    split: "smoke",
+    mode: "maximum",
+    requestedProvider: "webgpu",
+    baselineCommit: policy.baselineCommit,
+    candidateCommit: policy.candidateCommit,
+  };
 }
 
 function observedRoute() {
-  return { source: "worker-messages-v1", primaryExecutedProvider: null, gpu: { available: true }, jobs: [{ workerUrl: "http://127.0.0.1/assets/removal-worker.js", jobId: 1,
-    fileName: "synthetic.png", mode: "maximum", noWebgpu: false,
-    progress: [{ stage: "cutting", message: "Finding subject" }, { stage: "loading", message: "Switching to compatibility mode" }, { stage: "cutting", message: "Finding subject" }],
-    outcome: { type: "done", method: "model", provider: "wasm", workerHadGpu: true } }] };
+  return {
+    source: "worker-messages-v1",
+    primaryExecutedProvider: null,
+    gpu: { available: true },
+    jobs: [
+      {
+        workerUrl: "http://127.0.0.1/assets/removal-worker.js",
+        jobId: 1,
+        fileName: "synthetic.png",
+        mode: "maximum",
+        noWebgpu: false,
+        progress: [
+          { stage: "cutting", message: "Finding subject" },
+          { stage: "loading", message: "Switching to compatibility mode" },
+          { stage: "cutting", message: "Finding subject" },
+        ],
+        outcome: { type: "done", method: "model", provider: "wasm", workerHadGpu: true },
+      },
+    ],
+  };
 }
 
-const qualityFixtures = [{ id: "synthetic", evaluation: "known-alpha", input: { path: "input/synthetic.png" } }];
+const qualityFixtures = [
+  { id: "synthetic", evaluation: "known-alpha", input: { path: "input/synthetic.png" } },
+];
 
 function qualityRows(record) {
-  return pairRows(0, "synthetic", "synthetic", 10, 11).map((row) => ({ ...row, evaluation: "known-alpha", removalMode: "maximum",
-    requestedProvider: "webgpu", actualProvider: "wasm", capturePurpose: "quality-only", qualityPolicySha256: record.sha256,
-    commit: row.variant === "baseline" ? "b".repeat(40) : "c".repeat(40), routeEvidence: observedRoute() }));
+  return pairRows(0, "synthetic", "synthetic", 10, 11).map((row) => ({
+    ...row,
+    evaluation: "known-alpha",
+    removalMode: "maximum",
+    requestedProvider: "webgpu",
+    actualProvider: "wasm",
+    capturePurpose: "quality-only",
+    qualityPolicySha256: record.sha256,
+    commit: row.variant === "baseline" ? "b".repeat(40) : "c".repeat(40),
+    routeEvidence: observedRoute(),
+  }));
 }
 
 test("explicit pinned quality capture retains a model/WASM compatibility pair without performance eligibility", () => {
@@ -1175,58 +1551,128 @@ test("explicit pinned quality capture retains a model/WASM compatibility pair wi
   assert.throws(() => pairedLatency(rows), /quality-only/);
   for (const row of rows) assert.throws(() => checkRunRow(row), /quality-only/);
   const unmarked = rows.map(({ capturePurpose: _p, qualityPolicySha256: _h, ...row }) => row);
-  assert.throws(() => validateCompletedRuns(unmarked, ["synthetic"], 1), /requested webgpu.*reported wasm/);
+  assert.throws(
+    () => validateCompletedRuns(unmarked, ["synthetic"], 1),
+    /requested webgpu.*reported wasm/,
+  );
   assert.throws(() => pairedLatency(unmarked), /requested webgpu.*reported wasm/);
 });
 
 test("quality authorization rejects real-photo, undeclared, changed binding, malformed policy and row self-authorization", () => {
   const record = qualityPolicyRecord(qualityFixtures);
   const binding = qualityBinding(record, qualityFixtures);
-  for (const patch of [{ expectedSha256: "d".repeat(64) }, { manifestSha256: "d".repeat(64) }, { mode: "auto" },
-    { requestedProvider: "wasm" }, { split: "tune" }, { baselineCommit: "d".repeat(40) }, { candidateCommit: "d".repeat(40) },
-    { fixtures: [{ ...qualityFixtures[0], evaluation: "real-alpha" }] }, { fixtures: [] }]) {
+  for (const patch of [
+    { expectedSha256: "d".repeat(64) },
+    { manifestSha256: "d".repeat(64) },
+    { mode: "auto" },
+    { requestedProvider: "wasm" },
+    { split: "tune" },
+    { baselineCommit: "d".repeat(40) },
+    { candidateCommit: "d".repeat(40) },
+    { fixtures: [{ ...qualityFixtures[0], evaluation: "real-alpha" }] },
+    { fixtures: [] },
+  ]) {
     assert.throws(() => qualityCapturePolicy(record, { ...binding, ...patch }));
   }
-  for (const change of [(p) => p.expectations.push(p.expectations[0]), (p) => p.expectations[0].route = "compat", (p) => p.allowFallback = true]) {
-    const policy = JSON.parse(record.json); change(policy);
-    const json = JSON.stringify(policy), invalid = { json, sha256: hashOf(json) };
-    assert.throws(() => qualityCapturePolicy(invalid, { ...binding, expectedSha256: invalid.sha256 }));
+  for (const change of [
+    (p) => p.expectations.push(p.expectations[0]),
+    (p) => (p.expectations[0].route = "compat"),
+    (p) => (p.allowFallback = true),
+  ]) {
+    const policy = JSON.parse(record.json);
+    change(policy);
+    const json = JSON.stringify(policy),
+      invalid = { json, sha256: hashOf(json) };
+    assert.throws(() =>
+      qualityCapturePolicy(invalid, { ...binding, expectedSha256: invalid.sha256 }),
+    );
   }
   assert.throws(() => qualityCapturePolicy({ ...record, json: record.json + " " }, binding));
   const rows = qualityRows(record);
-  assert.throws(() => validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: record }), /unverified quality/);
+  assert.throws(
+    () => validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: record }),
+    /unverified quality/,
+  );
   const qualityCapture = qualityCapturePolicy(record, binding);
-  for (const patch of [{ fixtureId: "other" }, { evaluation: "real-alpha" }, { removalMode: "auto" }, { method: "illustration" },
-    { actualProvider: "webgpu" }, { requestedProvider: "wasm" }, { qualityPolicySha256: "d".repeat(64) }, { capturePurpose: undefined }])
+  for (const patch of [
+    { fixtureId: "other" },
+    { evaluation: "real-alpha" },
+    { removalMode: "auto" },
+    { method: "illustration" },
+    { actualProvider: "webgpu" },
+    { requestedProvider: "wasm" },
+    { qualityPolicySha256: "d".repeat(64) },
+    { capturePurpose: undefined },
+  ])
     assert.throws(() => checkRunRow({ ...rows[0], ...patch }, undefined, qualityCapture));
 });
 
 test("quality route needs observed ordered primary/compat processing and the matching worker result", () => {
   const record = qualityPolicyRecord(qualityFixtures);
   const context = qualityCapturePolicy(record, qualityBinding(record, qualityFixtures));
-  for (const change of [(r) => r.routeEvidence = undefined, (r) => r.routeEvidence.jobs = [],
-    (r) => r.routeEvidence.jobs[0].progress.splice(0, 1), (r) => r.routeEvidence.jobs[0].progress.pop(),
-    (r) => r.routeEvidence.jobs[0].progress.unshift(r.routeEvidence.jobs[0].progress.splice(1, 1)[0]), (r) => r.routeEvidence.jobs[0].noWebgpu = true,
-    (r) => r.routeEvidence.jobs[0].outcome.workerHadGpu = false, (r) => r.routeEvidence.jobs[0].fileName = "other.png",
-    (r) => r.routeEvidence.jobs[0].mode = "auto", (r) => r.routeEvidence.jobs[0].outcome.provider = "webgpu",
-    (r) => r.routeEvidence.gpu.available = false, (r) => r.routeEvidence.primaryExecutedProvider = "webgpu"]) {
-    const row = qualityRows(record)[0]; change(row);
+  for (const change of [
+    (r) => (r.routeEvidence = undefined),
+    (r) => (r.routeEvidence.jobs = []),
+    (r) => r.routeEvidence.jobs[0].progress.splice(0, 1),
+    (r) => r.routeEvidence.jobs[0].progress.pop(),
+    (r) =>
+      r.routeEvidence.jobs[0].progress.unshift(r.routeEvidence.jobs[0].progress.splice(1, 1)[0]),
+    (r) => (r.routeEvidence.jobs[0].noWebgpu = true),
+    (r) => (r.routeEvidence.jobs[0].outcome.workerHadGpu = false),
+    (r) => (r.routeEvidence.jobs[0].fileName = "other.png"),
+    (r) => (r.routeEvidence.jobs[0].mode = "auto"),
+    (r) => (r.routeEvidence.jobs[0].outcome.provider = "webgpu"),
+    (r) => (r.routeEvidence.gpu.available = false),
+    (r) => (r.routeEvidence.primaryExecutedProvider = "webgpu"),
+  ]) {
+    const row = qualityRows(record)[0];
+    change(row);
     assert.throws(() => checkRunRow(row, undefined, context), /route evidence/);
   }
 });
 
-async function qualityLane(t, { candidateFiles = {}, baselineFiles = {}, pairs = 1, extra = [] } = {}) {
+async function qualityLane(
+  t,
+  { candidateFiles = {}, baselineFiles = {}, pairs = 1, extra = [] } = {},
+) {
   const corpus = await fakeCorpus(t);
   const files = { "photo-a.png": { compat: true, provider: "wasm" } };
-  const baseline = await fakeApp(t, "quality-baseline", { provider: "webgpu", files: { ...files, ...baselineFiles } });
-  const candidate = await fakeApp(t, "quality-candidate", { provider: "webgpu", files: { ...files, ...candidateFiles } });
-  const record = qualityPolicyRecord([{ id: "photo-a" }], { mode: "auto", manifestSha256: hashOf(await readFile(corpus.manifestPath)),
-    baselineCommit: baseline.commit, candidateCommit: candidate.commit });
+  const baseline = await fakeApp(t, "quality-baseline", {
+    provider: "webgpu",
+    files: { ...files, ...baselineFiles },
+  });
+  const candidate = await fakeApp(t, "quality-candidate", {
+    provider: "webgpu",
+    files: { ...files, ...candidateFiles },
+  });
+  const record = qualityPolicyRecord([{ id: "photo-a" }], {
+    mode: "auto",
+    manifestSha256: hashOf(await readFile(corpus.manifestPath)),
+    baselineCommit: baseline.commit,
+    candidateCommit: candidate.commit,
+  });
   const policyPath = join(corpus.dir, "quality-policy.json");
   await writeFile(policyPath, record.json);
-  const lane = await runLane(t, { baseline, candidate, corpus, pairs, cwd: baseline.dir, allowDirty: false, provider: "webgpu",
-    extra: [ "--baseline-dir", baseline.dir, "--candidate-dir", candidate.dir,
-      "--quality-policy", policyPath, "--quality-policy-sha256", record.sha256, ...extra] });
+  const lane = await runLane(t, {
+    baseline,
+    candidate,
+    corpus,
+    pairs,
+    cwd: baseline.dir,
+    allowDirty: false,
+    provider: "webgpu",
+    extra: [
+      "--baseline-dir",
+      baseline.dir,
+      "--candidate-dir",
+      candidate.dir,
+      "--quality-policy",
+      policyPath,
+      "--quality-policy-sha256",
+      record.sha256,
+      ...extra,
+    ],
+  });
   return { ...lane, record, baseline, candidate, corpus, policyPath };
 }
 
@@ -1238,11 +1684,15 @@ test("quality-only CLI/browser/scorer retains a declared compatibility pair and 
   assert.equal(lane.manifest.latency, null);
   assert.equal(lane.manifest.performance.eligible, false);
   assert.equal(lane.manifest.sources.releaseEligible, false);
-  assert.deepEqual(lane.manifest.sources.releaseIneligibleReasons, ["quality-only-no-performance-or-release-eligibility"]);
+  assert.deepEqual(lane.manifest.sources.releaseIneligibleReasons, [
+    "quality-only-no-performance-or-release-eligibility",
+  ]);
   assert.equal(lane.manifest.sources.servedBytesVerified, true);
   for (const variant of ["baseline", "candidate"]) {
     const row = lane.rows.find((row) => row.fixtureId === "photo-a" && row.variant === variant);
-    assert.equal(row.requestedProvider, "webgpu"); assert.equal(row.actualProvider, "wasm"); assert.equal(row.method, "model");
+    assert.equal(row.requestedProvider, "webgpu");
+    assert.equal(row.actualProvider, "wasm");
+    assert.equal(row.method, "model");
     assert.equal(row.routeEvidence.primaryExecutedProvider, null);
     assert.equal(row.routeEvidence.jobs[0].progress.length, 3);
     assert.equal(row.routeEvidence.jobs[0].outcome.provenance, null); // No fabricated baseline provenance.
@@ -1251,17 +1701,35 @@ test("quality-only CLI/browser/scorer retains a declared compatibility pair and 
   const scored = await scoreLane(lane.output, ["--quality-policy-sha256", lane.record.sha256]);
   assert.equal(scored.code, 0, scored.stderr);
   assert.equal(scored.report.identity.identical, 3);
-  assert.equal(scored.report.latency, null); assert.equal(scored.report.performance.eligible, false);
-  const noPin = await run(process.execPath, [qualityScript, "--benchmark", lane.output]).catch((error) => error);
-  assert.equal(noPin.code, 1); assert.match(noPin.stderr, /policy SHA-256/);
-  const differences = await run(process.execPath, [qualityScript, "--benchmark", lane.output, "--quality-policy-sha256", lane.record.sha256, "--allow-output-differences"]).catch((error) => error);
-  assert.equal(differences.code, 1); assert.match(differences.stderr, /strict output identity/);
+  assert.equal(scored.report.latency, null);
+  assert.equal(scored.report.performance.eligible, false);
+  const noPin = await run(process.execPath, [qualityScript, "--benchmark", lane.output]).catch(
+    (error) => error,
+  );
+  assert.equal(noPin.code, 1);
+  assert.match(noPin.stderr, /policy SHA-256/);
+  const differences = await run(process.execPath, [
+    qualityScript,
+    "--benchmark",
+    lane.output,
+    "--quality-policy-sha256",
+    lane.record.sha256,
+    "--allow-output-differences",
+  ]).catch((error) => error);
+  assert.equal(differences.code, 1);
+  assert.match(differences.stderr, /strict output identity/);
 });
 
 test("quality-only capture rejects missing route and wrong method/provider with named saved offending output", async (t) => {
   for (const side of ["baseline", "candidate"]) {
-    for (const patch of [{ missingRoute: true }, { method: "illustration" }, { provider: "webgpu" }]) {
-      const lane = await qualityLane(t, { [`${side}Files`]: { "photo-a.png": { compat: true, provider: "wasm", ...patch } } });
+    for (const patch of [
+      { missingRoute: true },
+      { method: "illustration" },
+      { provider: "webgpu" },
+    ]) {
+      const lane = await qualityLane(t, {
+        [`${side}Files`]: { "photo-a.png": { compat: true, provider: "wasm", ...patch } },
+      });
       assert.equal(lane.code, 1, lane.stdout);
       assert.deepEqual(lane.failure.error.run, { fixtureId: "photo-a", variant: side, pair: 0 });
       const row = lane.failure.error.offendingRow;
@@ -1273,53 +1741,127 @@ test("quality-only capture rejects missing route and wrong method/provider with 
 });
 
 test("quality-only capture keeps undeclared provider flips strict and cross-pair byte changes fatal", async (t) => {
-  const undeclared = await qualityLane(t, { candidateFiles: { "photo-b.png": { compat: true, provider: "wasm" } } });
-  assert.equal(undeclared.code, 1); assert.match(undeclared.stderr, /photo-b candidate pair 0: .*requested webgpu.*reported wasm/);
+  const undeclared = await qualityLane(t, {
+    candidateFiles: { "photo-b.png": { compat: true, provider: "wasm" } },
+  });
+  assert.equal(undeclared.code, 1);
+  assert.match(undeclared.stderr, /photo-b candidate pair 0: .*requested webgpu.*reported wasm/);
   assert.equal(undeclared.rows.length, 4);
-  const changed = await qualityLane(t, { pairs: 2, candidateFiles: { "photo-a.png": { compat: true, provider: "wasm", extraByte: true, extraByteFromBlock: 2 } } });
-  assert.equal(changed.code, 1); assert.match(changed.stderr, /photo-a candidate pair 1: output sha256.*differs from pair 0/);
+  const changed = await qualityLane(t, {
+    pairs: 2,
+    candidateFiles: {
+      "photo-a.png": { compat: true, provider: "wasm", extraByte: true, extraByteFromBlock: 2 },
+    },
+  });
+  assert.equal(changed.code, 1);
+  assert.match(changed.stderr, /photo-a candidate pair 1: output sha256.*differs from pair 0/);
   const row = changed.failure.error.offendingRow;
   assert.equal(hashOf(await readFile(join(changed.output, row.outputPath))), row.outputSha256);
   const waived = await qualityLane(t, { extra: ["--allow-nondeterministic-outputs"] });
-  assert.equal(waived.code, 1); assert.match(waived.stderr, /strict output identity/);
+  assert.equal(waived.code, 1);
+  assert.match(waived.stderr, /strict output identity/);
 });
 
 test("quality-only CLI/browser/scorer preserves PNG and RGBA mismatch failures with actual saved files", async (t) => {
   for (const changePixels of [false, true]) {
     const pixels = Buffer.alloc(4 * 4 * 4);
-    for (let pixel = 0; pixel < 16; pixel += 1) pixels.set([0, 20 * pixel, 255 - 10 * pixel, pixel % 4 === 0 ? 0 : 17 * pixel], pixel * 4);
+    for (let pixel = 0; pixel < 16; pixel += 1)
+      pixels.set([0, 20 * pixel, 255 - 10 * pixel, pixel % 4 === 0 ? 0 : 17 * pixel], pixel * 4);
     if (changePixels) pixels[7] = 255;
-    const bytes = await sharp(pixels, { raw: { width: 4, height: 4, channels: 4 } }).png({ compressionLevel: 0 }).toBuffer();
-    const lane = await qualityLane(t, { candidateFiles: { "photo-a.png": { compat: true, provider: "wasm", outputBase64: bytes.toString("base64") } } });
+    const bytes = await sharp(pixels, { raw: { width: 4, height: 4, channels: 4 } })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    const lane = await qualityLane(t, {
+      candidateFiles: {
+        "photo-a.png": { compat: true, provider: "wasm", outputBase64: bytes.toString("base64") },
+      },
+    });
     assert.equal(lane.code, 0, lane.stderr);
     const scored = await scoreLane(lane.output, ["--quality-policy-sha256", lane.record.sha256]);
-    assert.equal(scored.code, 1); assert.match(scored.stderr, /photo-a.*PNG bytes differ/);
-    assert.deepEqual(scored.report.identity.differing, [{ fixtureId: "photo-a", problems: changePixels ? ["PNG bytes differ", "decoded RGBA differs"] : ["PNG bytes differ"] }]);
-    assert.equal(hashOf(await readFile(join(lane.output, "outputs/candidate/photo-a.png"))), hashOf(bytes));
+    assert.equal(scored.code, 1);
+    assert.match(scored.stderr, /photo-a.*PNG bytes differ/);
+    assert.deepEqual(scored.report.identity.differing, [
+      {
+        fixtureId: "photo-a",
+        problems: changePixels
+          ? ["PNG bytes differ", "decoded RGBA differs"]
+          : ["PNG bytes differ"],
+      },
+    ]);
+    assert.equal(
+      hashOf(await readFile(join(lane.output, "outputs/candidate/photo-a.png"))),
+      hashOf(bytes),
+    );
   }
 });
 
 test("the declared quality path supports each removal mode without accepting another mode", () => {
   for (const mode of ["quick", "auto", "maximum"]) {
     const record = qualityPolicyRecord(qualityFixtures, { mode });
-    const context = qualityCapturePolicy(record, { ...qualityBinding(record, qualityFixtures), mode });
+    const context = qualityCapturePolicy(record, {
+      ...qualityBinding(record, qualityFixtures),
+      mode,
+    });
     const rows = qualityRows(record);
-    for (const row of rows) { row.removalMode = mode; row.routeEvidence.jobs[0].mode = mode; }
-    assert.doesNotThrow(() => validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: context }));
+    for (const row of rows) {
+      row.removalMode = mode;
+      row.routeEvidence.jobs[0].mode = mode;
+    }
+    assert.doesNotThrow(() =>
+      validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: context }),
+    );
     rows[0].removalMode = mode === "auto" ? "quick" : "auto";
-    assert.throws(() => validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: context }), /corpus\/lane identity/);
+    assert.throws(
+      () => validateCompletedRuns(rows, ["synthetic"], 1, { qualityCapture: context }),
+      /corpus\/lane identity/,
+    );
   }
 });
 
 test("quality-only authorization keeps real-photo provider failures and completeness/uniqueness/hash checks strict", () => {
-  const fixtures = [...qualityFixtures, { id: "real-photo", evaluation: "real-alpha", input: { path: "input/real.png" } }];
+  const fixtures = [
+    ...qualityFixtures,
+    { id: "real-photo", evaluation: "real-alpha", input: { path: "input/real.png" } },
+  ];
   const record = qualityPolicyRecord(fixtures);
   const context = qualityCapturePolicy(record, qualityBinding(record, fixtures));
   const rows = qualityRows(record);
-  assert.throws(() => checkRunRow({ ...rows[0], fixtureId: "real-photo", evaluation: "real-alpha" }, undefined, context), /requested webgpu.*reported wasm/);
+  assert.throws(
+    () =>
+      checkRunRow(
+        { ...rows[0], fixtureId: "real-photo", evaluation: "real-alpha" },
+        undefined,
+        context,
+      ),
+    /requested webgpu.*reported wasm/,
+  );
   const options = { qualityCapture: context };
-  assert.throws(() => validateCompletedRuns(rows.slice(0, 1), ["synthetic"], 1, options), /missing candidate/);
-  assert.throws(() => validateCompletedRuns([...rows, rows[0]], ["synthetic"], 1, options), /duplicate run/);
-  assert.throws(() => validateCompletedRuns([{ ...rows[0], outputSha256: undefined }, rows[1]], ["synthetic"], 1, options), /no outputSha256/);
-  assert.throws(() => validateCompletedRuns([{ ...rows[0], commit: "d".repeat(40) }, rows[1]], ["synthetic"], 1, options), /source commit/);
+  assert.throws(
+    () => validateCompletedRuns(rows.slice(0, 1), ["synthetic"], 1, options),
+    /missing candidate/,
+  );
+  assert.throws(
+    () => validateCompletedRuns([...rows, rows[0]], ["synthetic"], 1, options),
+    /duplicate run/,
+  );
+  assert.throws(
+    () =>
+      validateCompletedRuns(
+        [{ ...rows[0], outputSha256: undefined }, rows[1]],
+        ["synthetic"],
+        1,
+        options,
+      ),
+    /no outputSha256/,
+  );
+  assert.throws(
+    () =>
+      validateCompletedRuns(
+        [{ ...rows[0], commit: "d".repeat(40) }, rows[1]],
+        ["synthetic"],
+        1,
+        options,
+      ),
+    /source commit/,
+  );
 });

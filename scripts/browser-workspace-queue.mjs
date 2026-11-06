@@ -1,6 +1,9 @@
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
-const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(/\/$/, "");
+const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(
+  /\/$/,
+  "",
+);
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -37,8 +40,12 @@ test("new removal publishes its own progress when the previous throttle clock is
     const upload = async (name) => {
       const chooser = page.waitForEvent("filechooser");
       await page.getByRole("button", { name: "Choose files", exact: true }).click();
-      await (await chooser).setFiles({
-        name, mimeType: "image/png", buffer: Buffer.from(image, "base64"),
+      await (
+        await chooser
+      ).setFiles({
+        name,
+        mimeType: "image/png",
+        buffer: Buffer.from(image, "base64"),
       });
       await page.waitForFunction((name) => {
         const item = window.__cutoutTest?.useWorkspace?.getState().items[0];
@@ -49,7 +56,8 @@ test("new removal publishes its own progress when the previous throttle clock is
     await page.evaluate(() => {
       window.progressEvents = [];
       window.__cutoutTest?.useWorkspace.subscribe((state, previous) => {
-        if (state.progress !== previous.progress) window.progressEvents.push(state.progress.message);
+        if (state.progress !== previous.progress)
+          window.progressEvents.push(state.progress.message);
       });
       window.__cutoutTest?.useWorkspace.getState().reset();
     });
@@ -100,7 +108,9 @@ async function queueOnePhoto({ adapter, config }) {
     });
     const chooser = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: "Choose files", exact: true }).click();
-    await (await chooser).setFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(photo, "base64") });
+    await (
+      await chooser
+    ).setFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(photo, "base64") });
     await page.waitForFunction(() => window.__cutoutTest?.useWorkspace);
     await page.evaluate(() => {
       const store = window.__cutoutTest.useWorkspace;
@@ -112,7 +122,8 @@ async function queueOnePhoto({ adapter, config }) {
     });
     const settled = await page
       .waitForFunction(
-        () => ["done", "error"].includes(window.__cutoutTest.useWorkspace.getState().items[0]?.status),
+        () =>
+          ["done", "error"].includes(window.__cutoutTest.useWorkspace.getState().items[0]?.status),
         null,
         { timeout: 15_000 },
       )
@@ -133,11 +144,14 @@ async function queueOnePhoto({ adapter, config }) {
     await page.waitForTimeout(1500);
     const later = await count();
     const item = await page.evaluate(() => {
-      const { status, error, retryable, provider } = window.__cutoutTest.useWorkspace.getState().items[0];
+      const { status, error, retryable, provider } =
+        window.__cutoutTest.useWorkspace.getState().items[0];
       return { status, error, retryable, provider, statuses: window.statuses };
     });
     // The first queued state belongs to ingest; only a return after working is a requeue.
-    const requeues = item.statuses.slice(item.statuses.indexOf("working") + 1).filter((status) => status === "queued").length;
+    const requeues = item.statuses
+      .slice(item.statuses.indexOf("working") + 1)
+      .filter((status) => status === "queued").length;
     return { settled, first, later, item, requeues };
   } finally {
     await browser.close();
@@ -184,9 +198,16 @@ for (const mixed of [false, true]) {
     try {
       const context = await browser.newContext();
       if (mixed) {
-        const config = { load: `(call) => { if (call.kind === "model") throw new Error("Failed to fetch"); }` };
-        await installFake(context, { deviceMemory: 8, adapter: false, page: config, worker: config,
-          workerEnv: { deviceMemory: 8, adapter: false } });
+        const config = {
+          load: `(call) => { if (call.kind === "model") throw new Error("Failed to fetch"); }`,
+        };
+        await installFake(context, {
+          deviceMemory: 8,
+          adapter: false,
+          page: config,
+          worker: config,
+          workerEnv: { deviceMemory: 8, adapter: false },
+        });
       }
       const page = await context.newPage();
       await page.goto(verifiedAppUrl);
@@ -209,17 +230,22 @@ for (const mixed of [false, true]) {
       });
       const chooser = page.waitForEvent("filechooser");
       await page.getByRole("button", { name: "Choose files", exact: true }).click();
-      await (await chooser).setFiles(Array.from({ length: mixed ? 2 : 20 }, (_, i) => ({
-        name: `notice-${i}.png`, mimeType: "image/png",
-        buffer: Buffer.from(mixed && i === 0 ? pngs.photo : pngs.graphic, "base64"),
-      })));
+      await (
+        await chooser
+      ).setFiles(
+        Array.from({ length: mixed ? 2 : 20 }, (_, i) => ({
+          name: `notice-${i}.png`,
+          mimeType: "image/png",
+          buffer: Buffer.from(mixed && i === 0 ? pngs.photo : pngs.graphic, "base64"),
+        })),
+      );
       await page.waitForFunction(() => {
         const s = window.__cutoutTest?.useWorkspace.getState();
-        return s?.phase === "result" && s.items.every(i => ["done", "error"].includes(i.status));
+        return s?.phase === "result" && s.items.every((i) => ["done", "error"].includes(i.status));
       });
       const state = await page.evaluate(() => {
         const s = window.__cutoutTest.useWorkspace.getState();
-        return { notice: s.errorMessage, statuses: s.items.map(i => i.status) };
+        return { notice: s.errorMessage, statuses: s.items.map((i) => i.status) };
       });
       if (mixed) {
         assert.deepEqual(state.statuses, ["error", "done"]);
@@ -231,31 +257,71 @@ for (const mixed of [false, true]) {
       await page.getByRole("alert").getByText(state.notice, { exact: true }).waitFor();
       await page.getByRole("button", { name: "Dismiss", exact: true }).click();
       assert.equal(await page.getByRole("alert").count(), 0);
-      assert.equal(await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().errorMessage), null);
+      assert.equal(
+        await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().errorMessage),
+        null,
+      );
     } finally {
       await browser.close();
     }
   });
 }
 
-
 test("F-E07-01: the benchmark runner accepts replacement and completes two fixtures", async () => {
   const directory = await mkdtemp(join(tmpdir(), "cutout-ux-benchmark-"));
   try {
     const inputPath = join(directory, "graphic.png");
-    await writeFile(inputPath, await sharp({ create: { width: 96, height: 96, channels: 4, background: "white" } })
-      .composite([{ input: await sharp({ create: { width: 48, height: 48, channels: 4, background: "black" } }).png().toBuffer(), left: 24, top: 24 }])
-      .png().toBuffer());
-    const fixtures = ["first", "second"].map(id => ({ id, category: "synthetic-boundary", evaluation: "known-alpha", inputPath, input: { path: inputPath } }));
+    await writeFile(
+      inputPath,
+      await sharp({ create: { width: 96, height: 96, channels: 4, background: "white" } })
+        .composite([
+          {
+            input: await sharp({
+              create: { width: 48, height: 48, channels: 4, background: "black" },
+            })
+              .png()
+              .toBuffer(),
+            left: 24,
+            top: 24,
+          },
+        ])
+        .png()
+        .toBuffer(),
+    );
+    const fixtures = ["first", "second"].map((id) => ({
+      id,
+      category: "synthetic-boundary",
+      evaluation: "known-alpha",
+      inputPath,
+      input: { path: inputPath },
+    }));
     const { rows } = await runVariantBlock({
-      url: verifiedAppUrl, profileDirectory: join(directory, "profile"),
-      outputDirectory: directory, requestedProvider: "wasm", mode: "auto", fixtures,
-      variant: "candidate", pair: 0, order: 0, warmups: 0, timeoutMs: 15_000,
-      saveOutputs: false, signal: new AbortController().signal,
+      url: verifiedAppUrl,
+      profileDirectory: join(directory, "profile"),
+      outputDirectory: directory,
+      requestedProvider: "wasm",
+      mode: "auto",
+      fixtures,
+      variant: "candidate",
+      pair: 0,
+      order: 0,
+      warmups: 0,
+      timeoutMs: 15_000,
+      saveOutputs: false,
+      signal: new AbortController().signal,
     });
-    assert.deepEqual(rows.map(row => [row.fixtureId, row.status]), [["first", "completed"], ["second", "completed"]]);
+    assert.deepEqual(
+      rows.map((row) => [row.fixtureId, row.status]),
+      [
+        ["first", "completed"],
+        ["second", "completed"],
+      ],
+    );
     assert.equal(rows[0].outputSha256, rows[1].outputSha256);
-    assert.ok(rows.every(row => row.method === "logo"), "the regression uses graphics without loading models");
+    assert.ok(
+      rows.every((row) => row.method === "logo"),
+      "the regression uses graphics without loading models",
+    );
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

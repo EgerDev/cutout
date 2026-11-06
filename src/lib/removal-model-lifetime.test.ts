@@ -16,12 +16,19 @@ function callableModel(dispose: () => void | Promise<void>): unknown {
 
 async function flushCleanup(): Promise<void> {
   for (let i = 0; i < 60; i += 1) await Promise.resolve();
-  await new Promise<void>((resolve) => { setImmediate(resolve); });
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
 }
 
 function hold<T>(): { promise: Promise<T>; resolve(value: T): void } {
   let resolve!: (value: T) => void;
-  return { promise: new Promise<T>((settle) => { resolve = settle; }), resolve };
+  return {
+    promise: new Promise<T>((settle) => {
+      resolve = settle;
+    }),
+    resolve,
+  };
 }
 
 async function expectTensorCleanupFailure(options: {
@@ -38,7 +45,9 @@ async function expectTensorCleanupFailure(options: {
   const returned = {
     data,
     dims: options.dims,
-    sigmoid() { return this; },
+    sigmoid() {
+      return this;
+    },
     dispose() {
       disposals += 1;
       throw new Error("returned tensor dispose failed");
@@ -46,7 +55,9 @@ async function expectTensorCleanupFailure(options: {
   };
   const pool = createRemovalEnginePool({
     async loadProcessor() {
-      return options.stage === "processor" ? async () => ({ pixel_values: returned }) : async () => ({});
+      return options.stage === "processor"
+        ? async () => ({ pixel_values: returned })
+        : async () => ({});
     },
     async loadModel() {
       return options.stage === "model"
@@ -57,18 +68,23 @@ async function expectTensorCleanupFailure(options: {
   const request = { model: "birefnet", provider: options.provider, context: "worker" } as const;
 
   await assert.rejects(
-    pool.use(request, {}, async (engine) => options.stage === "processor"
-      ? engine.processor({})
-      : engine.model({ input_image: {} })),
+    pool.use(request, {}, async (engine) =>
+      options.stage === "processor" ? engine.processor({}) : engine.model({ input_image: {} }),
+    ),
     (error) => {
-      if (!(error instanceof RemovalModelOutputError) || error.failureKind !== options.failureKind) return false;
-      if (error.message !== options.message || !(error.cause instanceof AggregateError)) return false;
+      if (!(error instanceof RemovalModelOutputError) || error.failureKind !== options.failureKind)
+        return false;
+      if (error.message !== options.message || !(error.cause instanceof AggregateError))
+        return false;
       const source = error.cause.cause;
       const cleanup = error.cause.errors[1];
-      return source instanceof RemovalModelOutputError &&
+      return (
+        source instanceof RemovalModelOutputError &&
         error.cause.errors[0] === source &&
         source.message === options.message &&
-        cleanup instanceof Error && cleanup.message === "returned tensor dispose failed";
+        cleanup instanceof Error &&
+        cleanup.message === "returned tensor dispose failed"
+      );
     },
   );
   assert.equal(disposals, 1);
@@ -118,7 +134,10 @@ test("an aborted subscriber detaches from a never-settling shared load", async (
   controller.abort();
 
   // Then: it rejects locally and retains no abort listener.
-  await assert.rejects(waiting, (error) => error instanceof DOMException && error.name === "AbortError");
+  await assert.rejects(
+    waiting,
+    (error) => error instanceof DOMException && error.name === "AbortError",
+  );
   assert.equal(getEventListeners(controller.signal, "abort").length, 0);
 });
 
@@ -169,11 +188,15 @@ test("partial cleanup failure retains both the source cause and cleanup error", 
   });
 
   // When/Then: classification follows the source while the aggregate retains cleanup detail.
-  await assert.rejects(pool.use(REQUEST, {}, async () => null), (error) => {
-    if (!(error instanceof RemovalModelLoadError) || error.failureKind !== "network") return false;
-    if (!(error.cause instanceof AggregateError)) return false;
-    return error.cause.cause instanceof TypeError && error.cause.errors.length === 2;
-  });
+  await assert.rejects(
+    pool.use(REQUEST, {}, async () => null),
+    (error) => {
+      if (!(error instanceof RemovalModelLoadError) || error.failureKind !== "network")
+        return false;
+      if (!(error.cause instanceof AggregateError)) return false;
+      return error.cause.cause instanceof TypeError && error.cause.errors.length === 2;
+    },
+  );
 });
 
 test("a returned processor is disposed when its sibling model load rejects", async () => {
@@ -181,7 +204,11 @@ test("a returned processor is disposed when its sibling model load rejects", asy
   let processorDisposals = 0;
   const pool = createRemovalEnginePool({
     async loadProcessor() {
-      return Object.assign(async () => ({}), { async dispose() { processorDisposals += 1; } });
+      return Object.assign(async () => ({}), {
+        async dispose() {
+          processorDisposals += 1;
+        },
+      });
     },
     async loadModel() {
       throw new Error("model load failed");
@@ -189,7 +216,10 @@ test("a returned processor is disposed when its sibling model load rejects", asy
   });
 
   // When/Then: the partial processor resource is released exactly once.
-  await assert.rejects(pool.use(REQUEST, {}, async () => null), /model load failed/);
+  await assert.rejects(
+    pool.use(REQUEST, {}, async () => null),
+    /model load failed/,
+  );
   assert.equal(processorDisposals, 1);
 });
 
@@ -199,15 +229,26 @@ test("bridge validation failure disposes every returned disposable resource", as
   let modelDisposals = 0;
   const pool = createRemovalEnginePool({
     async loadProcessor() {
-      return { async dispose() { processorDisposals += 1; } };
+      return {
+        async dispose() {
+          processorDisposals += 1;
+        },
+      };
     },
     async loadModel() {
-      return { async dispose() { modelDisposals += 1; } };
+      return {
+        async dispose() {
+          modelDisposals += 1;
+        },
+      };
     },
   });
 
   // When/Then: rejected bridge construction releases both resources once.
-  await assert.rejects(pool.use(REQUEST, {}, async () => null), /non-callable removal model or processor/);
+  await assert.rejects(
+    pool.use(REQUEST, {}, async () => null),
+    /non-callable removal model or processor/,
+  );
   assert.equal(processorDisposals, 1);
   assert.equal(modelDisposals, 1);
 });
@@ -218,10 +259,16 @@ test("successful engine retirement disposes processor and model exactly once", a
   let modelDisposals = 0;
   const pool = createRemovalEnginePool({
     async loadProcessor() {
-      return Object.assign(async () => ({}), { async dispose() { processorDisposals += 1; } });
+      return Object.assign(async () => ({}), {
+        async dispose() {
+          processorDisposals += 1;
+        },
+      });
     },
     async loadModel() {
-      return callableModel(async () => { modelDisposals += 1; });
+      return callableModel(async () => {
+        modelDisposals += 1;
+      });
     },
   });
   await pool.use(REQUEST, {}, async () => "ready");
@@ -240,7 +287,9 @@ test("processor cleanup failure preserves the sibling model-load cause", async (
   const pool = createRemovalEnginePool({
     async loadProcessor() {
       return Object.assign(async () => ({}), {
-        async dispose() { throw new Error("processor dispose failed"); },
+        async dispose() {
+          throw new Error("processor dispose failed");
+        },
       });
     },
     async loadModel() {
@@ -249,11 +298,15 @@ test("processor cleanup failure preserves the sibling model-load cause", async (
   });
 
   // When/Then: classification follows the source and the aggregate retains both errors.
-  await assert.rejects(pool.use(REQUEST, {}, async () => null), (error) => {
-    if (!(error instanceof RemovalModelLoadError) || error.failureKind !== "network") return false;
-    if (!(error.cause instanceof AggregateError)) return false;
-    return error.cause.cause instanceof TypeError && error.cause.errors.length === 2;
-  });
+  await assert.rejects(
+    pool.use(REQUEST, {}, async () => null),
+    (error) => {
+      if (!(error instanceof RemovalModelLoadError) || error.failureKind !== "network")
+        return false;
+      if (!(error.cause instanceof AggregateError)) return false;
+      return error.cause.cause instanceof TypeError && error.cause.errors.length === 2;
+    },
+  );
 });
 
 test("malformed processor output remains non-persistent when tensor cleanup throws", async () => {
@@ -304,43 +357,75 @@ test("C13: asymmetric dual load failures retain both causes and the model fetch 
   const processor = new SyntaxError("preprocessor_config.json: unexpected token");
   const model = new TypeError("Failed to fetch");
   const pool = createRemovalEnginePool({
-    async loadProcessor() { throw processor; },
-    async loadModel() { throw model; },
+    async loadProcessor() {
+      throw processor;
+    },
+    async loadModel() {
+      throw model;
+    },
   });
-  await assert.rejects(pool.use(REQUEST, {}, () => null), (error) => {
-    assert.ok(error instanceof RemovalModelLoadError);
-    assert.equal(error.failureKind, "network");
-    assert.ok(error.cause instanceof AggregateError);
-    assert.deepEqual(error.cause.errors, [processor, model]);
-    assert.equal(error.cause.cause, model);
-    return true;
-  });
+  await assert.rejects(
+    pool.use(REQUEST, {}, () => null),
+    (error) => {
+      assert.ok(error instanceof RemovalModelLoadError);
+      assert.equal(error.failureKind, "network");
+      assert.ok(error.cause instanceof AggregateError);
+      assert.deepEqual(error.cause.errors, [processor, model]);
+      assert.equal(error.cause.cause, model);
+      return true;
+    },
+  );
 });
 
-for (const variant of ["getter", "uint16"] as const) test(`C15: ${variant} output is a typed mask fault and is disposed`, async () => {
-  let disposed = 0;
-  const candidate = {
-    dims: [1, 1, 512, 512],
-    get data() { if (variant === "getter") throw new Error("Tensor data is not on CPU"); return new Uint16Array(512 * 512); },
-    dispose() { disposed++; },
-    sigmoid() { return this; },
-  };
-  // Use the same real preparation function as the pool, to inject a model tensor accessor.
-  const { prepareRemovalEngine } = await import("./removal-prepared-engine.ts");
-  const { REMOVAL_MODELS } = await import("./removal-model.ts");
-  const engine = prepareRemovalEngine({ request: REQUEST, spec: REMOVAL_MODELS.birefnet,
-    route: REMOVAL_MODELS.birefnet.routes.webgpu,
-    processorValue: async () => ({}), modelValue: Object.assign(async () => ({ output_image: candidate }), { dispose() {} }),
+for (const variant of ["getter", "uint16"] as const)
+  test(`C15: ${variant} output is a typed mask fault and is disposed`, async () => {
+    let disposed = 0;
+    const candidate = {
+      dims: [1, 1, 512, 512],
+      get data() {
+        if (variant === "getter") throw new Error("Tensor data is not on CPU");
+        return new Uint16Array(512 * 512);
+      },
+      dispose() {
+        disposed++;
+      },
+      sigmoid() {
+        return this;
+      },
+    };
+    // Use the same real preparation function as the pool, to inject a model tensor accessor.
+    const { prepareRemovalEngine } = await import("./removal-prepared-engine.ts");
+    const { REMOVAL_MODELS } = await import("./removal-model.ts");
+    const engine = prepareRemovalEngine({
+      request: REQUEST,
+      spec: REMOVAL_MODELS.birefnet,
+      route: REMOVAL_MODELS.birefnet.routes.webgpu,
+      processorValue: async () => ({}),
+      modelValue: Object.assign(async () => ({ output_image: candidate }), { dispose() {} }),
+    });
+    await assert.rejects(
+      engine.model({ input_image: {} }),
+      (error) => error instanceof RemovalModelOutputError && error.failureKind === "gpu-mask",
+    );
+    assert.equal(disposed, 1);
   });
-  await assert.rejects(engine.model({ input_image: {} }), (error) => error instanceof RemovalModelOutputError && error.failureKind === "gpu-mask");
-  assert.equal(disposed, 1);
-});
 
 test("C17: pool retirement retries a transient teardown failure without redisposing a successful sibling", async () => {
-  let proc = 0, model = 0;
+  let proc = 0,
+    model = 0;
   const pool = createRemovalEnginePool({
-    async loadProcessor() { return Object.assign(async () => ({}), { dispose() { proc++; } }); },
-    async loadModel() { return callableModel(() => { if (++model === 1) throw new Error("transient teardown"); }); },
+    async loadProcessor() {
+      return Object.assign(async () => ({}), {
+        dispose() {
+          proc++;
+        },
+      });
+    },
+    async loadModel() {
+      return callableModel(() => {
+        if (++model === 1) throw new Error("transient teardown");
+      });
+    },
   });
   await pool.use(REQUEST, {}, () => null);
   await pool.releaseIdle(REQUEST);
@@ -351,10 +436,19 @@ test("C17: pool retirement retries a transient teardown failure without redispos
 
 test("C17: a cancelled pending load that resolves late retries failed teardown once", async () => {
   const gate = hold<unknown>();
-  let proc = 0, model = 0;
+  let proc = 0,
+    model = 0;
   const pool = createRemovalEnginePool({
-    async loadProcessor() { return Object.assign(async () => ({}), { dispose() { proc++; } }); },
-    async loadModel() { return gate.promise; },
+    async loadProcessor() {
+      return Object.assign(async () => ({}), {
+        dispose() {
+          proc++;
+        },
+      });
+    },
+    async loadModel() {
+      return gate.promise;
+    },
   });
   const controller = new AbortController();
   const pending = assert.rejects(
@@ -363,9 +457,15 @@ test("C17: a cancelled pending load that resolves late retries failed teardown o
   );
   controller.abort();
   await pending;
-  const deadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("retirement awaited an abandoned load")), 50).unref());
+  const deadline = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("retirement awaited an abandoned load")), 50).unref(),
+  );
   await Promise.race([pool.releaseAllIdle(), deadline]);
-  gate.resolve(callableModel(() => { if (++model === 1) throw new Error("late transient"); }));
+  gate.resolve(
+    callableModel(() => {
+      if (++model === 1) throw new Error("late transient");
+    }),
+  );
   await flushCleanup();
   await pool.releaseAllIdle();
   await flushCleanup();
@@ -376,10 +476,19 @@ test("C17: a cancelled pending load that resolves late retries failed teardown o
 
 test("C17: late persistent teardown stays bounded and records both failures", async () => {
   const gate = hold<unknown>();
-  let proc = 0, model = 0;
+  let proc = 0,
+    model = 0;
   const pool = createRemovalEnginePool({
-    async loadProcessor() { return Object.assign(async () => ({}), { dispose() { proc++; } }); },
-    async loadModel() { return gate.promise; },
+    async loadProcessor() {
+      return Object.assign(async () => ({}), {
+        dispose() {
+          proc++;
+        },
+      });
+    },
+    async loadModel() {
+      return gate.promise;
+    },
   });
   const controller = new AbortController();
   const pending = assert.rejects(
@@ -387,27 +496,49 @@ test("C17: late persistent teardown stays bounded and records both failures", as
   );
   controller.abort();
   await pending;
-  gate.resolve(callableModel(() => { model++; throw new Error("late persistent"); }));
+  gate.resolve(
+    callableModel(() => {
+      model++;
+      throw new Error("late persistent");
+    }),
+  );
   await flushCleanup();
   await pool.releaseAllIdle();
   await flushCleanup();
   assert.deepEqual([proc, model], [1, 2]);
   assert.equal(pool.cleanupErrors().length, 2);
-  for (const error of pool.cleanupErrors()) assert.equal((error as Error).message, "late persistent");
+  for (const error of pool.cleanupErrors())
+    assert.equal((error as Error).message, "late persistent");
 });
 
 test("C17: timeout completion retries failed teardown once without redisposing a sibling", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const gate = hold<unknown>();
-  let proc = 0, model = 0;
+  let proc = 0,
+    model = 0;
   const pool = createRemovalEnginePool({
-    async loadProcessor() { return Object.assign(async () => ({}), { dispose() { proc++; } }); },
-    async loadModel() { return gate.promise; },
+    async loadProcessor() {
+      return Object.assign(async () => ({}), {
+        dispose() {
+          proc++;
+        },
+      });
+    },
+    async loadModel() {
+      return gate.promise;
+    },
   });
-  const waiting = assert.rejects(pool.use(REQUEST, {}, () => "unused"), { code: "model-load-timeout", failureKind: "network" });
+  const waiting = assert.rejects(
+    pool.use(REQUEST, {}, () => "unused"),
+    { code: "model-load-timeout", failureKind: "network" },
+  );
   t.mock.timers.tick(60_000);
   await waiting;
-  gate.resolve(callableModel(() => { if (++model === 1) throw new Error("timeout transient"); }));
+  gate.resolve(
+    callableModel(() => {
+      if (++model === 1) throw new Error("timeout transient");
+    }),
+  );
   await flushCleanup();
   await pool.releaseAllIdle();
   await flushCleanup();
@@ -418,13 +549,26 @@ test("C17: timeout completion retries failed teardown once without redisposing a
 
 test("C17: late completion after a fatal realm skips teardown", async () => {
   let lose!: (value: unknown) => void;
-  const lost = new Promise<unknown>((resolve) => { lose = resolve; });
+  const lost = new Promise<unknown>((resolve) => {
+    lose = resolve;
+  });
   const gate = hold<unknown>();
-  let proc = 0, model = 0;
+  let proc = 0,
+    model = 0;
   const pool = createRemovalEnginePool({
-    async loadProcessor() { return Object.assign(async () => ({}), { dispose() { proc++; } }); },
-    async loadModel() { return gate.promise; },
-    async gpuDevice() { return { lost }; },
+    async loadProcessor() {
+      return Object.assign(async () => ({}), {
+        dispose() {
+          proc++;
+        },
+      });
+    },
+    async loadModel() {
+      return gate.promise;
+    },
+    async gpuDevice() {
+      return { lost };
+    },
   });
   const controller = new AbortController();
   const pending = assert.rejects(
@@ -435,7 +579,11 @@ test("C17: late completion after a fatal realm skips teardown", async () => {
   await pending;
   lose({ reason: "unknown" });
   await flushCleanup();
-  gate.resolve(callableModel(() => { model++; }));
+  gate.resolve(
+    callableModel(() => {
+      model++;
+    }),
+  );
   await flushCleanup();
   await pool.releaseAllIdle();
   assert.deepEqual([proc, model], [0, 0]);

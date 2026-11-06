@@ -80,9 +80,13 @@ test("prepareModel checks abort after a lazy backend import", async () => {
   const calls: unknown[] = [];
   (globalThis as { __prepareCalls?: unknown }).__prepareCalls = calls;
   const controller = new AbortController();
-  const pending = prepareModel("swin2sr-x2", (fraction) => {
-    assert.notEqual(fraction, 1, "cancelled prepare must not report final progress");
-  }, { signal: controller.signal, timeoutMs: 1_000 });
+  const pending = prepareModel(
+    "swin2sr-x2",
+    (fraction) => {
+      assert.notEqual(fraction, 1, "cancelled prepare must not report final progress");
+    },
+    { signal: controller.signal, timeoutMs: 1_000 },
+  );
   controller.abort();
   await assert.rejects(pending, { name: "AbortError" });
   assert.deepEqual(calls, []);
@@ -96,9 +100,13 @@ test("prepareModel forwards signal and a remaining budget to each backend", asyn
   const ids: ModelId[] = ["birefnet", "swin2sr-x2", "swin2sr-x4", "depth"];
   const progress: Partial<Record<ModelId, number>> = {};
   for (const id of ids) {
-    await prepareModel(id, (fraction) => {
-      progress[id] = fraction;
-    }, { signal: controller.signal, timeoutMs: 1_000 });
+    await prepareModel(
+      id,
+      (fraction) => {
+        progress[id] = fraction;
+      },
+      { signal: controller.signal, timeoutMs: 1_000 },
+    );
   }
   assert.deepEqual(
     calls.map((call) => call.id),

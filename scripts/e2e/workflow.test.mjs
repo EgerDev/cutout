@@ -6,7 +6,10 @@ import { launchChrome } from "../chrome.mjs";
 import { cutoutOrSkip } from "../require-server.mjs";
 
 async function main(t) {
-  const appUrl = await cutoutOrSkip(t, appCandidates("http://127.0.0.1:8081/", "http://127.0.0.1:8080/"));
+  const appUrl = await cutoutOrSkip(
+    t,
+    appCandidates("http://127.0.0.1:8081/", "http://127.0.0.1:8080/"),
+  );
   if (!appUrl) return;
 
   console.log("Starting End-to-End Workflow Verification with Playwright...");
@@ -58,7 +61,8 @@ async function main(t) {
     () =>
       window.__cutoutTest.useWorkspace
         .getState()
-        .items.find((i) => i.id === window.__cutoutTest.useWorkspace.getState().activeId)?.status === "done",
+        .items.find((i) => i.id === window.__cutoutTest.useWorkspace.getState().activeId)
+        ?.status === "done",
     undefined,
     { timeout: 60000 },
   );
@@ -132,7 +136,6 @@ async function main(t) {
   console.log("Replacement image processed successfully!");
 
   console.log("All E2E checks passed without fatal failures!");
-
 }
 
 // A missing server is reported as skipped (failed under CUTOUT_REQUIRE_E2E), not as a pass.

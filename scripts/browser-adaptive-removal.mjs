@@ -292,102 +292,106 @@ test("ink the 96 px probe blurs is keyed on its own pixels, without a model", as
   }, fakeBoundary));
 
 test("a shaded grayscale subject the probe looks at twice still uses model removal", async () =>
-  withPage(async (page) => {
-    // Given a lit, grainy grayscale sphere on white: achromatic and on a clean field, so the probe
-    // asks for a second look, but continuously shaded at any resolution.
-    const result = await page.evaluate(async (base) => {
-      const { removeBackgroundLocal } = await import(`${base}/src/lib/engine.ts`);
-      const { blurredInk } = await import(`${base}/src/lib/graphics.ts`);
-      const { resizeBitmap } = await import(`${base}/src/lib/bitmap-resize.ts`);
-      const size = 200;
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      const image = ctx.createImageData(size, size);
-      for (let y = 0; y < size; y += 1)
-        for (let x = 0; x < size; x += 1) {
-          const i = (y * size + x) * 4;
-          const nx = (x + 0.5 - 100) / 64;
-          const ny = (y + 0.5 - 100) / 64;
-          const d = nx * nx + ny * ny;
-          const grain = ((x * 7919 + y * 104729) % 9) - 4;
-          const lit =
-            35 + 200 * Math.max(0, -0.45 * nx - 0.35 * ny + 0.82 * Math.sqrt(Math.max(0, 1 - d)));
-          const v = d < 1 ? Math.round(lit + grain) : 255;
-          image.data.set([v, v, v, 255], i);
-        }
-      ctx.putImageData(image, 0, 0);
-      const source = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      const small = await resizeBitmap(source, 96, 96, "low");
-      const probe = document.createElement("canvas");
-      probe.width = probe.height = 96;
-      probe.getContext("2d").drawImage(small, 0, 0);
-      small.close();
-      const pixels = probe.getContext("2d").getImageData(0, 0, 96, 96).data;
-      const probeBlurred = blurredInk(pixels, 96, 96);
-      // When running real detection/removal/finishing with optional crops disabled.
-      const removed = await removeBackgroundLocal(source, { mode: "quick" });
-      return { probeBlurred, method: removed.method };
-    }, appUrl);
-    // Then the sharper read finds shading, not ink: exactly one model run.
-    const calls = select(await readFakeLog(page), { type: "run", phase: "model" }).length;
-    assert.deepEqual({ ...result, calls }, { probeBlurred: true, method: "model", calls: 1 });
-  }, (page) =>
-    installFake(page, {
-      deviceMemory: 8,
-      adapter: false,
-      page: {
-        // Source coordinates of the sphere's bounding box; raw BiRefNet logits.
-        mask: (c, h) => h.rect(c, { x0: 36, y0: 36, x1: 164, y1: 164, inside: 20, outside: -20 }),
-      },
-    }),
+  withPage(
+    async (page) => {
+      // Given a lit, grainy grayscale sphere on white: achromatic and on a clean field, so the probe
+      // asks for a second look, but continuously shaded at any resolution.
+      const result = await page.evaluate(async (base) => {
+        const { removeBackgroundLocal } = await import(`${base}/src/lib/engine.ts`);
+        const { blurredInk } = await import(`${base}/src/lib/graphics.ts`);
+        const { resizeBitmap } = await import(`${base}/src/lib/bitmap-resize.ts`);
+        const size = 200;
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const image = ctx.createImageData(size, size);
+        for (let y = 0; y < size; y += 1)
+          for (let x = 0; x < size; x += 1) {
+            const i = (y * size + x) * 4;
+            const nx = (x + 0.5 - 100) / 64;
+            const ny = (y + 0.5 - 100) / 64;
+            const d = nx * nx + ny * ny;
+            const grain = ((x * 7919 + y * 104729) % 9) - 4;
+            const lit =
+              35 + 200 * Math.max(0, -0.45 * nx - 0.35 * ny + 0.82 * Math.sqrt(Math.max(0, 1 - d)));
+            const v = d < 1 ? Math.round(lit + grain) : 255;
+            image.data.set([v, v, v, 255], i);
+          }
+        ctx.putImageData(image, 0, 0);
+        const source = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        const small = await resizeBitmap(source, 96, 96, "low");
+        const probe = document.createElement("canvas");
+        probe.width = probe.height = 96;
+        probe.getContext("2d").drawImage(small, 0, 0);
+        small.close();
+        const pixels = probe.getContext("2d").getImageData(0, 0, 96, 96).data;
+        const probeBlurred = blurredInk(pixels, 96, 96);
+        // When running real detection/removal/finishing with optional crops disabled.
+        const removed = await removeBackgroundLocal(source, { mode: "quick" });
+        return { probeBlurred, method: removed.method };
+      }, appUrl);
+      // Then the sharper read finds shading, not ink: exactly one model run.
+      const calls = select(await readFakeLog(page), { type: "run", phase: "model" }).length;
+      assert.deepEqual({ ...result, calls }, { probeBlurred: true, method: "model", calls: 1 });
+    },
+    (page) =>
+      installFake(page, {
+        deviceMemory: 8,
+        adapter: false,
+        page: {
+          // Source coordinates of the sphere's bounding box; raw BiRefNet logits.
+          mask: (c, h) => h.rect(c, { x0: 36, y0: 36, x1: 164, y1: 164, inside: 20, outside: -20 }),
+        },
+      }),
   ));
 
 test("dark continuous grayscale shading uses model removal and preserves enclosed detail", async () =>
-  withPage(async (page) => {
-    // Given a model that keeps the subject, including its enclosed white detail (raw logits).
-    const result = await page.evaluate(async (base) => {
-      const { removeBackgroundLocal } = await import(`${base}/src/lib/engine.ts`);
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 96;
-      const ctx = canvas.getContext("2d");
-      const image = ctx.createImageData(96, 96);
-      image.data.fill(255);
-      for (let y = 18; y < 78; y += 1)
-        for (let x = 18; x < 78; x += 1) {
-          const i = (y * 96 + x) * 4;
-          const shade = 20 + Math.floor(((x - 18) * 28) / 60);
-          image.data[i] = image.data[i + 1] = image.data[i + 2] = shade;
-        }
-      ctx.putImageData(image, 0, 0);
-      ctx.fillStyle = "white";
-      ctx.fillRect(44, 44, 8, 8);
-      const source = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      // When running real detection/removal/finishing with optional crops disabled.
-      const removed = await removeBackgroundLocal(source, { mode: "quick" });
-      const bitmap = await createImageBitmap(removed.blob);
-      ctx.clearRect(0, 0, 96, 96);
-      ctx.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      return {
-        method: removed.method,
-        corner: ctx.getImageData(0, 0, 1, 1).data[3],
-        enclosed: ctx.getImageData(48, 48, 1, 1).data[3],
-      };
-    }, appUrl);
-    // Then flat-ink keying cannot erase the enclosed detail before inference: exactly one model run.
-    const calls = select(await readFakeLog(page), { type: "run", phase: "model" }).length;
-    assert.deepEqual(
-      { method: result.method, calls, corner: result.corner, enclosed: result.enclosed },
-      { method: "model", calls: 1, corner: 0, enclosed: 255 },
-    );
-  }, (page) =>
-    installFake(page, {
-      deviceMemory: 8,
-      adapter: false,
-      page: {
-        // Source coordinates 18-78 in both axes; the model output is raw BiRefNet logits.
-        mask: (c, h) => h.rect(c, { x0: 18, y0: 18, x1: 78, y1: 78, inside: 20, outside: -20 }),
-      },
-    }),
+  withPage(
+    async (page) => {
+      // Given a model that keeps the subject, including its enclosed white detail (raw logits).
+      const result = await page.evaluate(async (base) => {
+        const { removeBackgroundLocal } = await import(`${base}/src/lib/engine.ts`);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 96;
+        const ctx = canvas.getContext("2d");
+        const image = ctx.createImageData(96, 96);
+        image.data.fill(255);
+        for (let y = 18; y < 78; y += 1)
+          for (let x = 18; x < 78; x += 1) {
+            const i = (y * 96 + x) * 4;
+            const shade = 20 + Math.floor(((x - 18) * 28) / 60);
+            image.data[i] = image.data[i + 1] = image.data[i + 2] = shade;
+          }
+        ctx.putImageData(image, 0, 0);
+        ctx.fillStyle = "white";
+        ctx.fillRect(44, 44, 8, 8);
+        const source = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        // When running real detection/removal/finishing with optional crops disabled.
+        const removed = await removeBackgroundLocal(source, { mode: "quick" });
+        const bitmap = await createImageBitmap(removed.blob);
+        ctx.clearRect(0, 0, 96, 96);
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        return {
+          method: removed.method,
+          corner: ctx.getImageData(0, 0, 1, 1).data[3],
+          enclosed: ctx.getImageData(48, 48, 1, 1).data[3],
+        };
+      }, appUrl);
+      // Then flat-ink keying cannot erase the enclosed detail before inference: exactly one model run.
+      const calls = select(await readFakeLog(page), { type: "run", phase: "model" }).length;
+      assert.deepEqual(
+        { method: result.method, calls, corner: result.corner, enclosed: result.enclosed },
+        { method: "model", calls: 1, corner: 0, enclosed: 255 },
+      );
+    },
+    (page) =>
+      installFake(page, {
+        deviceMemory: 8,
+        adapter: false,
+        page: {
+          // Source coordinates 18-78 in both axes; the model output is raw BiRefNet logits.
+          mask: (c, h) => h.rect(c, { x0: 18, y0: 18, x1: 78, y1: 78, inside: 20, outside: -20 }),
+        },
+      }),
   ));

@@ -68,12 +68,14 @@ type PendingRelease = { readonly promise: Promise<void>; settled: boolean };
 const BIREFNET_WASM = { model: "birefnet", provider: "wasm" } as const;
 const noop = (): void => undefined;
 
-export function createRemovalRuntime(deps: {
-  pool?: ReturnType<typeof createRemovalEnginePool>;
-  adapter?: () => Promise<unknown>;
-  /** Whether that adapter can run the fp16 route; an injected `adapter` alone counts as able. */
-  fp16?: () => Promise<boolean>;
-} = {}) {
+export function createRemovalRuntime(
+  deps: {
+    pool?: ReturnType<typeof createRemovalEnginePool>;
+    adapter?: () => Promise<unknown>;
+    /** Whether that adapter can run the fp16 route; an injected `adapter` alone counts as able. */
+    fp16?: () => Promise<boolean>;
+  } = {},
+) {
   const pool = deps.pool ?? createRemovalEnginePool();
   const context = "WorkerGlobalScope" in globalThis ? "worker" : "page";
   const probeAdapter = deps.adapter ?? (() => requestCompatibleAdapter(navigatorGpu()));
@@ -125,7 +127,8 @@ export function createRemovalRuntime(deps: {
   function startRelease(target?: RemovalTarget): void {
     const next = release(target);
     const previous = pendingRelease;
-    const promise = previous && !previous.settled ? Promise.all([previous.promise, next]).then(noop) : next;
+    const promise =
+      previous && !previous.settled ? Promise.all([previous.promise, next]).then(noop) : next;
     const record: PendingRelease = { promise, settled: false };
     pendingRelease = record;
     void promise.then(() => {
@@ -232,7 +235,9 @@ export function createRemovalRuntime(deps: {
           onProgress: (event) => {
             if (event.status !== "progress" || !event.file?.endsWith(".onnx")) return;
             const percent = event.progress ?? 0;
-            opts.onProgress?.(Math.min(1, Math.max(0, Number.isFinite(percent) ? percent / 100 : 0)));
+            opts.onProgress?.(
+              Math.min(1, Math.max(0, Number.isFinite(percent) ? percent / 100 : 0)),
+            );
           },
         },
         (engine) => {
@@ -257,7 +262,8 @@ export function createRemovalRuntime(deps: {
       if (!entered && error instanceof RemovalModelLoadError) {
         const code = failureCode(error);
         if (code !== "memory" && code !== "browser" && code !== "updated") {
-          if (error.code !== "model-load-timeout") Object.assign(error, { code: "model-load-failed" });
+          if (error.code !== "model-load-timeout")
+            Object.assign(error, { code: "model-load-failed" });
         }
         if (target.provider === "webgpu") jobLoadFailure ??= error;
       }
@@ -355,17 +361,25 @@ export function engineErrorFor(
   const outputError =
     error instanceof Error && error.name === "RemovalModelOutputError" ? error : undefined;
   if (boundary === "processor") {
-    return new RemovalInputError(outputError ? "Image preprocessing failed" : messageOf(error), error);
+    return new RemovalInputError(
+      outputError ? "Image preprocessing failed" : messageOf(error),
+      error,
+    );
   }
   if (outputError) {
     return outputError.message.startsWith("Model returned nonfinite")
       ? maskError("The model returned an invalid alpha mask", provider === "webgpu", error)
-      : maskError("The model returned an invalid mask shape", (outputError as Error & { failureKind?: string }).failureKind === "gpu-mask", error);
+      : maskError(
+          "The model returned an invalid mask shape",
+          (outputError as Error & { failureKind?: string }).failureKind === "gpu-mask",
+          error,
+        );
   }
   // Memory, browser and updated keep their non-retryable precedence; everything else, including
   // a RuntimeError "Aborted()" crash, is a retryable inference failure rather than a cancellation.
   // ORT WASM can throw its numeric C++ exception pointer on allocation failure.
-  if (typeof error === "number") return new RemovalInferenceError("The model ran out of memory", error, "out-of-memory");
+  if (typeof error === "number")
+    return new RemovalInferenceError("The model ran out of memory", error, "out-of-memory");
   const kept = failureCode(error);
   return new RemovalInferenceError(
     messageOf(error),

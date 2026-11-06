@@ -1,6 +1,9 @@
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
-const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(/\/$/, "");
+const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(
+  /\/$/,
+  "",
+);
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { launchChrome } from "./chrome.mjs";
@@ -116,8 +119,8 @@ async function upload(count = 1) {
     );
   await page.waitForFunction(
     (count) =>
-      window.__cutoutTest?.useWorkspace.getState().items.filter((item) => item.status === "done").length ===
-      count,
+      window.__cutoutTest?.useWorkspace.getState().items.filter((item) => item.status === "done")
+        .length === count,
     count,
   );
 }
@@ -130,7 +133,10 @@ async function assertHandled(button) {
   await page.getByRole("button", { name: button, exact: true }).waitFor();
   if (["Retry colours", "Retry quality check", "Retry area check"].includes(button)) {
     const alerts = (await page.getByRole("alert").allTextContents()).join(" ");
-    assert.doesNotMatch(alerts, /source image could not be decoded|InvalidStateError|createImageBitmap/);
+    assert.doesNotMatch(
+      alerts,
+      /source image could not be decoded|InvalidStateError|createImageBitmap/,
+    );
     assert.match(alerts, /This image is damaged or in a format this browser can’t read\./);
   }
 }
@@ -308,7 +314,9 @@ for (const kind of ["quality", "areas"]) {
     await page.getByRole("button", { name: "Adjust", exact: true }).click();
     if (kind === "areas") {
       await page.getByText("Removal", { exact: true }).click();
-      await page.getByLabel("Show areas to check (specks, holes, soft edges)", { exact: true }).check();
+      await page
+        .getByLabel("Show areas to check (specks, holes, soft edges)", { exact: true })
+        .check();
     }
     const alert = page.getByRole("alert");
     await alert.waitFor();

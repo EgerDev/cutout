@@ -9,7 +9,10 @@ test("metadata reads an image once across concurrent requests and panel reopen",
   const file = new File([image], "sample.jpg", { type: "image/jpeg" });
   const read = file.arrayBuffer.bind(file);
   const tracked = t.mock.method(file, "arrayBuffer", read);
-  const [first, second] = await Promise.all([inspectImageMetadata(file), inspectImageMetadata(file)]);
+  const [first, second] = await Promise.all([
+    inspectImageMetadata(file),
+    inspectImageMetadata(file),
+  ]);
   const reopened = await inspectImageMetadata(file);
   assert.equal(tracked.mock.callCount(), 1);
   assert.deepEqual(first, second);

@@ -4,21 +4,32 @@ import { attachStageGpu } from "./stage-gpu.ts";
 
 test("2d attachment listeners belong to live handles and cannot revive destroyed ones", async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  Object.defineProperty(globalThis, "window", { configurable: true, value: { devicePixelRatio: 1 } });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { devicePixelRatio: 1 },
+  });
   const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
   const target = new EventTarget();
   const ctx = {
-    setTransform() {}, fillRect() {}, drawImage() {},
+    setTransform() {},
+    fillRect() {},
+    drawImage() {},
   };
   const canvas = {
-    width: 16, height: 16, clientWidth: 16, clientHeight: 16,
-    getContext: (kind: string) => kind === "2d" ? ctx : null,
+    width: 16,
+    height: 16,
+    clientWidth: 16,
+    clientHeight: 16,
+    getContext: (kind: string) => (kind === "2d" ? ctx : null),
     addEventListener(type: string, fn: EventListenerOrEventListenerObject) {
       const set = listeners.get(type) ?? new Set();
-      set.add(fn); listeners.set(type, set); target.addEventListener(type, fn);
+      set.add(fn);
+      listeners.set(type, set);
+      target.addEventListener(type, fn);
     },
     removeEventListener(type: string, fn: EventListenerOrEventListenerObject) {
-      listeners.get(type)?.delete(fn); target.removeEventListener(type, fn);
+      listeners.get(type)?.delete(fn);
+      target.removeEventListener(type, fn);
     },
   } as unknown as HTMLCanvasElement;
   const frame = { comparing: false, peeking: false, masking: false, wipe: 0.5 };

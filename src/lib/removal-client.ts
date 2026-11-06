@@ -10,7 +10,13 @@ import { readEnv } from "./device.ts";
 import { CutoutError, failureCode } from "./errors.ts";
 import { navigatorGpu, requestCompatibleAdapter } from "./gpu-compat.ts";
 import { isPrepareTimeout, withPrepareDeadline } from "./idle-model.ts";
-import { ENGINE_ERROR_NAMES, requiresFreshRemovalContext, requiresWasmContext, readGpuFailure, rememberGpuFailure } from "./removal-provider.ts";
+import {
+  ENGINE_ERROR_NAMES,
+  requiresFreshRemovalContext,
+  requiresWasmContext,
+  readGpuFailure,
+  rememberGpuFailure,
+} from "./removal-provider.ts";
 import type { RemovalFaultProvenance, RemovalProvenance } from "./removal-runtime.ts";
 
 export type RemovalResult = Awaited<ReturnType<typeof removeBackgroundLocal>>;
@@ -35,7 +41,8 @@ function touch() {
   if (!inFlight.size) return;
   activityTimer = setTimeout(() => {
     const error = Object.assign(new Error("The remover stopped responding. Try again."), {
-      code: "removal-worker-stalled", failureKind: "network",
+      code: "removal-worker-stalled",
+      failureKind: "network",
     });
     dropWorker(error, true);
   }, INACTIVITY_MS);
@@ -137,7 +144,10 @@ function getWorker(): Worker | null {
     // No code: a crash is the worker's, not the engine's, so the page can still take the job.
     if (crashRespawns < CRASH_RESPAWNS) {
       crashRespawns += 1;
-      dropWorker(Object.assign(new Error("The removal worker failed."), { workerCrashed: true }), true);
+      dropWorker(
+        Object.assign(new Error("The removal worker failed."), { workerCrashed: true }),
+        true,
+      );
     } else dropWorker(new Error("The removal worker failed."));
   });
   worker.addEventListener(
@@ -174,7 +184,13 @@ function getWorker(): Worker | null {
         // Cancellation already settled the caller, but a dead realm must still be retired.
         if (data.type === "error" && requiresFreshRemovalContext(data)) {
           if (requiresWasmContext(data)) workerGpuFailed = true;
-          dropWorker(Object.assign(new Error(data.message), { code: data.code, failureKind: data.failureKind }), true);
+          dropWorker(
+            Object.assign(new Error(data.message), {
+              code: data.code,
+              failureKind: data.failureKind,
+            }),
+            true,
+          );
         }
         return;
       }
@@ -212,7 +228,10 @@ function getWorker(): Worker | null {
 function dropWorker(error: Error, respawn = false) {
   clearTimeout(idleTimer);
   clearTimeout(activityTimer);
-  for (const entry of pending.values()) { entry.cleanup(); entry.reject(error); }
+  for (const entry of pending.values()) {
+    entry.cleanup();
+    entry.reject(error);
+  }
   pending.clear();
   inFlight.clear();
   worker?.terminate();
@@ -250,7 +269,12 @@ function callOnce<T>(
   const id = next++;
   clearTimeout(idleTimer);
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress, cleanup: () => signal?.removeEventListener("abort", abort) });
+    pending.set(id, {
+      resolve: resolve as (value: unknown) => void,
+      reject,
+      onProgress,
+      cleanup: () => signal?.removeEventListener("abort", abort),
+    });
     // Settle now: a job waiting behind an inference that cannot be interrupted would
     // otherwise keep the cancel pending until that inference ends.
     const abort = () => {
@@ -263,7 +287,12 @@ function callOnce<T>(
     inFlight.add(id);
     if (inFlight.size === 1) touch();
     try {
-      w.postMessage({ ...message, id, env: readEnv(), noWebgpu: workerGpuFailed || readGpuFailure() });
+      w.postMessage({
+        ...message,
+        id,
+        env: readEnv(),
+        noWebgpu: workerGpuFailed || readGpuFailure(),
+      });
     } catch (error) {
       // Never sent (a value that cannot be cloned): no reply will come to clear the job, and
       // a job left in either map keeps the worker's model from ever being released.
@@ -286,7 +315,11 @@ function callOnce<T>(
  * Re-running an image that ran out of memory on the main thread only froze the page
  * before failing again, and left every later cut there.
  */
-async function fallBackToPage(error: unknown, signal: AbortSignal | undefined, inputs: readonly Blob[]) {
+async function fallBackToPage(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  inputs: readonly Blob[],
+) {
   if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError"))
     throw error;
   // An error the engine reported (with a string code) is not a broken worker: keep it. A
@@ -329,11 +362,7 @@ export async function removeBackgroundAuto(
 ): Promise<RemovalResult> {
   const viaWorker = call<
     RemovalResult & { workerHadGpu?: boolean; provenance?: RemovalProvenance }
-  >(
-    { type: "run", file, mode: options.mode ?? "auto" },
-    options.signal,
-    options.onProgress,
-  );
+  >({ type: "run", file, mode: options.mode ?? "auto" }, options.signal, options.onProgress);
   if (viaWorker) {
     try {
       const { workerHadGpu, provenance, ...result } = await viaWorker;
@@ -373,10 +402,14 @@ export async function removeBackgroundAuto(
 }
 
 /** Capture the engine's per-invocation handoff; another overlapping job cannot supply it. */
-async function onPage<T>(job: (record: (value: RemovalProvenance | RemovalFaultProvenance) => void) => Promise<T>): Promise<T> {
+async function onPage<T>(
+  job: (record: (value: RemovalProvenance | RemovalFaultProvenance) => void) => Promise<T>,
+): Promise<T> {
   let record: RemovalProvenance | RemovalFaultProvenance | undefined;
   try {
-    return await job((value) => { record = value; });
+    return await job((value) => {
+      record = value;
+    });
   } finally {
     lastProvenance = record;
   }
@@ -406,7 +439,9 @@ export async function refineCropsAuto(
     }
   }
   const { refineWithUserCrops } = await import("./engine.ts");
-  return onPage((onProvenance) => refineWithUserCrops(source, base, boxes, { ...options, onProvenance }));
+  return onPage((onProvenance) =>
+    refineWithUserCrops(source, base, boxes, { ...options, onProvenance }),
+  );
 }
 
 /** Loads the model where removal will run, reporting its download (0..1); rejects when it fails.

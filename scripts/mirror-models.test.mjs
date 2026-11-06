@@ -30,11 +30,21 @@ test("mirrored files are held to the app's pins, else Hugging Face's LFS oid", (
   const pin = REMOVAL_MODEL_SHA256.birefnet["config.json"];
   assert.equal(expectedSha256(modelId, revision, { path: "config.json" }), pin);
   const onnx = REMOVAL_MODEL_SHA256.birefnet["onnx/model.onnx"];
-  assert.equal(expectedSha256(modelId, revision, { path: "onnx/model.onnx", lfs: { oid: onnx } }), onnx);
-  assert.throws(() => expectedSha256(modelId, revision, { path: "onnx/model.onnx", lfs: { oid: "0".repeat(64) } }), /pins/);
+  assert.equal(
+    expectedSha256(modelId, revision, { path: "onnx/model.onnx", lfs: { oid: onnx } }),
+    onnx,
+  );
+  assert.throws(
+    () =>
+      expectedSha256(modelId, revision, { path: "onnx/model.onnx", lfs: { oid: "0".repeat(64) } }),
+    /pins/,
+  );
   const other = { path: "onnx/model.onnx", lfs: { oid: "a".repeat(64) } };
   assert.equal(expectedSha256("Xenova/swin2SR-lightweight-x2-64", "main", other), "a".repeat(64));
-  assert.equal(expectedSha256("Xenova/swin2SR-lightweight-x2-64", "main", { path: "config.json" }), undefined);
+  assert.equal(
+    expectedSha256("Xenova/swin2SR-lightweight-x2-64", "main", { path: "config.json" }),
+    undefined,
+  );
 });
 
 test("the mirror repairs same-size corruption, reuses verified files and rejects bad downloads", (t) => {
@@ -45,7 +55,9 @@ test("the mirror repairs same-size corruption, reuses verified files and rejects
   const target = path.join(root, modelId, "resolve", revision, "config.json");
   const loader = path.join(root, "fetch.mjs");
   const fetched = path.join(root, "fetched");
-  fs.writeFileSync(loader, `
+  fs.writeFileSync(
+    loader,
+    `
     import fs from "node:fs";
     globalThis.fetch = async (url) => {
       if (url.includes("/api/models/")) return Response.json(
@@ -55,11 +67,24 @@ test("the mirror repairs same-size corruption, reuses verified files and rejects
       fs.writeFileSync(${JSON.stringify(fetched)}, "yes");
       return new Response(process.env.MIRROR_TEST_BAD ? "bad" : ${JSON.stringify(config)});
     };
-  `);
-  const run = (bad = false) => spawnSync(process.execPath, [
-    // --import takes a URL on Windows (a bare C:\ path parses as scheme "c:").
-    "--import", pathToFileURL(loader).href, path.join(import.meta.dirname, "mirror-models.mjs"), root,
-  ], { encoding: "utf8", env: { ...process.env, MIRROR_TEST_BAD: bad ? "1" : "" }, timeout: 10_000 });
+  `,
+  );
+  const run = (bad = false) =>
+    spawnSync(
+      process.execPath,
+      [
+        // --import takes a URL on Windows (a bare C:\ path parses as scheme "c:").
+        "--import",
+        pathToFileURL(loader).href,
+        path.join(import.meta.dirname, "mirror-models.mjs"),
+        root,
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, MIRROR_TEST_BAD: bad ? "1" : "" },
+        timeout: 10_000,
+      },
+    );
 
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, "x".repeat(Buffer.byteLength(config)));

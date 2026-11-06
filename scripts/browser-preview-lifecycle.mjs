@@ -52,15 +52,13 @@ async function upload(page, name, count = 1) {
     x.fillRect(24, 24, 48, 48);
     return c.toDataURL().split(",")[1];
   });
-  await page
-    .getByLabel("Choose files", { exact: true })
-    .setInputFiles(
-      Array.from({ length: count }, (_, i) => ({
-        name: `${name}-${i}.png`,
-        mimeType: "image/png",
-        buffer: Buffer.from(png, "base64"),
-      })),
-    );
+  await page.getByLabel("Choose files", { exact: true }).setInputFiles(
+    Array.from({ length: count }, (_, i) => ({
+      name: `${name}-${i}.png`,
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    })),
+  );
   await page.waitForFunction((n) => {
     const s = window.__cutoutTest.useWorkspace.getState();
     return (
@@ -318,7 +316,10 @@ test("all stage backends paint closed inputs exactly as absent and recover witho
     return results;
   });
   t.diagnostic(JSON.stringify(results));
-  assert.ok(results.some((r) => !r.unavailable), "at least one stage backend is available");
+  assert.ok(
+    results.some((r) => !r.unavailable),
+    "at least one stage backend is available",
+  );
   for (const r of results)
     for (const c of r.cases ?? [])
       assert.deepEqual(

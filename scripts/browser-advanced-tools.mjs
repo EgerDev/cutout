@@ -1,6 +1,9 @@
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
-const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(/\/$/, "");
+const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(
+  /\/$/,
+  "",
+);
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { launchChrome } from "./chrome.mjs";
@@ -204,7 +207,9 @@ async function uploadGraphic() {
   await (
     await chooser
   ).setFiles({ name: "advanced.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
-  await page.waitForFunction(() => window.__cutoutTest?.useWorkspace?.getState().items[0]?.status === "done");
+  await page.waitForFunction(
+    () => window.__cutoutTest?.useWorkspace?.getState().items[0]?.status === "done",
+  );
   await page.getByRole("button", { name: "Adjust", exact: true }).click();
 }
 async function setSlider(label, value) {
@@ -308,7 +313,10 @@ test("advanced controls apply shadow, colours, edge cleanup, matching and reset 
   assert.equal(framing.scale, 120);
   assert.equal(framing.rotate, 15);
   assert.equal(framing.flipX, true);
-  assert.equal(await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().showGuides), true);
+  assert.equal(
+    await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().showGuides),
+    true,
+  );
   await page.getByRole("button", { name: "Reset transform", exact: true }).click();
   s = await settings();
   assert.equal(s.scale, 100);
@@ -321,10 +329,16 @@ test("advanced controls apply shadow, colours, edge cleanup, matching and reset 
   await page.getByText("Removal", { exact: true }).click();
   for (const mode of ["quick", "maximum", "auto"]) {
     await page.getByLabel("Removal detail", { exact: true }).selectOption(mode);
-    assert.equal(await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().removalMode), mode);
+    assert.equal(
+      await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().removalMode),
+      mode,
+    );
   }
   await page.getByLabel("Show areas to check (specks, holes, soft edges)", { exact: true }).check();
-  assert.equal(await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().showCheckAreas), true);
+  assert.equal(
+    await page.evaluate(() => window.__cutoutTest?.useWorkspace.getState().showCheckAreas),
+    true,
+  );
 });
 
 test("areas to check follow flipped output coordinates", async () => {

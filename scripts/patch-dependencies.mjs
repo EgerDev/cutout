@@ -25,7 +25,8 @@ const patches = [
     file: "node_modules/@huggingface/transformers/dist/transformers.web.js",
     name: "verify model bytes before cache or use",
     find: "        result = buffer;\n    }",
-    replace: "        await _env_js__WEBPACK_IMPORTED_MODULE_2__.env.customCache?.verify?.(path_or_repo_id, filename, revision, buffer);\n        result = buffer; // cutout: verified model bytes\n    }",
+    replace:
+      "        await _env_js__WEBPACK_IMPORTED_MODULE_2__.env.customCache?.verify?.(path_or_repo_id, filename, revision, buffer);\n        result = buffer; // cutout: verified model bytes\n    }",
     marker: "result = buffer; // cutout: verified model bytes",
   },
   // transformers.js queues browser inference on one promise chain; one rejected run left

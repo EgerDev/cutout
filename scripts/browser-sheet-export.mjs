@@ -1,6 +1,9 @@
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
-const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(/\/$/, "");
+const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(
+  /\/$/,
+  "",
+);
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { unzipSync, strFromU8 } from "fflate";
@@ -124,31 +127,51 @@ test("exported matte restores one subject while leaving its neighbor removed", a
 
 for (const label of ["jpeg", "passport"]) {
   test(`sprite tiles preserve transparency with ${label} settings`, async () => {
-    const pixels = await page.evaluate(async ({ base, label }) => {
-      const { renderSheet } = await import(`${base}/src/lib/editor/sheet.ts`);
-      const { defaults, presetPatch } = await import(`${base}/src/lib/editor/model.ts`);
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 16;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ff0000";
-      ctx.fillRect(0, 0, 16, 16);
-      ctx.clearRect(6, 6, 4, 4);
-      ctx.clearRect(2, 2, 1, 1);
-      ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
-      ctx.fillRect(2, 2, 1, 1);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve));
-      const settings = { ...defaults, ...(label === "passport" ? presetPatch("passport") : { exportFormat: "jpeg" }) };
-      const rendered = await renderSheet([{
-        name: "sprite.png", source: new File([blob], "sprite.png", { type: "image/png" }), result: blob, settings,
-      }], { kind: "sprite", cell: 64 });
-      const bitmap = await createImageBitmap(rendered.blob);
-      canvas.width = bitmap.width; canvas.height = bitmap.height;
-      ctx.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      const { x, y, w, h } = Object.values(rendered.atlas)[0];
-      const alpha = ctx.getImageData(x, y, w, h).data.filter((_, i) => i % 4 === 3);
-      return { center: Array.from(ctx.getImageData(x + Math.floor(w / 2), y + Math.floor(h / 2), 1, 1).data), partial: alpha.some((a) => a > 0 && a < 255) };
-    }, { base: moduleBase, label });
+    const pixels = await page.evaluate(
+      async ({ base, label }) => {
+        const { renderSheet } = await import(`${base}/src/lib/editor/sheet.ts`);
+        const { defaults, presetPatch } = await import(`${base}/src/lib/editor/model.ts`);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 16;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ff0000";
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.clearRect(6, 6, 4, 4);
+        ctx.clearRect(2, 2, 1, 1);
+        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.fillRect(2, 2, 1, 1);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve));
+        const settings = {
+          ...defaults,
+          ...(label === "passport" ? presetPatch("passport") : { exportFormat: "jpeg" }),
+        };
+        const rendered = await renderSheet(
+          [
+            {
+              name: "sprite.png",
+              source: new File([blob], "sprite.png", { type: "image/png" }),
+              result: blob,
+              settings,
+            },
+          ],
+          { kind: "sprite", cell: 64 },
+        );
+        const bitmap = await createImageBitmap(rendered.blob);
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const { x, y, w, h } = Object.values(rendered.atlas)[0];
+        const alpha = ctx.getImageData(x, y, w, h).data.filter((_, i) => i % 4 === 3);
+        return {
+          center: Array.from(
+            ctx.getImageData(x + Math.floor(w / 2), y + Math.floor(h / 2), 1, 1).data,
+          ),
+          partial: alpha.some((a) => a > 0 && a < 255),
+        };
+      },
+      { base: moduleBase, label },
+    );
     assert.equal(pixels.center[3], 0, "the hole inside the frame stays transparent");
     assert.equal(pixels.partial, true, "partial alpha survives JPEG export settings");
   });

@@ -662,14 +662,25 @@ test("colourful flat art is an illustration on white, black, grey and a green ke
 
 // E10-01 (M14): intentional translucency above 2 % of the probe is returned as-is; at or below, it is cut.
 test("E10-S M14: partial alpha uses strict 2 percent boundary", () => {
-  const width = 100, height = 100;
+  const width = 100,
+    height = 100;
   const paint = (partial: number) => {
     const data = new Uint8ClampedArray(width * height * 4);
-    for (let i = 0; i < width * height; i++) data.set([200, 80, 40, i < partial ? 128 : 255], i * 4);
+    for (let i = 0; i < width * height; i++)
+      data.set([200, 80, 40, i < partial ? 128 : 255], i * 4);
     return data;
   };
-  for (const [count, expected] of [[199, false], [200, false], [201, true], [1000, true]] as const)
-    assert.equal(looksAlreadyTransparent(paint(count), width, height), expected, `${count}/10000 partial pixels`);
+  for (const [count, expected] of [
+    [199, false],
+    [200, false],
+    [201, true],
+    [1000, true],
+  ] as const)
+    assert.equal(
+      looksAlreadyTransparent(paint(count), width, height),
+      expected,
+      `${count}/10000 partial pixels`,
+    );
 });
 
 /** A hard-edged ring and bar, dark ink on white, at its own size. */

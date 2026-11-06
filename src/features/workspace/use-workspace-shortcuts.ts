@@ -13,7 +13,12 @@ export function useWorkspaceShortcuts(actions: {
     const releasePeek = () => useWorkspace.getState().setPeeking(false);
     const onPaste = (event: ClipboardEvent) => {
       if (isEditableTarget(event.target)) return;
-      if (document.querySelector('[role="dialog"][data-state="open"], [role="menu"][data-state="open"], dialog[open]')) return;
+      if (
+        document.querySelector(
+          '[role="dialog"][data-state="open"], [role="menu"][data-state="open"], dialog[open]',
+        )
+      )
+        return;
       const file = fileFromClipboard(event.clipboardData);
       if (!file) return;
       event.preventDefault();
@@ -24,7 +29,8 @@ export function useWorkspaceShortcuts(actions: {
       const target = event.target;
       // A modal owns the keyboard even when focus drops to <body> (a button disabling itself).
       if (document.querySelector('[role="dialog"][data-state="open"]')) return;
-      if (target instanceof Element && target.closest('[role="dialog"], [role="menu"], dialog')) return;
+      if (target instanceof Element && target.closest('[role="dialog"], [role="menu"], dialog'))
+        return;
       const key = event.key.toLowerCase();
       const current = useWorkspace.getState();
       const active = current.items.find((item) => item.id === current.activeId);
@@ -37,42 +43,62 @@ export function useWorkspaceShortcuts(actions: {
       }
       if (isEditableTarget(target)) return;
       if (event.metaKey || event.ctrlKey) {
-        if(!event.altKey && !event.repeat && (key==='z'||key==='y')) {
-          event.preventDefault();if(key==='y'||event.shiftKey)current.redo();else current.undo();return;
+        if (!event.altKey && !event.repeat && (key === "z" || key === "y")) {
+          event.preventDefault();
+          if (key === "y" || event.shiftKey) current.redo();
+          else current.undo();
+          return;
         }
         if (event.altKey || event.shiftKey || event.repeat) return;
-        if (key === "o") { event.preventDefault(); openPicker(); }
+        if (key === "o") {
+          event.preventDefault();
+          openPicker();
+        }
         if (key === "c" && active?.status === "done" && !window.getSelection()?.toString()) {
-          event.preventDefault(); void current.copyActive();
+          event.preventDefault();
+          void current.copyActive();
         }
         if (key === "s" && active?.status === "done") {
-          event.preventDefault(); void current.downloadActive();
+          event.preventDefault();
+          void current.downloadActive();
         }
         // Native paste delivers the image once, without a second clipboard permission request.
         return;
       }
       if (event.altKey) return;
       if (key === "?" && !event.repeat) {
-        event.preventDefault(); releasePeek(); openHelp(); return;
+        event.preventDefault();
+        releasePeek();
+        openHelp();
+        return;
       }
-      const interactive = target instanceof Element && target.closest('button, a, [role="button"], [role="slider"]');
+      const interactive =
+        target instanceof Element && target.closest('button, a, [role="button"], [role="slider"]');
       if (interactive || event.shiftKey || event.repeat) return;
       if (key === " " && active?.status === "done") {
-        event.preventDefault(); current.setPeeking(true);
+        event.preventDefault();
+        current.setPeeking(true);
       }
       if (key === "i" && active?.status === "done") {
         event.preventDefault();
-        if (current.inspecting) current.closeInfo(); else current.openInfo();
+        if (current.inspecting) current.closeInfo();
+        else current.openInfo();
       }
       if (key === "m" && active?.status === "done") {
-        event.preventDefault(); current.cycleInspectMode();
+        event.preventDefault();
+        current.cycleInspectMode();
       }
       if (key === "g" && active?.status === "done") {
-        event.preventDefault(); current.setShowGuides(!current.showGuides);
+        event.preventDefault();
+        current.setShowGuides(!current.showGuides);
       }
     };
-    const onKeyUp = (event: KeyboardEvent) => { if (event.key === " ") releasePeek(); };
-    const onVisibility = () => { if (document.hidden) releasePeek(); };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === " ") releasePeek();
+    };
+    const onVisibility = () => {
+      if (document.hidden) releasePeek();
+    };
     window.addEventListener("paste", onPaste);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);

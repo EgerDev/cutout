@@ -158,11 +158,13 @@ for (const [name, launch] of [
 
         // Opening a file replaces the sample; Chromium and Firefox decode HEIC with heic-to.
         const heic = await readFile(new URL("./fixtures/sample.heic", import.meta.url));
-        const replacement = page.waitForEvent("dialog", { timeout: 30_000 }).then(async (dialog) => {
-          assert.equal(dialog.type(), "confirm");
-          assert.match(dialog.message(), /Replace the open images/);
-          await dialog.accept();
-        });
+        const replacement = page
+          .waitForEvent("dialog", { timeout: 30_000 })
+          .then(async (dialog) => {
+            assert.equal(dialog.type(), "confirm");
+            assert.match(dialog.message(), /Replace the open images/);
+            await dialog.accept();
+          });
         await page
           .locator('input[type="file"][aria-label="Choose files"]')
           .setInputFiles({ name: "sample.heic", mimeType: "image/heic", buffer: heic });
