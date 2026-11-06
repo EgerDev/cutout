@@ -317,20 +317,24 @@ test("Q7: a throwing localStorage getter never escapes remember, read, clear or 
 
 // ---- Q8: legacy bg0 records ---------------------------------------------------------------------
 
-test("Q8: a legacy record for the current user agent is honoured and never migrated", async () => {
+test("Q8: a matching legacy record leaves WebGPU routing enabled and is only cleared on request", async () => {
   // Given: only a legacy key whose value is this browser's user agent.
-  const { readGpuFailure } = await load();
+  const { readGpuFailure, clearRemovalFailureRecords } = await load();
   const store = new MemoryStore();
   store.setItem(LEGACY_KEY, currentUserAgent());
   const before = JSON.stringify([...store.values]);
 
-  // When/Then: it counts as a GPU failure but storage is read-only.
-  assert.equal(readGpuFailure(store), true);
+  // When/Then: the retired engine's failure does not disable the current engine's WebGPU route.
+  assert.equal(readGpuFailure(store), false);
+  assert.deepEqual(selectRemovalRoute({ compatibleGpu: true, gpuFailed: readGpuFailure(store) }), {
+    primary: { model: "birefnet", provider: "webgpu" },
+  });
   assert.equal(JSON.stringify([...store.values]), before);
   assert.equal(store.getItem(REMOVAL_FAILURE_KEY), null);
 
-  // And removing the legacy key restores WebGPU.
-  store.removeItem(LEGACY_KEY);
+  // The user-agent value remains removable when the user clears local data.
+  clearRemovalFailureRecords(store);
+  assert.equal(store.getItem(LEGACY_KEY), null);
   assert.equal(readGpuFailure(store), false);
 });
 
@@ -365,27 +369,25 @@ test("Q8: clear removes the legacy and the current record", async () => {
   assert.deepEqual([...store.values.keys()], ["keep"]);
 });
 
-test("Q8: with no store the legacy key is not consulted", async () => {
-  // Given: a matching legacy key in a store that the caller does not pass.
-  const { readGpuFailure, legacyGpuFailure } = await load();
-  const separate = new MemoryStore();
-  separate.setItem(LEGACY_KEY, currentUserAgent());
-
-  // When/Then: null and undefined both mean "no store" for the legacy check.
-  assert.equal(readGpuFailure(null), false);
-  assert.equal(legacyGpuFailure(null), false);
-  assert.equal(legacyGpuFailure(undefined), false);
-  assert.equal(legacyGpuFailure(separate), true);
-});
-
-test("Q8: legacyGpuFailure swallows storage errors and reads nothing outside the prefix", async () => {
-  const { legacyGpuFailure } = await load();
+test("Q8: routing reads only the owned failure key without enumerating storage", async () => {
+  const { readGpuFailure } = await load();
   const store = new MemoryStore();
-  store.setItem("other", currentUserAgent());
+  store.setItem(LEGACY_KEY, currentUserAgent());
+  const reads: string[] = [];
+  const getItem = store.getItem.bind(store);
+  store.getItem = (key) => {
+    reads.push(key);
+    return getItem(key);
+  };
+  let enumerations = 0;
+  store.key = () => {
+    enumerations += 1;
+    return LEGACY_KEY;
+  };
 
-  assert.equal(legacyGpuFailure(store), false);
-  assert.equal(legacyGpuFailure(denied()), false);
-  assert.equal(legacyGpuFailure(broken()), false);
+  assert.equal(readGpuFailure(store), false);
+  assert.deepEqual(reads, [REMOVAL_FAILURE_KEY]);
+  assert.equal(enumerations, 0);
 });
 
 // ---- Q4 / Q3: session load memo, absorb predicate ---------------------------------------------------
