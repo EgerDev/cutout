@@ -93,18 +93,14 @@ test("deleting local data removes workspace settings and retains the deletion fe
   const entries = new Map([
     ["cutout.saved", "1"],
     ["cutout.enhance.tileMs", '{"2":40}'],
-    ["bg0:webgpu-failure:abc123", "Mozilla/5.0"],
+    ["bg0:webgpu-failure:abc123", navigator.userAgent],
     ["bg0:webgpu-failure:def456", "Mozilla/5.0"],
     ["theme", "dark"],
     ["cutout:workspace-deleted", "receipt"],
   ]);
-  const storage = {
-    get length() {
-      return entries.size;
-    },
-    key: (index: number) => [...entries.keys()][index] ?? null,
-    removeItem: (key: string) => void entries.delete(key),
-  };
+  const storage = keyStorage(entries);
+  assert.equal(readGpuFailure(storage), false, "legacy keys do not disable WebGPU");
+  assert.equal(entries.get("bg0:webgpu-failure:abc123"), navigator.userAgent);
   forgetLocalData(storage);
   assert.deepEqual([...entries.keys()], ["theme", "cutout:workspace-deleted"]);
 });

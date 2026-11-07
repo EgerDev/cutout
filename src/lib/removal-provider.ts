@@ -233,28 +233,10 @@ export function readGpuFailure(
       if (current) return true;
       storage?.removeItem(REMOVAL_FAILURE_KEY);
     }
-    return legacyGpuFailure(storage);
+    return false;
   } catch {
     return confirmedGpuFailure;
   }
-}
-
-/**
- * Honours bg0's old failure note in place (Q8): a `bg0:webgpu-failure:` key whose value is this
- * user agent. Read-only (never migrated or deleted at runtime) and false without a store.
- */
-export function legacyGpuFailure(storage: RemovalFailureStore | null | undefined): boolean {
-  if (!storage) return false;
-  try {
-    const userAgent = navigator.userAgent;
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (key?.startsWith(LEGACY_FAILURE_PREFIX) && storage.getItem(key) === userAgent) return true;
-    }
-  } catch {
-    // Unreadable storage or no navigator: no legacy signal.
-  }
-  return false;
 }
 
 /** Clears both stored records, the process flag and the session memo (Delete resets them all). */

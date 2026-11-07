@@ -111,8 +111,8 @@ function Privacy() {
             storage): if WebGPU fails on this device, Cutout saves the kind of failure and the
             version of its removal runtime and models (no personal data), so the next visit skips
             WebGPU and uses WebAssembly instead. Older versions stored your browser&apos;s user
-            agent under <code>bg0:webgpu-failure:…</code>; Cutout still honours those and removes
-            them when you clear local workspace data.
+            agent under <code>bg0:webgpu-failure:…</code>; Cutout no longer uses those notes and
+            removes them when you clear local workspace data.
           </li>
         </ul>
       </DocSection>
