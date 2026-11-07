@@ -51,7 +51,7 @@
     "exifreader": "^4.45.0",
     "fflate": "0.8.3",
     "imagetracerjs": "^1.2.6",
-    "lucide-react": "^0.510.0",
+    "lucide-react": "^1.68.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.5.0",
