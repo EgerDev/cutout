@@ -433,26 +433,39 @@ test("Batch reuses completed real quality inspections across unrelated updates",
   );
 });
 
-
 test("E05-G-02: Retry targets the active failure and respects retryable false", async (t) => {
   const page = await open(t);
   await page.evaluate(() => {
     const store = window.__cutoutTest.useWorkspace;
     const item = (id, retryable) => ({
-      id, name: `${id}.png`, source: new File(["bad"], `${id}.png`, { type: "image/png" }),
-      sourceUrl: "", preview: null, resultBlob: null, resultUrl: null, width: 16, height: 16,
-      status: "error", error: `${id} failed`, ...(retryable === undefined ? {} : { retryable }),
+      id,
+      name: `${id}.png`,
+      source: new File(["bad"], `${id}.png`, { type: "image/png" }),
+      sourceUrl: "",
+      preview: null,
+      resultBlob: null,
+      resultUrl: null,
+      width: 16,
+      height: 16,
+      status: "error",
+      error: `${id} failed`,
+      ...(retryable === undefined ? {} : { retryable }),
     });
     window.__retryTargets = [];
     store.setState({
-      items: [item("A"), item("B", false)], activeId: "A", phase: "error", errorMessage: "A failed",
+      items: [item("A"), item("B", false)],
+      activeId: "A",
+      phase: "error",
+      errorMessage: "A failed",
       retryItem: (id) => window.__retryTargets.push(id),
     });
   });
   const alert = page.getByRole("alert");
   await alert.getByRole("button", { name: "Retry", exact: true }).click();
   assert.deepEqual(await page.evaluate(() => window.__retryTargets), ["A"]);
-  await page.evaluate(() => window.__cutoutTest.useWorkspace.setState({ activeId: "B", errorMessage: "B failed" }));
+  await page.evaluate(() =>
+    window.__cutoutTest.useWorkspace.setState({ activeId: "B", errorMessage: "B failed" }),
+  );
   assert.equal(await alert.getByRole("button", { name: "Retry", exact: true }).count(), 0);
   await alert.getByRole("button", { name: "Dismiss", exact: true }).click();
   assert.equal(await alert.count(), 0);

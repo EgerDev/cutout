@@ -27,7 +27,13 @@ export function AppHeader({
         type="button"
         className="pointer-events-auto inline-flex min-h-11 items-center gap-2.5 text-[15px] font-semibold tracking-tight text-fg"
         onClick={() => {
-          if (idle || window.confirm("Clear this workspace and start over? Images and edits that you haven’t downloaded will be lost.")) onReset();
+          if (
+            idle ||
+            window.confirm(
+              "Clear this workspace and start over? Images and edits that you haven’t downloaded will be lost.",
+            )
+          )
+            onReset();
         }}
         aria-label={`${APP_NAME} — ${idle ? "new image" : "clear workspace"}`}
       >

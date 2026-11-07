@@ -31,8 +31,10 @@ cd "$WORK/package"
 # Emscripten 5's factory is async (heic-to called it synchronously), and its unused
 # Node branch requires "node:fs" etc., which esbuild must leave external like "fs".
 patch -p1 < "$SRC/heic-to-1.5.2-emscripten5.patch"
-# esbuild version from heic-to v1.5.2's package-lock.json.
-npm install --no-save --no-package-lock --no-audit --no-fund esbuild@0.25.12
+# Install only the integrity-locked build tool, not heic-to's other devDependencies.
+# Its optional platform binary is locked too; disable postinstall download fallbacks.
+cp "$SRC/heic-build-tools/package.json" "$SRC/heic-build-tools/package-lock.json" "$WORK/"
+(cd "$WORK" && npm ci --ignore-scripts --include=optional --no-audit --no-fund)
 node esbuild.mjs
 
 mkdir -p "$OUT"

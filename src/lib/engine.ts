@@ -96,22 +96,45 @@ function freshContextFor(error: unknown): unknown {
   const webgpuInit =
     error === removalRuntime.jobInfo().webgpuLoadFailure &&
     (kind === "provider-init" || (kind === "gpu-device" && field(error, "dtype") === "fp32"));
-  return webgpuInit && "WorkerGlobalScope" in globalThis ? new RemovalWebgpuInitError(error) : error;
+  return webgpuInit && "WorkerGlobalScope" in globalThis
+    ? new RemovalWebgpuInitError(error)
+    : error;
 }
 
 /** Share pending warmups only: idle/pagehide release can invalidate readiness later. */
-export function warmupBiRefNet(onProgress?: (fraction: number) => void, signal?: AbortSignal): Promise<void> {
+export function warmupBiRefNet(
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   if (signal?.aborted) return Promise.reject(signal.reason);
   if (!warmup) {
-    const job: WarmupJob = { promise: Promise.resolve(), controller: new AbortController(), listeners: new Set(), users: 0 };
+    const job: WarmupJob = {
+      promise: Promise.resolve(),
+      controller: new AbortController(),
+      listeners: new Set(),
+      users: 0,
+    };
     warmup = job;
-    job.promise = (typeof document === "undefined" ? Promise.resolve() : removalRuntime
-      .exclusive(job.controller.signal, async () => removalRuntime.usePrimary(
-        await removalRuntime.automaticRoute(),
-        { signal: job.controller.signal, onProgress: (fraction) => job.listeners.forEach((listener) => listener(fraction)) },
-        () => undefined,
-      ).catch((error: unknown) => { throw freshContextFor(error); })))
-      .finally(() => { if (warmup === job) warmup = null; });
+    job.promise = (
+      typeof document === "undefined"
+        ? Promise.resolve()
+        : removalRuntime.exclusive(job.controller.signal, async () =>
+            removalRuntime
+              .usePrimary(
+                await removalRuntime.automaticRoute(),
+                {
+                  signal: job.controller.signal,
+                  onProgress: (fraction) => job.listeners.forEach((listener) => listener(fraction)),
+                },
+                () => undefined,
+              )
+              .catch((error: unknown) => {
+                throw freshContextFor(error);
+              }),
+          )
+    ).finally(() => {
+      if (warmup === job) warmup = null;
+    });
   }
   const job = warmup;
   job.users++;
@@ -145,15 +168,18 @@ export function warmupBiRefNet(onProgress?: (fraction: number) => void, signal?:
       reject(signal?.reason);
     };
     signal?.addEventListener("abort", abort, { once: true });
-    job.promise.then(() => {
-      if (!waiting) return;
-      cleanup();
-      resolve();
-    }, (error: unknown) => {
-      if (!waiting) return;
-      cleanup();
-      reject(signal?.aborted ? signal.reason : error);
-    });
+    job.promise.then(
+      () => {
+        if (!waiting) return;
+        cleanup();
+        resolve();
+      },
+      (error: unknown) => {
+        if (!waiting) return;
+        cleanup();
+        reject(signal?.aborted ? signal.reason : error);
+      },
+    );
     if (signal?.aborted) abort();
   });
 }
@@ -247,7 +273,8 @@ export async function removeBackgroundLocal(
   // Model loading is shared across jobs; cancellation must not reject its progress callbacks.
   const onCutting = (progress: number) => {
     if (!computeStarted) computeStarted = performance.now();
-    if (!options.signal?.aborted) emitProgress(emit("cutting", Math.min(0.92, progress), COPY.subject));
+    if (!options.signal?.aborted)
+      emitProgress(emit("cutting", Math.min(0.92, progress), COPY.subject));
   };
   const onDownload = (progress: number) => {
     if (!options.signal?.aborted)
@@ -392,12 +419,22 @@ export async function removeBackgroundLocal(
           };
         }
         return {
-          ...(await finishModel({ ...cut, ...recovered }, engine, computeMs, true, COMPAT_TRANSFER, compat)),
+          ...(await finishModel(
+            { ...cut, ...recovered },
+            engine,
+            computeMs,
+            true,
+            COMPAT_TRANSFER,
+            compat,
+          )),
           webgpuBroken,
         };
       });
     };
-    const graphicOrThrow = async (error: unknown, compatAttempted: boolean): Promise<RemovalOutcome> => {
+    const graphicOrThrow = async (
+      error: unknown,
+      compatAttempted: boolean,
+    ): Promise<RemovalOutcome> => {
       if (requiresFreshRemovalContext(error)) throw error;
       const recovered = await tryGraphic(work);
       signal?.throwIfAborted();
@@ -655,7 +692,11 @@ async function cutoutFromModel(
       },
       rawHasStructure: () => {
         try {
-          return !!held.source && !!held.alpha && hasStructure(held.source.data, held.alpha, width, height);
+          return (
+            !!held.source &&
+            !!held.alpha &&
+            hasStructure(held.source.data, held.alpha, width, height)
+          );
         } catch {
           return false;
         }
@@ -753,7 +794,11 @@ function hasStructure(source: Uint8ClampedArray, alpha: Uint8Array, width: numbe
     }
   }
   const samples = w * h;
-  return high.some((value, c) => value - low[c]! > 8) && background / samples >= 0.008 && subject / samples >= 0.008;
+  return (
+    high.some((value, c) => value - low[c]! > 8) &&
+    background / samples >= 0.008 &&
+    subject / samples >= 0.008
+  );
 }
 
 async function encodeImageData(image: ImageData): Promise<Blob> {
@@ -779,7 +824,9 @@ async function finishPhoto(
   stats: CropStats,
   alreadyRecovered = false,
 ) {
-  const recovered = alreadyRecovered ? { blob: cut.blob, method: cut.method ?? "model" } : await recoverIfEmpty(source, cut);
+  const recovered = alreadyRecovered
+    ? { blob: cut.blob, method: cut.method ?? "model" }
+    : await recoverIfEmpty(source, cut);
   const { blob: base, method } = recovered;
   // The cut holds the full-size source pixels (4 B/px) and alpha for `raw`; refinement below
   // decodes again, so keeping them alive only raised its peak.
@@ -902,23 +949,27 @@ export async function refineWithUserCrops(
     // One lease for every crop (plus one same-job WASM lease on an absorbable WebGPU load failure).
     let ranOn: PreparedRemovalEngine["provider"] | undefined;
     try {
-      return await removalRuntime.usePrimary(route, {
-        signal,
-        onProgress: (fraction) => {
-          if (!signal?.aborted) report(emit("loading", 0.08 + fraction * 0.58, COPY.download));
-        },
-      }, async (engine) => {
-        ranOn = engine.provider;
-        const refined = await refineRemoval(source, base, {
-          maxCrops: crops.length,
-          crops,
+      return await removalRuntime.usePrimary(
+        route,
+        {
           signal,
-          infer: cropInfer(engine, signal, report, stats),
-        });
-        report(emit("finishing", 1, COPY.done));
-        recordProvenance(provenanceFor(engine, route, "manual", stats));
-        return refined.blob;
-      });
+          onProgress: (fraction) => {
+            if (!signal?.aborted) report(emit("loading", 0.08 + fraction * 0.58, COPY.download));
+          },
+        },
+        async (engine) => {
+          ranOn = engine.provider;
+          const refined = await refineRemoval(source, base, {
+            maxCrops: crops.length,
+            crops,
+            signal,
+            infer: cropInfer(engine, signal, report, stats),
+          });
+          report(emit("finishing", 1, COPY.done));
+          recordProvenance(provenanceFor(engine, route, "manual", stats));
+          return refined.blob;
+        },
+      );
     } catch (error) {
       signal?.throwIfAborted();
       recordProvenance(faultRecord(route, ranOn, false, false));

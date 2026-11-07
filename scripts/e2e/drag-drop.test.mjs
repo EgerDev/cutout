@@ -7,7 +7,10 @@ import { launchChrome } from "../chrome.mjs";
 import { cutoutOrSkip } from "../require-server.mjs";
 
 async function main(t) {
-  const appUrl = await cutoutOrSkip(t, appCandidates("http://127.0.0.1:8081/", "http://127.0.0.1:8080/"));
+  const appUrl = await cutoutOrSkip(
+    t,
+    appCandidates("http://127.0.0.1:8081/", "http://127.0.0.1:8080/"),
+  );
   if (!appUrl) return;
 
   const browser = await launchChrome();
@@ -31,9 +34,16 @@ async function main(t) {
     const dt = new DataTransfer();
     return dt;
   });
-  await page.dispatchEvent("body", "dragenter", { dataTransfer: emptyTransfer, clientX: 640, clientY: 360 });
+  await page.dispatchEvent("body", "dragenter", {
+    dataTransfer: emptyTransfer,
+    clientX: 640,
+    clientY: 360,
+  });
   await page.waitForTimeout(200);
-  assert.ok(await page.$(".drop-veil.is-open"), "Drop veil opened on first dragenter even with empty types");
+  assert.ok(
+    await page.$(".drop-veil.is-open"),
+    "Drop veil opened on first dragenter even with empty types",
+  );
 
   const veilHandle = await page.$(".drop-veil");
   await page.dispatchEvent("body", "dragleave", {
@@ -49,15 +59,15 @@ async function main(t) {
   await page.dispatchEvent("body", "dragenter", { dataTransfer, clientX: 640, clientY: 360 });
   await page.waitForTimeout(200);
 
-  const dropVeil = await page.$('.drop-veil.is-open');
+  const dropVeil = await page.$(".drop-veil.is-open");
   assert.ok(dropVeil, "Drop veil opened on dragenter");
 
-  const dropCard = await page.$('.drop-card');
+  const dropCard = await page.$(".drop-card");
   assert.ok(dropCard, "Drop card is rendered");
 
   // Verify drop card text
-  const cardTitle = await page.textContent('.drop-card-title');
-  const cardCopy = await page.textContent('.drop-card-copy');
+  const cardTitle = await page.textContent(".drop-card-title");
+  const cardCopy = await page.textContent(".drop-card-copy");
   console.log("Drop card title:", cardTitle);
   console.log("Drop card copy:", cardCopy);
   assert.equal(cardTitle?.trim(), "Release to remove");
@@ -76,7 +86,9 @@ async function main(t) {
   const viewportCenterX = viewport.width / 2;
   const viewportCenterY = viewport.height / 2;
 
-  console.log(`Card center: (${cardCenterX}, ${cardCenterY}), Viewport center: (${viewportCenterX}, ${viewportCenterY})`);
+  console.log(
+    `Card center: (${cardCenterX}, ${cardCenterY}), Viewport center: (${viewportCenterX}, ${viewportCenterY})`,
+  );
   assert.ok(Math.abs(cardCenterX - viewportCenterX) < 10, "Card is horizontally centered");
   assert.ok(Math.abs(cardCenterY - viewportCenterY) < 20, "Card is vertically centered");
 
@@ -90,7 +102,6 @@ async function main(t) {
 
   await page.waitForSelector('[role="toolbar"]', { timeout: 45000 });
   console.log("Background removal succeeded from drag and drop!");
-
 
   console.log("Drag & Drop test completed successfully!");
 }

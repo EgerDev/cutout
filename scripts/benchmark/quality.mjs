@@ -5,10 +5,10 @@ function boundary(alpha, width, height) {
       const index = y * width + x;
       const foreground = alpha[index] >= 128;
       const differs =
-        (x > 0 && (alpha[index - 1] >= 128) !== foreground) ||
-        (x + 1 < width && (alpha[index + 1] >= 128) !== foreground) ||
-        (y > 0 && (alpha[index - width] >= 128) !== foreground) ||
-        (y + 1 < height && (alpha[index + width] >= 128) !== foreground);
+        (x > 0 && alpha[index - 1] >= 128 !== foreground) ||
+        (x + 1 < width && alpha[index + 1] >= 128 !== foreground) ||
+        (y > 0 && alpha[index - width] >= 128 !== foreground) ||
+        (y + 1 < height && alpha[index + width] >= 128 !== foreground);
       if (differs) result[index] = 1;
     }
   }

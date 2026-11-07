@@ -60,11 +60,19 @@ test("drop session ends only after the last target leaves the window", () => {
   session.enter(body);
   session.enter(overlay);
   assert.equal(
-    session.leave({ target: body, relatedTarget: overlay, clientX: 640, clientY: 360 }, viewport, inside),
+    session.leave(
+      { target: body, relatedTarget: overlay, clientX: 640, clientY: 360 },
+      viewport,
+      inside,
+    ),
     false,
   );
   assert.equal(
-    session.leave({ target: overlay, relatedTarget: null, clientX: -1, clientY: 20 }, viewport, outside),
+    session.leave(
+      { target: overlay, relatedTarget: null, clientX: -1, clientY: 20 },
+      viewport,
+      outside,
+    ),
     true,
   );
 });

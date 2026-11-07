@@ -405,14 +405,11 @@ test("a launch link is refused unless its type is exactly an image's and its byt
         return { items: s.items.length, error: s.errorMessage };
       });
       assert.equal(state.items, 0, type);
-      const copy = type === "image/png"
-        ? "We couldn’t process this image on this device."
-        : "That file isn’t a photo or drawing we can open.";
-      assert.equal(
-        state.error,
-        `${copy} Choose a file from your device to continue.`,
-        type,
-      );
+      const copy =
+        type === "image/png"
+          ? "We couldn’t process this image on this device."
+          : "That file isn’t a photo or drawing we can open.";
+      assert.equal(state.error, `${copy} Choose a file from your device to continue.`, type);
     } finally {
       await context.close();
     }

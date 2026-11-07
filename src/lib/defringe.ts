@@ -360,7 +360,6 @@ export function suppressContactShadow(
   }
 }
 
-
 function analyzeScene(
   src: Uint8ClampedArray,
   mask: Uint8ClampedArray,

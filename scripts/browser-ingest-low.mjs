@@ -30,9 +30,10 @@ async function browserFor(engine) {
     await activeBrowser?.close();
     activeBrowser = undefined;
     activeEngine = undefined;
-    activeBrowser = engine === "chromium"
-      ? await launchChrome({ bypassCSP: false })
-      : await webkit.launch({ headless: true });
+    activeBrowser =
+      engine === "chromium"
+        ? await launchChrome({ bypassCSP: false })
+        : await webkit.launch({ headless: true });
     activeEngine = engine;
   }
   return activeBrowser;
@@ -48,7 +49,9 @@ async function poll(page, predicate, arg, timeout = 20000) {
   throw new Error(`Timed out waiting for ${predicate}`);
 }
 async function open(t, engine, search = "?e2e", configure) {
-  const context = await (await browserFor(engine)).newContext({ acceptDownloads: true, bypassCSP: false });
+  const context = await (
+    await browserFor(engine)
+  ).newContext({ acceptDownloads: true, bypassCSP: false });
   t.after(() => context.close());
   const page = await context.newPage();
   await page.addInitScript(() => {
@@ -270,110 +273,120 @@ for (const engine of ["chromium", "webkit"]) {
 }
 
 for (const engine of ["chromium", "webkit"]) {
-  test(`${engine}: native worker preview stays bounded, preserves dimensions/pixels and recovers after decode refusal`, { timeout: 60_000 }, async (t) => {
-    const page = await open(t, engine);
-    let workerUrl;
-    page.on("request", (request) => {
-      if (/decode-worker(?:\.ts|-[^/]+\.js)/.test(request.url())) workerUrl = request.url();
-    });
-    await page.evaluate(async () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 2400;
-      canvas.height = 1200;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, 2400, 1200);
-      ctx.fillStyle = "black";
-      ctx.fillRect(600, 300, 1200, 600);
-      const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      // Valid PNG with harmless trailing padding selects the app's real worker path (>3 MB).
-      window.__previewSource = new File([png, new Uint8Array(3_100_000)], "preview.png", {
-        type: "image/png",
+  test(
+    `${engine}: native worker preview stays bounded, preserves dimensions/pixels and recovers after decode refusal`,
+    { timeout: 60_000 },
+    async (t) => {
+      const page = await open(t, engine);
+      let workerUrl;
+      page.on("request", (request) => {
+        if (/decode-worker(?:\.ts|-[^/]+\.js)/.test(request.url())) workerUrl = request.url();
       });
-      await window.__cutoutTest.useWorkspace.getState().receiveFiles([window.__previewSource]);
-    });
-    const preview = await poll(page, () => {
-      const item = window.__cutoutTest.useWorkspace.getState().items[0];
-      return (
-        item?.preview && {
-          original: [item.width, item.height],
-          preview: [item.preview.width, item.preview.height],
-        }
-      );
-    });
-    assert.deepEqual(preview, { original: [2400, 1200], preview: [1600, 800] });
-    assert.ok(workerUrl, "real worker module was requested");
-    const result = await page.evaluate(async (workerUrl) => {
-      const worker = new Worker(workerUrl, { type: "module" });
-      try {
-        const ask = (id, file) =>
-          new Promise((resolve, reject) => {
-            const timer = setTimeout(
-              () => reject(new Error(`decode worker request ${id} did not answer`)),
-              10_000,
-            );
-            worker.onerror = (error) => { clearTimeout(timer); reject(error); };
-            worker.onmessage = ({ data }) => { clearTimeout(timer); resolve(data); };
-            worker.postMessage({ id, file, type: file.type, maxEdge: 1600 });
-          });
-        const refused = await ask(1, new File(["broken"], "bad.png", { type: "image/png" }));
-        const healthy = await ask(2, window.__previewSource);
-        const canvas = new OffscreenCanvas(healthy.bitmap.width, healthy.bitmap.height);
+      await page.evaluate(async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 2400;
+        canvas.height = 1200;
         const ctx = canvas.getContext("2d");
-        ctx.drawImage(healthy.bitmap, 0, 0);
-        const hash = Array.from(
-          new Uint8Array(
-            await crypto.subtle.digest(
-              "SHA-256",
-              ctx.getImageData(0, 0, canvas.width, canvas.height).data,
-            ),
-          ),
-          (b) => b.toString(16).padStart(2, "0"),
-        ).join("");
-        const pixels = [
-          Array.from(ctx.getImageData(20, 20, 1, 1).data),
-          Array.from(ctx.getImageData(800, 400, 1, 1).data),
-        ];
-        const dimensions = [
-          healthy.width,
-          healthy.height,
-          healthy.bitmap.width,
-          healthy.bitmap.height,
-        ];
-        healthy.bitmap.close();
-        canvas.width = canvas.height = 0;
-        let contextless;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, 2400, 1200);
+        ctx.fillStyle = "black";
+        ctx.fillRect(600, 300, 1200, 600);
+        const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        // Valid PNG with harmless trailing padding selects the app's real worker path (>3 MB).
+        window.__previewSource = new File([png, new Uint8Array(3_100_000)], "preview.png", {
+          type: "image/png",
+        });
+        await window.__cutoutTest.useWorkspace.getState().receiveFiles([window.__previewSource]);
+      });
+      const preview = await poll(page, () => {
+        const item = window.__cutoutTest.useWorkspace.getState().items[0];
+        return (
+          item?.preview && {
+            original: [item.width, item.height],
+            preview: [item.preview.width, item.preview.height],
+          }
+        );
+      });
+      assert.deepEqual(preview, { original: [2400, 1200], preview: [1600, 800] });
+      assert.ok(workerUrl, "real worker module was requested");
+      const result = await page.evaluate(async (workerUrl) => {
+        const worker = new Worker(workerUrl, { type: "module" });
         try {
-          const blank = new OffscreenCanvas(2, 2).transferToImageBitmap();
-          contextless = "returned bitmap";
-          blank.close();
-        } catch (error) {
-          contextless = error.name;
+          const ask = (id, file) =>
+            new Promise((resolve, reject) => {
+              const timer = setTimeout(
+                () => reject(new Error(`decode worker request ${id} did not answer`)),
+                10_000,
+              );
+              worker.onerror = (error) => {
+                clearTimeout(timer);
+                reject(error);
+              };
+              worker.onmessage = ({ data }) => {
+                clearTimeout(timer);
+                resolve(data);
+              };
+              worker.postMessage({ id, file, type: file.type, maxEdge: 1600 });
+            });
+          const refused = await ask(1, new File(["broken"], "bad.png", { type: "image/png" }));
+          const healthy = await ask(2, window.__previewSource);
+          const canvas = new OffscreenCanvas(healthy.bitmap.width, healthy.bitmap.height);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(healthy.bitmap, 0, 0);
+          const hash = Array.from(
+            new Uint8Array(
+              await crypto.subtle.digest(
+                "SHA-256",
+                ctx.getImageData(0, 0, canvas.width, canvas.height).data,
+              ),
+            ),
+            (b) => b.toString(16).padStart(2, "0"),
+          ).join("");
+          const pixels = [
+            Array.from(ctx.getImageData(20, 20, 1, 1).data),
+            Array.from(ctx.getImageData(800, 400, 1, 1).data),
+          ];
+          const dimensions = [
+            healthy.width,
+            healthy.height,
+            healthy.bitmap.width,
+            healthy.bitmap.height,
+          ];
+          healthy.bitmap.close();
+          canvas.width = canvas.height = 0;
+          let contextless;
+          try {
+            const blank = new OffscreenCanvas(2, 2).transferToImageBitmap();
+            contextless = "returned bitmap";
+            blank.close();
+          } catch (error) {
+            contextless = error.name;
+          }
+          return {
+            refused: Boolean(refused.error) && !refused.bitmap,
+            dimensions,
+            pixels,
+            contextless,
+            hash,
+          };
+        } finally {
+          worker.terminate();
         }
-        return {
-          refused: Boolean(refused.error) && !refused.bitmap,
-          dimensions,
-          pixels,
-          contextless,
-          hash,
-        };
-      } finally {
-        worker.terminate();
-      }
-    }, workerUrl);
-    console.log("healthy-preview", engine, result.hash);
-    assert.equal(result.refused, true);
-    assert.deepEqual(result.dimensions, [2400, 1200, 1600, 800]);
-    assert.deepEqual(result.pixels, [
-      [255, 255, 255, 255],
-      [0, 0, 0, 255],
-    ]);
-    assert.equal(
-      result.contextless,
-      "InvalidStateError",
-      "native no-context transfer already fails safe here",
-    );
-  });
+      }, workerUrl);
+      console.log("healthy-preview", engine, result.hash);
+      assert.equal(result.refused, true);
+      assert.deepEqual(result.dimensions, [2400, 1200, 1600, 800]);
+      assert.deepEqual(result.pixels, [
+        [255, 255, 255, 255],
+        [0, 0, 0, 255],
+      ]);
+      assert.equal(
+        result.contextless,
+        "InvalidStateError",
+        "native no-context transfer already fails safe here",
+      );
+    },
+  );
 }
 
 function graphicPng() {
@@ -700,21 +713,19 @@ for (const engine of ["chromium", "webkit"]) {
           await page.waitForTimeout(10);
         assert.ok(flow.route(), "confirmed fetch reached the controlled boundary");
         if (outcome !== "current-error") await ingestGraphic(page);
-        await flow
-          .route()
-          .fulfill(
-            outcome === "stale-success"
-              ? {
-                  body: graphic,
-                  contentType: "image/png",
-                  headers: { "access-control-allow-origin": "*" },
-                }
-              : {
-                  status: 500,
-                  body: "controlled failure",
-                  headers: { "access-control-allow-origin": "*" },
-                },
-          );
+        await flow.route().fulfill(
+          outcome === "stale-success"
+            ? {
+                body: graphic,
+                contentType: "image/png",
+                headers: { "access-control-allow-origin": "*" },
+              }
+            : {
+                status: 500,
+                body: "controlled failure",
+                headers: { "access-control-allow-origin": "*" },
+              },
+        );
         if (outcome === "current-error")
           await poll(page, () => Boolean(window.__cutoutTest.useWorkspace.getState().errorMessage));
         else {
@@ -943,45 +954,77 @@ for (const engine of ["chromium", "webkit"])
   for (const boundary of ["picker", "create", "write", "close", "native-share", "share-dialog"])
     for (const outcome of ["success", "error"])
       test(`${engine}: launch pending ${boundary} ${outcome} cancellation`, async (t) => {
-        const flow = await launchPage(t, engine, { noSource: true }), { page, dialog } = flow;
+        const flow = await launchPage(t, engine, { noSource: true }),
+          { page, dialog } = flow;
         await ingestGraphic(page, ["save-a.png", "save-b.png"]);
-        await page.evaluate(({ boundary, outcome }) => {
-          window.__nativeTrace = [];
-          const hold = (value) => new Promise((resolve, reject) => {
-            window.__nativeHeld = true;
-            window.__releaseNative = () => outcome === "error"
-              ? reject(Object.assign(new Error("late controlled native failure"), { name: "NotAllowedError" }))
-              : resolve(value);
-          });
-          const writable = {
-            write: async blob => {
-              window.__nativeTrace.push("write");
-              const bytes = new Uint8Array(await blob.arrayBuffer());
-              if (bytes[0] !== 255 || bytes[1] !== 216) throw new Error("expected actual JPEG bytes");
-              if (boundary === "write") await hold();
-            },
-            close: async () => { window.__nativeTrace.push("close"); if (boundary === "close") await hold(); },
-            abort: async () => { window.__nativeTrace.push("abort"); },
-          };
-          const handle = { createWritable: async () => {
-            window.__nativeTrace.push("create");
-            return boundary === "create" ? hold(writable) : writable;
-          } };
-          if (boundary.includes("share")) {
-            Object.defineProperty(navigator, "userAgent", { configurable: true, value: "iPhone OS 18_0" });
-            Object.defineProperty(navigator, "userActivation", { configurable: true, value: { isActive: boundary !== "share-dialog" } });
-            Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
-            Object.defineProperty(navigator, "share", { configurable: true, value: async ({ files }) => {
-              window.__nativeTrace.push("share");
-              const bytes = new Uint8Array(await files[0].arrayBuffer());
-              if (bytes[0] !== 255 || bytes[1] !== 216) throw new Error("expected actual JPEG bytes");
-              return hold();
-            } });
-          } else window.showSaveFilePicker = () => {
-            window.__nativeTrace.push("picker");
-            return boundary === "picker" ? hold(handle) : Promise.resolve(handle);
-          };
-        }, { boundary, outcome });
+        await page.evaluate(
+          ({ boundary, outcome }) => {
+            window.__nativeTrace = [];
+            const hold = (value) =>
+              new Promise((resolve, reject) => {
+                window.__nativeHeld = true;
+                window.__releaseNative = () =>
+                  outcome === "error"
+                    ? reject(
+                        Object.assign(new Error("late controlled native failure"), {
+                          name: "NotAllowedError",
+                        }),
+                      )
+                    : resolve(value);
+              });
+            const writable = {
+              write: async (blob) => {
+                window.__nativeTrace.push("write");
+                const bytes = new Uint8Array(await blob.arrayBuffer());
+                if (bytes[0] !== 255 || bytes[1] !== 216)
+                  throw new Error("expected actual JPEG bytes");
+                if (boundary === "write") await hold();
+              },
+              close: async () => {
+                window.__nativeTrace.push("close");
+                if (boundary === "close") await hold();
+              },
+              abort: async () => {
+                window.__nativeTrace.push("abort");
+              },
+            };
+            const handle = {
+              createWritable: async () => {
+                window.__nativeTrace.push("create");
+                return boundary === "create" ? hold(writable) : writable;
+              },
+            };
+            if (boundary.includes("share")) {
+              Object.defineProperty(navigator, "userAgent", {
+                configurable: true,
+                value: "iPhone OS 18_0",
+              });
+              Object.defineProperty(navigator, "userActivation", {
+                configurable: true,
+                value: { isActive: boundary !== "share-dialog" },
+              });
+              Object.defineProperty(navigator, "canShare", {
+                configurable: true,
+                value: () => true,
+              });
+              Object.defineProperty(navigator, "share", {
+                configurable: true,
+                value: async ({ files }) => {
+                  window.__nativeTrace.push("share");
+                  const bytes = new Uint8Array(await files[0].arrayBuffer());
+                  if (bytes[0] !== 255 || bytes[1] !== 216)
+                    throw new Error("expected actual JPEG bytes");
+                  return hold();
+                },
+              });
+            } else
+              window.showSaveFilePicker = () => {
+                window.__nativeTrace.push("picker");
+                return boundary === "picker" ? hold(handle) : Promise.resolve(handle);
+              };
+          },
+          { boundary, outcome },
+        );
         await dialog.getByRole("button", { name: "Download when ready", exact: true }).click();
         if (boundary === "share-dialog") {
           const ready = page.getByRole("dialog", { name: "Your image is ready" });
@@ -1000,37 +1043,61 @@ for (const engine of ["chromium", "webkit"])
         await page.waitForTimeout(150);
         assert.equal(flow.downloads(), 0);
         const state = await page.evaluate(() => {
-          const store = window.__cutoutTest.useWorkspace, s = store.getState();
+          const store = window.__cutoutTest.useWorkspace,
+            s = store.getState();
           store.getState().removeItem(s.items[0].id);
-          const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event);
-          return { saved: s.saved, exporting: s.exporting, error: s.errorMessage, guarded: event.defaultPrevented, trace: window.__nativeTrace };
+          const event = new Event("beforeunload", { cancelable: true });
+          window.dispatchEvent(event);
+          return {
+            saved: s.saved,
+            exporting: s.exporting,
+            error: s.errorMessage,
+            guarded: event.defaultPrevented,
+            trace: window.__nativeTrace,
+          };
         });
-        assert.deepEqual({ saved: state.saved, exporting: state.exporting, error: state.error, guarded: state.guarded }, { saved: false, exporting: false, error: null, guarded: true });
+        assert.deepEqual(
+          {
+            saved: state.saved,
+            exporting: state.exporting,
+            error: state.error,
+            guarded: state.guarded,
+          },
+          { saved: false, exporting: false, error: null, guarded: true },
+        );
         if (boundary === "picker") assert.deepEqual(state.trace, ["picker"]);
-        if (boundary === "create" && outcome === "success") assert.deepEqual(state.trace, ["picker", "create", "abort"]);
-        if (boundary === "write") assert.deepEqual(state.trace, ["picker", "create", "write", "abort"]);
-        if (boundary === "close" && outcome === "success") assert.deepEqual(state.trace, ["picker", "create", "write", "close"]);
+        if (boundary === "create" && outcome === "success")
+          assert.deepEqual(state.trace, ["picker", "create", "abort"]);
+        if (boundary === "write")
+          assert.deepEqual(state.trace, ["picker", "create", "write", "abort"]);
+        if (boundary === "close" && outcome === "success")
+          assert.deepEqual(state.trace, ["picker", "create", "write", "close"]);
         if (boundary === "share-dialog" && outcome === "success") assert.deepEqual(state.trace, []);
         assert.equal(await page.getByRole("dialog", { name: "Your image is ready" }).count(), 0);
         console.log("controlled-native-save", { engine, boundary, outcome, ...state });
       });
 
 for (const engine of ["chromium", "webkit"])
-  test(`${engine}: unheld current launch exports once and marks only its exported settings`, async t => {
-    const flow = await launchPage(t, engine, { noSource: true }), { page, dialog } = flow;
+  test(`${engine}: unheld current launch exports once and marks only its exported settings`, async (t) => {
+    const flow = await launchPage(t, engine, { noSource: true }),
+      { page, dialog } = flow;
     await ingestGraphic(page, ["healthy-a.png", "healthy-b.png"]);
     await page.evaluate(() => window.__cutoutTest.useWorkspace.setState({ saved: true }));
     const waiting = page.waitForEvent("download");
     await dialog.getByRole("button", { name: "Download when ready", exact: true }).click();
     const file = await waiting;
-    const bytes = await readFile(await file.path()); assert.equal(bytes.readUInt16BE(0), 0xffd8);
-    if (process.env.CUTOUT_DOWNLOAD_DIR) await file.saveAs(`${process.env.CUTOUT_DOWNLOAD_DIR}/healthy-current-${engine}.jpg`);
+    const bytes = await readFile(await file.path());
+    assert.equal(bytes.readUInt16BE(0), 0xffd8);
+    if (process.env.CUTOUT_DOWNLOAD_DIR)
+      await file.saveAs(`${process.env.CUTOUT_DOWNLOAD_DIR}/healthy-current-${engine}.jpg`);
     await poll(page, () => !window.__cutoutTest.useWorkspace.getState().exporting);
     assert.equal(flow.downloads(), 1);
     const state = await page.evaluate(() => {
-      const store = window.__cutoutTest.useWorkspace, s = store.getState();
+      const store = window.__cutoutTest.useWorkspace,
+        s = store.getState();
       store.getState().removeItem(s.items[1].id);
-      const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event);
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
       return { saved: s.saved, error: s.errorMessage, guarded: event.defaultPrevented };
     });
     assert.deepEqual(state, { saved: true, error: null, guarded: false });
@@ -1049,7 +1116,10 @@ for (const engine of ["chromium", "webkit"])
       const files = [];
       page.on("download", (d) => files.push(d));
       await dialog
-        .getByRole("button", { name: noSource ? "Download when ready" : "Load and download", exact: true })
+        .getByRole("button", {
+          name: noSource ? "Download when ready" : "Load and download",
+          exact: true,
+        })
         .click();
       await poll(page, () => {
         const s = window.__cutoutTest.useWorkspace.getState();
@@ -1070,7 +1140,9 @@ for (const engine of ["chromium", "webkit"])
         };
       });
       const automaticDownloads = flow.downloads();
-      await page.evaluate(() => window.__cutoutTest.useWorkspace.setState({ errorMessage: null, saved: false }));
+      await page.evaluate(() =>
+        window.__cutoutTest.useWorkspace.setState({ errorMessage: null, saved: false }),
+      );
       const next = page.waitForEvent("download");
       await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().downloadActive("jpeg"));
       const manual = await next;
@@ -1078,7 +1150,9 @@ for (const engine of ["chromium", "webkit"])
       if (process.env.CUTOUT_DOWNLOAD_DIR) {
         const label = (process.env.CUTOUT_EXPECT_COMMIT ?? "dev").slice(0, 7);
         const kind = noSource ? "current" : "linked";
-        await manual.saveAs(`${process.env.CUTOUT_DOWNLOAD_DIR}/compat-${label}-${engine}-${kind}-manual.jpg`);
+        await manual.saveAs(
+          `${process.env.CUTOUT_DOWNLOAD_DIR}/compat-${label}-${engine}-${kind}-manual.jpg`,
+        );
         for (let i = 0; i < automaticDownloads; i++)
           await files[i].saveAs(
             `${process.env.CUTOUT_DOWNLOAD_DIR}/compat-${label}-${engine}-${kind}-automatic.jpg`,

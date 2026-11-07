@@ -75,6 +75,47 @@ async function settled(page, count = 1) {
   await page.locator(".workspace-frame .stage-media.is-ready.is-settled").waitFor();
 }
 
+/** Record before a className rewrite: animationend can erase both symptoms afterward. */
+async function watchStageEntrance(stage) {
+  return stage.evaluateHandle((el) => {
+    let classLost = false;
+    let animationStarts = 0;
+    const recordClasses = (records) => {
+      // oldValue retains a transient loss even if the class is restored in the same task.
+      if (
+        records.length &&
+        (!el.classList.contains("is-settled") ||
+          records.some((record) => !record.oldValue?.split(/\s+/).includes("is-settled")))
+      )
+        classLost = true;
+    };
+    const observer = new MutationObserver(recordClasses);
+    observer.observe(el, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+    const onStart = (event) => {
+      if (event.target === el && event.animationName === "stage-in") animationStarts++;
+    };
+    el.addEventListener("animationstart", onStart);
+    return {
+      read() {
+        recordClasses(observer.takeRecords());
+        return { classLost, animationStarts };
+      },
+      stop() {
+        observer.disconnect();
+        el.removeEventListener("animationstart", onStart);
+      },
+    };
+  });
+}
+
+async function assertNoStageEntranceReplay(recorder) {
+  assert.deepEqual(
+    await recorder.evaluate((recording) => recording.read()),
+    { classLost: false, animationStarts: 0 },
+    "a className rewrite restarted the stage entrance",
+  );
+}
+
 /** RGBA at fractional points of an element's screenshot. */
 async function pixels(page, locator, points) {
   const png = await locator.screenshot({ animations: "disabled" });
@@ -155,9 +196,11 @@ test("the stage keeps showing the photo while the compositor's images decode", a
 test("dragging the compare wipe updates --wipe and the slider value, nothing else", async (t) => {
   const page = await open(t);
   await upload(page);
+  const entrance = await watchStageEntrance(page.locator(".stage-media"));
   await page.getByRole("button", { name: "Compare" }).click();
   const slider = page.getByRole("slider", { name: "Compare original and result" });
   await slider.waitFor();
+  await assertNoStageEntranceReplay(entrance);
   const gpuBefore = await slider.getAttribute("data-gpu");
   await slider.evaluate((el) => {
     window.__stageMutations = [];
@@ -198,6 +241,48 @@ test("dragging the compare wipe updates --wipe and the slider value, nothing els
     "the spoken value says which side is which",
   );
   assert.equal(await slider.getAttribute("data-gpu"), gpuBefore, "the renderer stayed attached");
+  await assertNoStageEntranceReplay(entrance);
+  await entrance.evaluate((recording) => recording.stop());
+  await entrance.dispose();
+});
+
+test("the entrance recorder detects a replay even after animationend restores the stage", async (t) => {
+  const page = await open(t);
+  await upload(page);
+  const stage = page.locator(".stage-media");
+  const entrance = await watchStageEntrance(stage);
+  await page.getByRole("button", { name: "Compare" }).click();
+  // Simulate the original bug without modifying product code: React dropped the class,
+  // then the old animationend handler added it back. Read only after that recovery.
+  await stage.evaluate((el) => {
+    const restore = (event) => {
+      if (event.target !== el || event.animationName !== "stage-in") return;
+      el.removeEventListener("animationend", restore);
+      el.classList.add("is-settled");
+    };
+    el.addEventListener("animationend", restore);
+    el.classList.remove("is-settled");
+  });
+  await stage.and(page.locator(".is-settled")).waitFor();
+  // A delayed runner sees healthy snapshots, but the recorder retains the replay.
+  assert.equal(await stage.evaluate((el) => el.classList.contains("is-settled")), true);
+  assert.equal(await stage.evaluate((el) => el.getAnimations().length), 0);
+  await assert.rejects(assertNoStageEntranceReplay(entrance), /restarted the stage entrance/);
+  assert.deepEqual(await entrance.evaluate((recording) => recording.read()), {
+    classLost: true,
+    animationStarts: 1,
+  });
+  await entrance.evaluate((recording) => recording.stop());
+  await entrance.dispose();
+
+  const transient = await watchStageEntrance(stage);
+  await stage.evaluate((el) => {
+    el.classList.remove("is-settled");
+    el.classList.add("is-settled");
+  });
+  await assert.rejects(assertNoStageEntranceReplay(transient), /restarted the stage entrance/);
+  await transient.evaluate((recording) => recording.stop());
+  await transient.dispose();
 });
 
 test("compare shows the original file on the source side of the wipe", async (t) => {
@@ -509,6 +594,91 @@ test("opening Adjust or Info does not move the photo or the file name", async (t
     await page.waitForTimeout(250);
   }
 });
+
+// Native focus may reach a sheet after its inert timer expires while the compositor
+// is still sliding it in. Keep that moment deterministic without relying on CPU load.
+for (const direction of ["ltr", "rtl"]) {
+  test(`focusing a sliding sheet cannot scroll the workspace (${direction})`, async (t) => {
+    const page = await open(t);
+    await page.evaluate((dir) => (document.documentElement.dir = dir), direction);
+    await upload(page);
+    const measure = () =>
+      page.evaluate(() => ({
+        stage: document.querySelector(".stage-media").getBoundingClientRect().toJSON(),
+        name: document.querySelector(".image-summary [title]").getBoundingClientRect().toJSON(),
+        scroll: [...document.querySelectorAll("html, body, .workspace-frame")].map((el) => [
+          el.scrollLeft,
+          el.scrollTop,
+        ]),
+      }));
+    const before = await measure();
+    for (const [name, id] of [
+      ["Adjust", "#cutout-adjust"],
+      ["Info", "#cutout-info"],
+    ]) {
+      const paused = await page
+        .getByRole("button", { name, exact: true })
+        .evaluate((button, id) => {
+          button.click();
+          return new Promise((resolve) =>
+            requestAnimationFrame(() => {
+              const transition = document
+                .querySelector(id)
+                .getAnimations()
+                .find((animation) => animation.transitionProperty === "translate");
+              if (!transition) return resolve(false);
+              transition.pause();
+              transition.currentTime = 0;
+              resolve(true);
+            }),
+          );
+        }, id);
+      assert.equal(paused, true, `${name} has a slide transition to pause`);
+      await page.waitForFunction((id) => !document.querySelector(id).inert, id);
+      const focused = await page.locator(id).evaluate((el) => {
+        const button = el.querySelector("button");
+        button.focus();
+        return document.activeElement === button;
+      });
+      assert.equal(focused, true, `${name} remains keyboard focusable`);
+      assert.deepEqual(await measure(), before, `${name} focus scrolled the fixed workspace`);
+      await page
+        .locator(id)
+        .evaluate((el) => el.getAnimations().forEach((animation) => animation.finish()));
+      assert.deepEqual(await measure(), before, `${name} left a scroll offset after opening`);
+      await page.keyboard.press("Escape");
+      await page.locator(`${id}[aria-hidden="true"]`).waitFor();
+      await page
+        .locator(id)
+        .evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+    }
+  });
+}
+
+for (const [label, width, height] of [
+  ["desktop", 1280, 800],
+  ["phone", 390, 844],
+]) {
+  test(`the Adjust sheet still scrolls within the fixed workspace (${label})`, async (t) => {
+    const page = await open(t, { width, height });
+    await upload(page);
+    await openSheet(page, "Adjust");
+    const scroller = page.locator(
+      label === "desktop" ? "#cutout-adjust .sheet-scroll" : "#cutout-adjust",
+    );
+    const box = await scroller.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 500);
+    await page.waitForFunction(
+      (selector) => document.querySelector(selector).scrollTop > 0,
+      label === "desktop" ? "#cutout-adjust .sheet-scroll" : "#cutout-adjust",
+    );
+    assert.deepEqual(
+      await page.locator(".workspace-frame").evaluate((el) => [el.scrollLeft, el.scrollTop]),
+      [0, 0],
+    );
+  });
+}
 
 test("Choose subject fits the photo and offers zoom, undo, redo, show original and Apply", async (t) => {
   const page = await open(t);

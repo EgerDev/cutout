@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { webkit } from "playwright";
-import { launchChrome, bypassCsp, webkitCrashed } from "./chrome.mjs";
+import { launchChrome, bypassCsp, webkitCrashed, tolerateWebkitCrash } from "./chrome.mjs";
+import { testNativeDecoders } from "./native-decoders.mjs";
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
 
@@ -37,17 +38,18 @@ async function decoded(page, bytes, width, height) {
   );
 }
 
-for (const selected of [0, 1])
-  test(`${selected === 0 ? "Chrome" : "WebKit"} opaque AVIF without auxiliary items preserves edges across native decoders (S3-C-PLATFORM-07)`, async (t) => {
-    const chrome = await launchChrome();
-    const apple = bypassCsp(await webkit.launch());
-    const dir = await mkdtemp(join(tmpdir(), "cutout-pixels-"));
-    const rows = [];
-    try {
-      const pages = await Promise.all([chrome.newPage(), apple.newPage()]);
-      await Promise.all(pages.map((page) => page.goto(appUrl)));
-      for (const [encoder, page] of pages.entries()) {
-        if (encoder !== selected) continue;
+for (const [encoder, launch] of [
+  ["Chrome", launchChrome],
+  ["WebKit", async () => bypassCsp(await webkit.launch())],
+])
+  test(`${encoder} opaque AVIF without auxiliary items preserves edges across native decoders (S3-C-PLATFORM-07)`, async (t) => {
+    const samples = [];
+    let encodedAll = false;
+    const encode = async (t) => {
+      const browser = await launch();
+      try {
+        const page = await browser.newPage();
+        await page.goto(appUrl);
         for (const [width, height] of [
           [1001, 750],
           [129, 65],
@@ -99,52 +101,69 @@ for (const selected of [0, 1])
             continue;
           }
           assert.equal(encoded.supported, true);
-          const bytes = encoded.bytes;
-          for (const [decoder, target] of pages.entries()) {
-            rows.push({
-              encoder,
-              decoder,
-              expected: [width, height],
-              width,
-              height,
-              ...(await decoded(target, bytes, width, height)),
-            });
-          }
-          if (process.platform === "darwin") {
-            const path = join(dir, `${encoder}-${width}x${height}.avif`);
-            await writeFile(path, new Uint8Array(bytes));
-            execFileSync("sips", ["-s", "format", "png", path, "--out", `${path}.png`], {
-              stdio: "pipe",
-            });
-            rows.push({
-              encoder,
-              decoder: "ImageIO",
-              expected: [width, height],
-              width,
-              height,
-              ...(await decoded(pages[0], [...(await readFile(`${path}.png`))], width, height)),
-            });
-          }
+          samples.push({ bytes: encoded.bytes, width, height });
         }
+        encodedAll = true;
+      } finally {
+        await browser.close();
       }
-      for (const row of rows) t.diagnostic(JSON.stringify(row));
-      for (const row of rows) {
-        assert.deepEqual([row.width, row.height], row.expected);
-        assert.equal(row.last[3] >= 250, true, `last column ${JSON.stringify(row)}`);
-        assert.equal(row.bottom[3] >= 250, true, `last row ${JSON.stringify(row)}`);
-        for (const pixel of [row.last, row.bottom])
-          for (const [i, expected] of [80, 180, 220].entries()) {
-            assert.ok(Math.abs(pixel[i] - expected) <= 12, `edge colour ${JSON.stringify(row)}`);
+    };
+    await t.test(`${encoder} encoder`, encoder === "WebKit" ? tolerateWebkitCrash(encode) : encode);
+    if (!encodedAll) return;
+
+    const decoders = [
+      ["Chrome", launchChrome],
+      ["WebKit", async () => bypassCsp(await webkit.launch())],
+    ].map(([name, launch]) => ({
+      name,
+      open: async () => {
+        const browser = await launch();
+        try {
+          const page = await browser.newPage();
+          await page.goto(appUrl);
+          return {
+            decode: (bytes, width, height) => decoded(page, bytes, width, height),
+            close: () => browser.close(),
+          };
+        } catch (error) {
+          await browser.close();
+          throw error;
+        }
+      },
+    }));
+    if (process.platform === "darwin") {
+      decoders.push({
+        name: "ImageIO",
+        open: async () => {
+          const dir = await mkdtemp(join(tmpdir(), "cutout-pixels-"));
+          let browser;
+          try {
+            browser = await launchChrome();
+            const page = await browser.newPage();
+            await page.goto(appUrl);
+            return {
+              decode: async (bytes, width, height) => {
+                const path = join(dir, `${width}x${height}.avif`);
+                await writeFile(path, new Uint8Array(bytes));
+                execFileSync("sips", ["-s", "format", "png", path, "--out", `${path}.png`], {
+                  stdio: "pipe",
+                });
+                return decoded(page, [...(await readFile(`${path}.png`))], width, height);
+              },
+              close: async () => {
+                await browser.close();
+                await rm(dir, { recursive: true, force: true });
+              },
+            };
+          } catch (error) {
+            await browser?.close();
+            await rm(dir, { recursive: true, force: true });
+            throw error;
           }
-      }
-    } catch (error) {
-      if (selected !== 1 || !webkitCrashed(error)) throw error;
-      return t.skip("Linux WPE WebKit crashed (recorded environment limit)");
-    } finally {
-      await chrome.close();
-      await apple.close();
-      await rm(dir, { recursive: true, force: true });
+        },
+      });
     }
+    await testNativeDecoders(t, samples, decoders);
   });
 
 test("native HEIC small/extreme sizes either encode or report dimensions and retain the failure (S3-C-PLATFORM-08)", async (t) => {

@@ -168,8 +168,10 @@ export const defaults: EditSettings = {
 export function backgroundPatch(settings: EditSettings, background: BackgroundMode) {
   return {
     background,
-    exportFormat: background.type === "transparent" && settings.exportFormat === "jpeg"
-      ? "png" as const : settings.exportFormat,
+    exportFormat:
+      background.type === "transparent" && settings.exportFormat === "jpeg"
+        ? ("png" as const)
+        : settings.exportFormat,
   };
 }
 

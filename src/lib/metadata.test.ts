@@ -26,11 +26,12 @@ test("JFXX thumbnails containing EXIF/GPS are detected and removed losslessly", 
   app0.writeUInt16BE(payload.length + 2, 2);
   const input = Buffer.concat([plain.subarray(0, 2), app0, payload, plain.subarray(2)]);
   assert.equal(hasEmbeddedMetadata(input), true);
-  const cleaned = new Uint8Array(await (await stripOriginalMetadata(new Blob([input]))).arrayBuffer());
+  const cleaned = new Uint8Array(
+    await (await stripOriginalMetadata(new Blob([input]))).arrayBuffer(),
+  );
   assert.equal(hasEmbeddedMetadata(cleaned), false);
   assert.deepEqual(cleaned, plain, "only the embedded thumbnail is discarded");
 });
-
 
 // Structural controls use the real fixture's headers, with explicitly synthetic entropy.
 const sosAt = gpsJpeg.indexOf(Buffer.from([0xff, 0xda]));
@@ -126,7 +127,7 @@ function pngChunk(type: string, data: Buffer) {
 
 function pngChunkTypes(bytes: Uint8Array) {
   const types: string[] = [];
-  for (let offset = 8; offset + 8 <= bytes.length; ) {
+  for (let offset = 8; offset + 8 <= bytes.length;) {
     const length = new DataView(bytes.buffer, bytes.byteOffset + offset).getUint32(0);
     types.push(Buffer.from(bytes.subarray(offset + 4, offset + 8)).toString("latin1"));
     offset += 12 + length;
@@ -242,7 +243,10 @@ test("inspectImageMetadata reads PNG chunks ExifReader skips and keeps IHDR fiel
     chunk("sRGB", Buffer.from([0])),
     text("Software", "Cutout"),
     text("Comment", "garden still"),
-    chunk("IDAT", Buffer.from([0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00])),
+    chunk(
+      "IDAT",
+      Buffer.from([0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00]),
+    ),
     chunk("IEND", Buffer.alloc(0)),
   ]);
   const report = await inspectImageMetadata(new Blob([png], { type: "image/png" }));
@@ -290,21 +294,35 @@ test("stripPngMetadata strips tEXt, zTXt, iTXt, and eXIf without touching image 
 
   // Build a test PNG with IHDR, tEXt (AI prompt), eXIf, IDAT, IEND
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  const ihdr = Buffer.from([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde]);
-  const textData = Buffer.from("parameters\0Prompt: a magic bunny in forest, Steps: 20, Seed: 12345");
+  const ihdr = Buffer.from([
+    0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53,
+    0xde,
+  ]);
+  const textData = Buffer.from(
+    "parameters\0Prompt: a magic bunny in forest, Steps: 20, Seed: 12345",
+  );
   const textLen = Buffer.alloc(4);
   textLen.writeUInt32BE(textData.length, 0);
   const tEXt = Buffer.concat([textLen, Buffer.from("tEXt"), textData, Buffer.alloc(4)]); // 4 dummy crc bytes
-  const idat = Buffer.from([0, 0, 0, 12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xdd, 0x8d, 0xb0]);
+  const idat = Buffer.from([
+    0, 0, 0, 12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01,
+    0x01, 0x00, 0x18, 0xdd, 0x8d, 0xb0,
+  ]);
   const iend = Buffer.from([0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
   const rawPng = Buffer.concat([signature, ihdr, tEXt, idat, iend]);
 
-  const beforeTags = ExifReader.load(rawPng.buffer.slice(rawPng.byteOffset, rawPng.byteOffset + rawPng.byteLength), { expanded: true });
+  const beforeTags = ExifReader.load(
+    rawPng.buffer.slice(rawPng.byteOffset, rawPng.byteOffset + rawPng.byteLength),
+    { expanded: true },
+  );
   assert.ok(beforeTags.pngText?.parameters);
 
   const { stripPngMetadata } = await import("./metadata.ts");
   const stripped = stripPngMetadata(new Uint8Array(rawPng));
-  const afterTags = ExifReader.load(stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength), { expanded: true });
+  const afterTags = ExifReader.load(
+    stripped.buffer.slice(stripped.byteOffset, stripped.byteOffset + stripped.byteLength),
+    { expanded: true },
+  );
 
   assert.equal(afterTags.pngText, undefined);
   assert.ok(stripped.length < rawPng.length);
@@ -329,7 +347,7 @@ test("stripWebpMetadata removes EXIF and XMP chunks and updates VP8X flags", asy
   // Construct a minimal WebP with VP8X, EXIF, and VP8L
   // RIFF header (12 bytes)
   const riffHeader = Buffer.from("RIFF\0\0\0\0WEBP", "ascii");
-  
+
   // VP8X chunk: 4 len + 4 'VP8X' + 10 bytes data (flags byte at index 0 has EXIF=0x04, XMP=0x08)
   const vp8xPayload = Buffer.alloc(10);
   vp8xPayload[0] = 0x04 | 0x08; // EXIF and XMP flags set
@@ -668,7 +686,10 @@ function orientedGpsJpeg(orientation: number) {
   ];
   const gpsAt = 8 + 2 + 2 * 12 + 4;
   const tiff = [
-    0x49, 0x49, ...le16(42), ...le32(8),
+    0x49,
+    0x49,
+    ...le16(42),
+    ...le32(8),
     ...le16(2),
     ...entry(0x0112, 3, 1, [...le16(orientation), 0, 0]), // Orientation
     ...entry(0x8825, 4, 1, le32(gpsAt)), // GPSInfo
@@ -678,7 +699,12 @@ function orientedGpsJpeg(orientation: number) {
     ...le32(0),
   ];
   const payload = [...Buffer.from("Exif\0\0", "latin1"), ...tiff];
-  const app1 = [0xff, 0xe1, ...[(payload.length + 2) >> 8, (payload.length + 2) & 0xff], ...payload];
+  const app1 = [
+    0xff,
+    0xe1,
+    ...[(payload.length + 2) >> 8, (payload.length + 2) & 0xff],
+    ...payload,
+  ];
   // gpsJpeg without its own APP1/COM: SOI, then everything from the first non-metadata segment.
   const plain = stripJpegForTest(gpsJpeg);
   return Uint8Array.from([...plain.subarray(0, 2), ...app1, ...plain.subarray(2)]);

@@ -1,5 +1,7 @@
 export type GpuApi = {
-  requestAdapter: (options?: { powerPreference?: "high-performance" | "low-power" }) => Promise<GpuAdapter | null>;
+  requestAdapter: (options?: {
+    powerPreference?: "high-performance" | "low-power";
+  }) => Promise<GpuAdapter | null>;
 };
 
 export type GpuAdapter = {
@@ -9,19 +11,28 @@ export type GpuAdapter = {
 };
 
 export type GpuDevice = {
-  addEventListener?: (type: string, listener: (event: { error?: { message?: string } }) => void) => void;
+  addEventListener?: (
+    type: string,
+    listener: (event: { error?: { message?: string } }) => void,
+  ) => void;
   lost?: Promise<{ reason?: string }>;
   destroy?: () => void;
 };
 
-const PREFS: Array<"high-performance" | "low-power" | undefined> = ["high-performance", "low-power", undefined];
+const PREFS: Array<"high-performance" | "low-power" | undefined> = [
+  "high-performance",
+  "low-power",
+  undefined,
+];
 
 /** Try discrete GPU, then integrated, then whatever the browser offers. */
 export async function requestCompatibleAdapter(api: GpuApi | undefined) {
   if (!api) return null;
   for (const preference of PREFS) {
     try {
-      const adapter = await api.requestAdapter(preference ? { powerPreference: preference } : undefined);
+      const adapter = await api.requestAdapter(
+        preference ? { powerPreference: preference } : undefined,
+      );
       if (adapter) return adapter;
     } catch {
       /* next preference */
@@ -47,7 +58,9 @@ export async function requestCompatibleDevice(adapter: GpuAdapter) {
   const maxStorage = adapter.limits?.maxStorageBufferBindingSize;
   const want = 128 * 1024 * 1024;
   const requiredLimits =
-    typeof maxStorage === "number" && maxStorage >= want ? { maxStorageBufferBindingSize: want } : undefined;
+    typeof maxStorage === "number" && maxStorage >= want
+      ? { maxStorageBufferBindingSize: want }
+      : undefined;
   try {
     return await adapter.requestDevice(requiredLimits ? { requiredLimits } : undefined);
   } catch {

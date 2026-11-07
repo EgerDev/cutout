@@ -1,12 +1,26 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   jobs,
+  claimCommit,
+  createStepLog,
+  DOCKER_STACK_SCRIPT,
   tapTotals,
   uiFiles,
   checkFailed,
@@ -282,7 +296,10 @@ const ALL_PASS_LOG = [
  * A fake `docker` that records every call's arguments, emits the canned suite
  * output for step execs, and reports a container as existing or not.
  */
-function fakeDockerHarness(tap, { inspectStatus = 0, mounts = "", workdir = "/srv/cutout-l20-src" } = {}) {
+function fakeDockerHarness(
+  tap,
+  { inspectStatus = 0, mounts = "", workdir = "/srv/cutout-l20-src" } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), "cutout-linux-ci-lane-"));
   const bin = join(root, "bin");
   mkdirSync(bin, { recursive: true });
@@ -544,7 +561,11 @@ test("a container from before the workdir change is migrated, not resumed", () =
     const calls = readFileSync(argsFile, "utf8");
     assert.match(calls, /rm -f /, "stale container was never removed");
     assert.ok(calls.indexOf("rm -f") < calls.indexOf("run -d"), calls);
-    assert.match(calls, /cp .*:\/srv\/cutout-l20-src/, "source copy never landed at the new workdir");
+    assert.match(
+      calls,
+      /cp .*:\/srv\/cutout-l20-src/,
+      "source copy never landed at the new workdir",
+    );
   } finally {
     cleanup();
   }
@@ -641,4 +662,152 @@ test("a failed browser prerequisite is logged and releases the lock", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("step log reservation never overwrites an existing attempt", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutout-linux-ci-log-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const stem = join(dir, "test-unit");
+  const first = createStepLog(stem);
+  const second = createStepLog(stem);
+  try {
+    writeFileSync(first.fd, "first run");
+    writeFileSync(second.fd, "second run");
+    assert.equal(second.path, `${stem}.attempt-2.log`);
+    assert.equal(readFileSync(first.path, "utf8"), "first run");
+    assert.equal(readFileSync(second.path, "utf8"), "second run");
+  } finally {
+    closeSync(first.fd);
+    closeSync(second.fd);
+  }
+});
+
+test("a competing commit claim cannot observe partially written ownership", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutout-linux-ci-publish-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "commit");
+  const write = fs.writeFileSync;
+  let competing = false;
+  t.mock.method(fs, "writeFileSync", (...args) => {
+    if (!competing) {
+      competing = true;
+      claimCommit(file, "same");
+    }
+    return write(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    claimCommit(file, "same");
+    assert.equal(readFileSync(file, "utf8"), "same\n");
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+test("commit ownership is immutable on resume and refuses linked markers", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutout-linux-ci-commit-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "commit");
+  claimCommit(file, "first");
+  claimCommit(file, "first");
+  assert.throws(() => claimCommit(file, "second"), /another commit/);
+  assert.equal(readFileSync(file, "utf8"), "first\n");
+  if (process.platform !== "win32") {
+    const linked = join(dir, "linked");
+    symlinkSync(file, linked);
+    assert.throws(() => claimCommit(linked, "first"));
+    assert.equal(readFileSync(file, "utf8"), "first\n");
+  }
+});
+
+test("compose passes shell metacharacters as data and still runs cleanup", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutout-linux-ci-compose-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const log = join(dir, "compose ' $(touch injected).log");
+  const calls = join(dir, "calls.jsonl");
+  const fakeDocker = join(dir, "docker fake.mjs");
+  writeFileSync(
+    fakeDocker,
+    `import { appendFileSync } from "node:fs"; appendFileSync(process.env.CALLS, JSON.stringify(process.argv.slice(2)) + "\\n");`,
+  );
+  writeFileSync(
+    join(dir, "curl"),
+    `#!/usr/bin/env node
+if (process.argv.includes("-w")) process.stdout.write("400");
+else if (process.argv.at(-1).endsWith("/version.json")) process.stdout.write("fixture-commit");
+else if (process.argv.at(-1).endsWith("/%GG")) process.exitCode = 22;
+`,
+    { mode: 0o755 },
+  );
+  const composeFile = "file ' $(touch injected);.yaml";
+  const result = spawnSync(
+    "bash",
+    [
+      "-c",
+      DOCKER_STACK_SCRIPT,
+      "--",
+      log,
+      "9310",
+      "fixture-commit",
+      process.execPath,
+      fakeDocker,
+      "compose",
+      "-f",
+      composeFile,
+    ],
+    {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, CALLS: calls, PATH: `${dir}${delimiter}${process.env.PATH}` },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(join(dir, "injected")), false);
+  const commands = readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(commands, [
+    ["compose", "-f", composeFile, "up", "-d", "--build", "--wait"],
+    ["compose", "-f", composeFile, "logs"],
+    ["compose", "-f", composeFile, "down", "-v"],
+  ]);
+  assert.equal(readFileSync(log, "utf8"), "");
+});
+
+test("compose still tears down after failed startup and failed log collection", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cutout-linux-ci-cleanup-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const calls = join(dir, "calls.jsonl");
+  const fakeDocker = join(dir, "docker.mjs");
+  writeFileSync(
+    fakeDocker,
+    `import { appendFileSync } from "node:fs";
+appendFileSync(process.env.CALLS, JSON.stringify(process.argv.slice(2)) + "\\n");
+if (process.argv.includes("up")) process.exitCode = 17;
+if (process.argv.includes("logs")) process.exitCode = 23;
+`,
+  );
+  const result = spawnSync(
+    "bash",
+    [
+      "-c",
+      DOCKER_STACK_SCRIPT,
+      "--",
+      join(dir, "compose.log"),
+      "9310",
+      "fixture-commit",
+      process.execPath,
+      fakeDocker,
+      "compose",
+    ],
+    {
+      encoding: "utf8",
+      env: { ...process.env, CALLS: calls },
+    },
+  );
+  assert.equal(result.status, 17, result.stderr);
+  assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse), [
+    ["compose", "up", "-d", "--build", "--wait"],
+    ["compose", "logs"],
+    ["compose", "down", "-v"],
+  ]);
 });

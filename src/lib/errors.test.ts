@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CutoutError, MEMORY_COPY, classifyError, isRetryableEngineError, messageFor } from "./errors.ts";
+import {
+  CutoutError,
+  MEMORY_COPY,
+  classifyError,
+  isRetryableEngineError,
+  messageFor,
+} from "./errors.ts";
 
 test("classifyError maps HEIC and abort", () => {
   const heic = classifyError(new Error("Failed to decode HEIC image"));
@@ -27,12 +33,18 @@ test("classifyError keeps CutoutError fields", () => {
 });
 
 test("classifyError maps engine codes to retryable", () => {
-  const load = classifyError({ code: "model-load-failed", message: "The local model could not be loaded." });
+  const load = classifyError({
+    code: "model-load-failed",
+    message: "The local model could not be loaded.",
+  });
   assert.equal(load.code, "model");
   assert.equal(load.retryable, true);
   assert.equal(isRetryableEngineError({ code: "model-load-failed" }), true);
 
-  const infer = classifyError({ code: "inference-failed", message: "Local processing could not finish." });
+  const infer = classifyError({
+    code: "inference-failed",
+    message: "Local processing could not finish.",
+  });
   assert.equal(infer.retryable, true);
   assert.equal(isRetryableEngineError({ code: "inference-failed" }), true);
 
@@ -191,16 +203,24 @@ test("pin: the five engine error names alone match no classify regex", (t) => {
 });
 
 test("context faults keep specific reload or damaged-model copy across the worker boundary", () => {
-  const lost = classifyError(Object.assign(new Error("The graphics device was lost. Reload the page to continue removing backgrounds."), { code: "removal-context-lost" }));
+  const lost = classifyError(
+    Object.assign(
+      new Error("The graphics device was lost. Reload the page to continue removing backgrounds."),
+      { code: "removal-context-lost" },
+    ),
+  );
   assert.equal(lost.code, "updated");
   assert.match(lost.message, /graphics device.*Reload/);
   assert.equal(lost.retryable, false);
-  const damaged = classifyError(Object.assign(new Error("The saved model file was damaged and has been removed. Try again."), { code: "removal-model-damaged" }));
+  const damaged = classifyError(
+    Object.assign(new Error("The saved model file was damaged and has been removed. Try again."), {
+      code: "removal-model-damaged",
+    }),
+  );
   assert.equal(damaged.code, "model");
   assert.match(damaged.message, /damaged.*removed/);
   assert.equal(damaged.retryable, true);
 });
-
 
 test("C26: oom is a token, not part of room or zoom", () => {
   for (const word of ["zoom", "room", "Kaboom", "classroom", "mushroom", "vroom", "gloom"]) {
@@ -214,11 +234,15 @@ test("C26: oom is a token, not part of room or zoom", () => {
 });
 
 const GPU = "The local remover couldn’t use this device’s graphics. Try again.";
-const CONNECTION = "The local remover couldn’t start on this device. Check your connection and try again.";
+const CONNECTION =
+  "The local remover couldn’t start on this device. Check your connection and try again.";
 
 test("E05-02: a stalled worker keeps its own copy, retryable, not the unknown copy", (t) => {
   t.mock.method(console, "error", () => undefined);
-  const stalled = Object.assign(new Error("The remover stopped responding. Try again."), { code: "removal-worker-stalled", failureKind: "network" });
+  const stalled = Object.assign(new Error("The remover stopped responding. Try again."), {
+    code: "removal-worker-stalled",
+    failureKind: "network",
+  });
   assert.deepEqual(
     (({ code, message, retryable }) => ({ code, message, retryable }))(classifyError(stalled)),
     { code: "model", message: "The remover stopped responding. Try again.", retryable: true },
@@ -228,7 +252,11 @@ test("E05-02: a stalled worker keeps its own copy, retryable, not the unknown co
 test("E05-05: GPU failures get the graphics copy, never the connection copy; network failures keep it", (t) => {
   t.mock.method(console, "error", () => undefined);
   const load = (message: string, failureKind: string, cause?: Error) =>
-    Object.assign(new Error(message, cause ? { cause } : undefined), { name: "RemovalModelLoadError", code: "model-load-failed", failureKind });
+    Object.assign(new Error(message, cause ? { cause } : undefined), {
+      name: "RemovalModelLoadError",
+      code: "model-load-failed",
+      failureKind,
+    });
   // E05-03's real failure: requestDevice throws inside ORT's WebGPU session creation.
   const device = load(
     "Could not load birefnet on webgpu: no available backend found. ERR: [webgpu] OperationError: The requested device could not be created.",
@@ -236,10 +264,22 @@ test("E05-05: GPU failures get the graphics copy, never the connection copy; net
   );
   for (const [label, error] of [
     ["provider-init on webgpu", device],
-    ["the worker's fresh-context request", Object.assign(new Error(GPU), { code: "removal-webgpu-init-failed", failureKind: "provider-init" })],
+    [
+      "the worker's fresh-context request",
+      Object.assign(new Error(GPU), {
+        code: "removal-webgpu-init-failed",
+        failureKind: "provider-init",
+      }),
+    ],
     ["device lost", new Error("WebGPU device lost")],
-    ["gpu-device kind", Object.assign(new Error("GPU device was destroyed"), { failureKind: "gpu-device" })],
-    ["a flat WebGPU mask", Object.assign(new Error("WebGPU returned a flat alpha mask"), { name: "MaskError" })],
+    [
+      "gpu-device kind",
+      Object.assign(new Error("GPU device was destroyed"), { failureKind: "gpu-device" }),
+    ],
+    [
+      "a flat WebGPU mask",
+      Object.assign(new Error("WebGPU returned a flat alpha mask"), { name: "MaskError" }),
+    ],
   ] as const) {
     const failure = classifyError(error);
     assert.equal(failure.message, GPU, label);
@@ -247,34 +287,76 @@ test("E05-05: GPU failures get the graphics copy, never the connection copy; net
   }
   for (const [label, error] of [
     ["fetch on webgpu", load("Could not load birefnet on webgpu: Failed to fetch", "network")],
-    ["a host error", load("Could not load birefnet on wasm: Could not locate file: \"https://huggingface.co/x\".", "model-fetch")],
-    ["a catch-all on wasm", load("Could not load birefnet on wasm: something odd", "provider-init")],
-    ["a JSON parse on webgpu", load("Could not load birefnet on webgpu: Unexpected token '<', \"<html>\" is not valid JSON", "provider-init")],
+    [
+      "a host error",
+      load(
+        'Could not load birefnet on wasm: Could not locate file: "https://huggingface.co/x".',
+        "model-fetch",
+      ),
+    ],
+    [
+      "a catch-all on wasm",
+      load("Could not load birefnet on wasm: something odd", "provider-init"),
+    ],
+    [
+      "a JSON parse on webgpu",
+      load(
+        "Could not load birefnet on webgpu: Unexpected token '<', \"<html>\" is not valid JSON",
+        "provider-init",
+      ),
+    ],
     ["uncoded fetch", new Error("Failed to fetch")],
     // removal-model.ts's real load timeout (a silent download), on either provider.
-    ["a load timeout", Object.assign(load("Could not load birefnet on webgpu: Model download stopped making progress", "network"), { code: "model-load-timeout" })],
-  ] as const) assert.equal(classifyError(error).message, CONNECTION, label);
+    [
+      "a load timeout",
+      Object.assign(
+        load(
+          "Could not load birefnet on webgpu: Model download stopped making progress",
+          "network",
+        ),
+        { code: "model-load-timeout" },
+      ),
+    ],
+  ] as const)
+    assert.equal(classifyError(error).message, CONNECTION, label);
 });
 
 test("E06-G-02: the model host's rate limit asks to wait a minute, retryable, through any wrapper", (t) => {
   t.mock.method(console, "error", () => undefined);
   // transformers hub.js handleError: `Error (${status}) occurred while trying to load file: "<url>".`
-  const raw = new Error('Error (429) occurred while trying to load file: "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c/onnx/model_fp16.onnx".');
-  const loaded = Object.assign(new Error(`Could not load birefnet on webgpu: ${raw.message}`, { cause: raw }), {
-    name: "RemovalModelLoadError", code: "model-load-failed", failureKind: "model-fetch",
-  });
+  const raw = new Error(
+    'Error (429) occurred while trying to load file: "https://huggingface.co/studioludens/birefnet-lite-512/resolve/4a3c/onnx/model_fp16.onnx".',
+  );
+  const loaded = Object.assign(
+    new Error(`Could not load birefnet on webgpu: ${raw.message}`, { cause: raw }),
+    {
+      name: "RemovalModelLoadError",
+      code: "model-load-failed",
+      failureKind: "model-fetch",
+    },
+  );
   // As the client rebuilds it from a worker reply: name, message, code, and the cause chain as text.
-  const fromWorker = Object.assign(new Error(loaded.message, { cause: new Error(`${loaded.message} ← ${raw.message}`) }), {
-    name: "RemovalModelLoadError", code: "model-load-failed", failureKind: "model-fetch",
-  });
+  const fromWorker = Object.assign(
+    new Error(loaded.message, { cause: new Error(`${loaded.message} ← ${raw.message}`) }),
+    {
+      name: "RemovalModelLoadError",
+      code: "model-load-failed",
+      failureKind: "model-fetch",
+    },
+  );
   for (const error of [raw, loaded, fromWorker, new Error("429 Too Many Requests")]) {
     const failure = classifyError(error);
-    assert.deepEqual([failure.code, failure.message, failure.retryable], ["model", "The model server is busy. Try again in a minute.", true]);
+    assert.deepEqual(
+      [failure.code, failure.message, failure.retryable],
+      ["model", "The model server is busy. Try again in a minute.", true],
+    );
   }
-  assert.notEqual(classifyError(new Error('Error (500) occurred while trying to load file: "x".')).message, "The model server is busy. Try again in a minute.");
+  assert.notEqual(
+    classifyError(new Error('Error (500) occurred while trying to load file: "x".')).message,
+    "The model server is busy. Try again in a minute.",
+  );
   assert.equal(isRetryableEngineError(loaded), true);
 });
-
 
 test("model integrity has clear non-looping copy, including the worker's reconstructed error", async (t) => {
   t.mock.method(console, "error", () => undefined);

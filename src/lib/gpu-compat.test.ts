@@ -33,7 +33,10 @@ test("hasFp16Adapter is true only when the default adapter reports shader-f16", 
   assert.equal(await hasFp16Adapter(undefined), false);
   assert.equal(
     await hasFp16Adapter({
-      requestAdapter: async () => ({ requestDevice: async () => ({}), features: { has: () => false } }),
+      requestAdapter: async () => ({
+        requestDevice: async () => ({}),
+        features: { has: () => false },
+      }),
     }),
     false,
   );

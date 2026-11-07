@@ -3,7 +3,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { launchChromeContext } from "../chrome.mjs";
 import { BenchmarkContractError, checkRunRow, inRun } from "./contract.mjs";
-import { combinedNetworkSummary, observeContextNetwork, observeNetwork } from "./network-telemetry.mjs";
+import {
+  combinedNetworkSummary,
+  observeContextNetwork,
+  observeNetwork,
+} from "./network-telemetry.mjs";
 
 export function providerLaunchArgs(requestedProvider) {
   return requestedProvider === "webgpu"
@@ -23,7 +27,11 @@ async function environment(page, cdp, requestedProvider) {
       deviceMemoryGiB: navigator.deviceMemory ?? null,
       crossOriginIsolated,
       gpu: adapter
-        ? { available: true, vendor: adapter.info?.vendor ?? null, architecture: adapter.info?.architecture ?? null }
+        ? {
+            available: true,
+            vendor: adapter.info?.vendor ?? null,
+            architecture: adapter.info?.architecture ?? null,
+          }
         : { available: false, reason: "navigator.gpu or a compatible adapter was unavailable" },
     };
   });
@@ -35,7 +43,10 @@ async function environment(page, cdp, requestedProvider) {
     ...surface,
     initialJsHeapBytes:
       metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")?.value ?? null,
-    nativeMemory: { value: null, reason: "Chrome CDP does not expose process-native peak RSS per removal" },
+    nativeMemory: {
+      value: null,
+      reason: "Chrome CDP does not expose process-native peak RSS per removal",
+    },
     gpuMemory: { value: null, reason: "WebGPU does not expose portable peak allocation telemetry" },
   };
 }
@@ -64,8 +75,14 @@ export async function observeQualityRoute(context) {
         worker.postMessage = (...messages) => {
           const data = messages[0];
           if (data?.type === "run") {
-            const job = { workerUrl: String(args[0]), jobId: data.id, fileName: data.file?.name,
-              mode: data.mode, noWebgpu: Boolean(data.noWebgpu), progress: [] };
+            const job = {
+              workerUrl: String(args[0]),
+              jobId: data.id,
+              fileName: data.file?.name,
+              mode: data.mode,
+              noWebgpu: Boolean(data.noWebgpu),
+              progress: [],
+            };
             jobs.set(data.id, job);
             window.__benchmarkWorkerJobs.push(job);
           }
@@ -76,8 +93,13 @@ export async function observeQualityRoute(context) {
           if (!job) return;
           if (data.type === "progress") job.progress.push({ ...data.progress });
           if (data.type === "done" || data.type === "error") {
-            job.outcome = { type: data.type, method: data.result?.method, provider: data.result?.provider,
-              workerHadGpu: data.result?.workerHadGpu, provenance: data.result?.provenance ?? null };
+            job.outcome = {
+              type: data.type,
+              method: data.result?.method,
+              provider: data.result?.provider,
+              workerHadGpu: data.result?.workerHadGpu,
+              provenance: data.result?.provenance ?? null,
+            };
             jobs.delete(data.id);
           }
         });
@@ -91,10 +113,17 @@ export async function observeQualityRoute(context) {
 export function qualityCaptureFields(options, fixture, result, gpu) {
   if (!options.qualityCapture) return {};
   const progress = result.workerJobs?.[0]?.progress;
-  const switchIndex = Array.isArray(progress) ? progress.findIndex((event) =>
-    event?.stage === "loading" && event.message === "Switching to compatibility mode") : -1;
-  const compatibilityObserved = switchIndex >= 0 && progress.slice(switchIndex + 1).some((event) =>
-    event?.stage === "cutting" && event.message === "Finding subject");
+  const switchIndex = Array.isArray(progress)
+    ? progress.findIndex(
+        (event) =>
+          event?.stage === "loading" && event.message === "Switching to compatibility mode",
+      )
+    : -1;
+  const compatibilityObserved =
+    switchIndex >= 0 &&
+    progress
+      .slice(switchIndex + 1)
+      .some((event) => event?.stage === "cutting" && event.message === "Finding subject");
   return {
     capturePurpose: "quality-only",
     qualityPolicySha256: options.qualityCapture.sha256,
@@ -102,11 +131,17 @@ export function qualityCaptureFields(options, fixture, result, gpu) {
     commit: options[`${options.variant}Commit`],
     evaluation: fixture.evaluation,
     removalMode: result.removalMode,
-    routeEvidence: { source: "worker-messages-v1", gpu, jobs: result.workerJobs,
+    routeEvidence: {
+      source: "worker-messages-v1",
+      gpu,
+      jobs: result.workerJobs,
       primaryExecutedProvider: null,
       compatibilityProcessing: compatibilityObserved ? "observed" : "not-observed",
-      limitation: "Worker messages are observations, not native primary-provider attestation; the baseline primary inference provider is unavailable. requestedProvider is the initial process lane." +
-        (compatibilityObserved ? "" : " Post-switch compatibility processing is not observed/unavailable in these worker messages."),
+      limitation:
+        "Worker messages are observations, not native primary-provider attestation; the baseline primary inference provider is unavailable. requestedProvider is the initial process lane." +
+        (compatibilityObserved
+          ? ""
+          : " Post-switch compatibility processing is not observed/unavailable in these worker messages."),
     },
   };
 }
@@ -122,15 +157,13 @@ async function captureResult(page, fixture, timeoutMs, saveOutput, expectedSha25
     window.__benchmarkCompletedAt = null;
     window.__benchmarkStop?.();
     const initialProgress = window.__cutoutTest.useWorkspace.getState().progress;
-    let lastMessage = initialProgress
-      ? `${initialProgress.stage}:${initialProgress.message}`
-      : "";
+    let lastMessage = initialProgress ? `${initialProgress.stage}:${initialProgress.message}` : "";
     window.__benchmarkStop = window.__cutoutTest.useWorkspace.subscribe((state) => {
       const active = state.items.find((entry) => entry.id === state.activeId);
       if (!active || previous.includes(active.id)) return;
       if (active.status === "done" || active.status === "error") {
         if (window.__benchmarkCompletedAt === null)
-        window.__benchmarkCompletedAt = performance.now();
+          window.__benchmarkCompletedAt = performance.now();
         return;
       }
       const progress = state.progress;
@@ -156,53 +189,78 @@ async function captureResult(page, fixture, timeoutMs, saveOutput, expectedSha25
     { name: fixture.input.path.split(/[\\/]/).at(-1), previous: existingIds },
     timeoutMs,
   );
-  return page.evaluate(async ({ name, includeBytes, expected, previous }) => {
-    const state = window.__cutoutTest.useWorkspace.getState();
-    const item = state.items.find((entry) => entry.name === name && !previous.includes(entry.id));
-    window.__benchmarkStop?.();
-    if (!item) return { status: "error", error: "Completed item disappeared", stages: window.__benchmarkStages };
-    if (item.status === "error")
-      return { status: "error", error: item.error ?? "Removal failed", stages: window.__benchmarkStages };
-    const completeMs = (window.__benchmarkCompletedAt ?? performance.now()) - window.__benchmarkStarted;
-    // Every result is hashed here, after completeMs is taken. Its bytes leave the page only
-    // to be saved: pair 0's, and any later run whose hash differs from pair 0's (C55).
-    let outputSha256 = null;
-    let outputBase64 = null;
-    if (item.resultBlob) {
-      if (!globalThis.crypto?.subtle)
-        throw new Error("crypto.subtle is unavailable (not a secure context); the output cannot be hashed");
-      const bytes = new Uint8Array(await item.resultBlob.arrayBuffer());
-      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-      outputSha256 = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-      if (includeBytes || (expected !== null && outputSha256 !== expected)) {
-        let binary = "";
-        for (let offset = 0; offset < bytes.length; offset += 32_768)
-          binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
-        outputBase64 = btoa(binary);
+  return page.evaluate(
+    async ({ name, includeBytes, expected, previous }) => {
+      const state = window.__cutoutTest.useWorkspace.getState();
+      const item = state.items.find((entry) => entry.name === name && !previous.includes(entry.id));
+      window.__benchmarkStop?.();
+      if (!item)
+        return {
+          status: "error",
+          error: "Completed item disappeared",
+          stages: window.__benchmarkStages,
+        };
+      if (item.status === "error")
+        return {
+          status: "error",
+          error: item.error ?? "Removal failed",
+          stages: window.__benchmarkStages,
+        };
+      const completeMs =
+        (window.__benchmarkCompletedAt ?? performance.now()) - window.__benchmarkStarted;
+      // Every result is hashed here, after completeMs is taken. Its bytes leave the page only
+      // to be saved: pair 0's, and any later run whose hash differs from pair 0's (C55).
+      let outputSha256 = null;
+      let outputBase64 = null;
+      if (item.resultBlob) {
+        if (!globalThis.crypto?.subtle)
+          throw new Error(
+            "crypto.subtle is unavailable (not a secure context); the output cannot be hashed",
+          );
+        const bytes = new Uint8Array(await item.resultBlob.arrayBuffer());
+        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+        outputSha256 = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+        if (includeBytes || (expected !== null && outputSha256 !== expected)) {
+          let binary = "";
+          for (let offset = 0; offset < bytes.length; offset += 32_768)
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+          outputBase64 = btoa(binary);
+        }
       }
-    }
-    return {
-      status: "completed",
-      completeMs,
-      appDurationMs: item.durationMs,
-      removalMode: state.removalMode,
-      provider: item.provider,
-      method: item.method,
-      width: item.width,
-      height: item.height,
-      diagnostics: item.diagnostics ?? null,
-      removalNote: item.removalNote ?? null,
-      stages: window.__benchmarkStages,
-      outputSha256,
-      outputBase64,
-      workerJobs: window.__benchmarkWorkerJobs ?? null,
-    };
-  }, { name: fixture.input.path.split(/[\\/]/).at(-1), includeBytes: saveOutput, expected: expectedSha256, previous: existingIds });
+      return {
+        status: "completed",
+        completeMs,
+        appDurationMs: item.durationMs,
+        removalMode: state.removalMode,
+        provider: item.provider,
+        method: item.method,
+        width: item.width,
+        height: item.height,
+        diagnostics: item.diagnostics ?? null,
+        removalNote: item.removalNote ?? null,
+        stages: window.__benchmarkStages,
+        outputSha256,
+        outputBase64,
+        workerJobs: window.__benchmarkWorkerJobs ?? null,
+      };
+    },
+    {
+      name: fixture.input.path.split(/[\\/]/).at(-1),
+      includeBytes: saveOutput,
+      expected: expectedSha256,
+      previous: existingIds,
+    },
+  );
 }
 
 /** What a failed removal reported, for failure.json. */
 function failedRow(fixture, result) {
-  return { fixtureId: fixture.id, status: result.status, error: result.error, stages: result.stages };
+  return {
+    fixtureId: fixture.id,
+    status: result.status,
+    error: result.error,
+    stages: result.stages,
+  };
 }
 
 /**
@@ -235,18 +293,29 @@ export async function runVariantBlock(options) {
       timeout: options.timeoutMs,
     });
     await poll(page, () => Boolean(window.__cutoutTest?.useWorkspace), null, options.timeoutMs);
-    await page.evaluate((mode) => window.__cutoutTest.useWorkspace.getState().setRemovalMode(mode), options.mode);
+    await page.evaluate(
+      (mode) => window.__cutoutTest.useWorkspace.getState().setRemovalMode(mode),
+      options.mode,
+    );
     const browserEnvironment = await environment(page, cdp, options.requestedProvider);
-    const qualityFields = (fixture, result) => qualityCaptureFields(options, fixture, result, browserEnvironment.gpu);
+    const qualityFields = (fixture, result) =>
+      qualityCaptureFields(options, fixture, result, browserEnvironment.gpu);
     for (let warmup = 0; warmup < options.warmups; warmup += 1) {
       activeFixture = `warmup-${warmup}`;
       const fixture = options.fixtures[warmup % options.fixtures.length];
       where = { fixtureId: fixture.id, ...block, phase: `warmup ${warmup}` };
       const result = await captureResult(page, fixture, options.timeoutMs, false);
       if (result.status !== "completed")
-        throw new BenchmarkContractError(`Warmup failed: ${result.error}`, where, failedRow(fixture, result));
+        throw new BenchmarkContractError(
+          `Warmup failed: ${result.error}`,
+          where,
+          failedRow(fixture, result),
+        );
       if (result.removalMode !== options.mode)
-        throw new BenchmarkContractError(`Warmup changed removal mode from ${options.mode} to ${result.removalMode}`, where);
+        throw new BenchmarkContractError(
+          `Warmup changed removal mode from ${options.mode} to ${result.removalMode}`,
+          where,
+        );
       checkRunRow(
         {
           fixtureId: fixture.id,
@@ -275,19 +344,30 @@ export async function runVariantBlock(options) {
         options.referenceOutputs?.get(fixture.id) ?? null,
       );
       if (result.status !== "completed")
-        throw new BenchmarkContractError(`removal failed: ${result.error}`, where, failedRow(fixture, result));
+        throw new BenchmarkContractError(
+          `removal failed: ${result.error}`,
+          where,
+          failedRow(fixture, result),
+        );
       await contextTelemetry.waitForSettled(fixture.id, Math.min(options.timeoutMs, 5_000));
       const metrics = await cdp.send("Performance.getMetrics");
       let outputPath = null;
       if (result.outputBase64) {
         // Pair 0 keeps the path the scorer reads; a later pair's differing output sits beside it.
-        const directory = join("outputs", options.variant, ...(options.pair === 0 ? [] : [`pair-${options.pair}`]));
+        const directory = join(
+          "outputs",
+          options.variant,
+          ...(options.pair === 0 ? [] : [`pair-${options.pair}`]),
+        );
         // outputPath is an artifact identifier inside the bundle, recorded in
         // runs.jsonl/manifest — always POSIX separators, even on Windows.
         outputPath = join(directory, `${fixture.id}.png`).replaceAll(sep, "/");
         const bytes = Buffer.from(result.outputBase64, "base64");
         if (createHash("sha256").update(bytes).digest("hex") !== result.outputSha256)
-          throw new BenchmarkContractError("saved output bytes do not match the sha256 the page computed", where);
+          throw new BenchmarkContractError(
+            "saved output bytes do not match the sha256 the page computed",
+            where,
+          );
         await mkdir(join(options.outputDirectory, directory), { recursive: true });
         await writeFile(join(options.outputDirectory, outputPath), bytes);
       }
@@ -312,8 +392,12 @@ export async function runVariantBlock(options) {
           contextTelemetry.entriesFor(fixture.id),
         ),
         resources: {
-          jsHeapBytes: metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")?.value ?? null,
-          workerMemory: { value: null, reason: "Worker heap is not exposed through page CDP metrics" },
+          jsHeapBytes:
+            metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")?.value ?? null,
+          workerMemory: {
+            value: null,
+            reason: "Worker heap is not exposed through page CDP metrics",
+          },
         },
         outputPath,
         pair: options.pair,
@@ -322,7 +406,11 @@ export async function runVariantBlock(options) {
         ...qualityFields(fixture, result),
       };
       if (result.removalMode !== options.mode)
-        throw new BenchmarkContractError(`changed removal mode from ${options.mode} to ${result.removalMode}`, where, row);
+        throw new BenchmarkContractError(
+          `changed removal mode from ${options.mode} to ${result.removalMode}`,
+          where,
+          row,
+        );
       checkRunRow(row, where, options.qualityCapture);
       await options.onRow?.(row);
       rows.push(row);

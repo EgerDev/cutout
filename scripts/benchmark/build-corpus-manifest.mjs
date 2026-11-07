@@ -20,7 +20,9 @@ const generatedCategories = [
 ];
 
 async function digest(path) {
-  return createHash("sha256").update(await readFile(path)).digest("hex");
+  return createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
 }
 
 async function fileRecord(root, path, includeDimensions) {
@@ -51,7 +53,8 @@ export async function buildCorpusManifest(root) {
         sourceUrl: aimIndex.datasetFolderUrl,
         sourceId: source.inputSourceId,
         annotationSourceId: source.alphaSourceId,
-        license: "MIT (AIM-500 release agreement); underlying image copyrights remain with original owners",
+        license:
+          "MIT (AIM-500 release agreement); underlying image copyrights remain with original owners",
         note: `${aimIndex.categorizationMethod} Local research/evaluation only; do not redistribute as an application fixture`,
       },
     });
@@ -63,9 +66,10 @@ export async function buildCorpusManifest(root) {
     // Edge-case fixtures (known-41+) are labelled by the generator's own tables,
     // not by index into the original ten categories.
     const edge = /^known-(\d+)$/.exec(id);
-    const category = edge && Number(edge[1]) >= 41
-      ? edgeCases[(Number(edge[1]) - 41) % edgeCases.length]
-      : generatedCategories[index % generatedCategories.length];
+    const category =
+      edge && Number(edge[1]) >= 41
+        ? edgeCases[(Number(edge[1]) - 41) % edgeCases.length]
+        : generatedCategories[index % generatedCategories.length];
     fixtures.push({
       id,
       split: generatedSplit(index),
@@ -82,19 +86,21 @@ export async function buildCorpusManifest(root) {
     });
   }
   // This is the historical corpus copy, not the replacement public sample. Keep its original provenance.
-  const excludedFixtures = [{
-    id: "current-sample-provenance-blocked",
-    split: "smoke",
-    category: "current-sample",
-    evaluation: "visual-only",
-    input: await fileRecord(root, "current/sample.jpg", true),
-    provenance: {
-      sourceUrl: "repository:public/sample.jpg",
-      sourceId: "66528ac22db767382652b575ce3184099da97386",
-      license: "UNKNOWN",
-      note: "CREDITS.md says provenance is unconfirmed; excluded from quality metrics and release claims",
+  const excludedFixtures = [
+    {
+      id: "current-sample-provenance-blocked",
+      split: "smoke",
+      category: "current-sample",
+      evaluation: "visual-only",
+      input: await fileRecord(root, "current/sample.jpg", true),
+      provenance: {
+        sourceUrl: "repository:public/sample.jpg",
+        sourceId: "66528ac22db767382652b575ce3184099da97386",
+        license: "UNKNOWN",
+        note: "CREDITS.md says provenance is unconfirmed; excluded from quality metrics and release claims",
+      },
     },
-  }];
+  ];
   const manifest = {
     schemaVersion: 1,
     heldoutState: "locked",
@@ -124,9 +130,13 @@ export async function buildCorpusManifest(root) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   buildCorpusManifest(resolve(process.argv[2] ?? ".omo/benchmarks/cutout-owned-engine/corpus"))
-    .then((manifest) => process.stdout.write(`${JSON.stringify({ ok: true, fixtures: manifest.fixtures.length })}\n`))
+    .then((manifest) =>
+      process.stdout.write(`${JSON.stringify({ ok: true, fixtures: manifest.fixtures.length })}\n`),
+    )
     .catch((error) => {
-      process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`);
+      process.stderr.write(
+        `${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+      );
       process.exitCode = 1;
     });
 }

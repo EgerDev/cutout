@@ -48,7 +48,9 @@ export function combinedNetworkSummary(pageEntries, contextEntries) {
   const browserContext = summarizeContext(contextEntries);
   const unmatched = [...pageEntries];
   const unmeasuredByPageTarget = contextEntries.filter((entry) => {
-    const match = unmatched.findIndex((candidate) => candidate.url === entry.url && candidate.method === entry.method);
+    const match = unmatched.findIndex(
+      (candidate) => candidate.url === entry.url && candidate.method === entry.method,
+    );
     if (match === -1) return true;
     unmatched.splice(match, 1);
     return false;
@@ -57,16 +59,18 @@ export function combinedNetworkSummary(pageEntries, contextEntries) {
     observedRequestCount: contextEntries.length,
     encodedDataLength: pageTarget.encodedDataLength,
     encodedDataLengthScope: "Page-target CDP Network.loadingFinished only",
-    completeEncodedCoverage: unmeasuredByPageTarget.length === 0
-      && pageTarget.incompleteCount === 0
-      && pageTarget.failedCount === 0
-      && browserContext.incompleteCount === 0
-      && browserContext.failedCount === 0,
+    completeEncodedCoverage:
+      unmeasuredByPageTarget.length === 0 &&
+      pageTarget.incompleteCount === 0 &&
+      pageTarget.failedCount === 0 &&
+      browserContext.incompleteCount === 0 &&
+      browserContext.failedCount === 0,
     unmeasuredByPageTargetCount: unmeasuredByPageTarget.length,
     unmeasuredByPageTarget,
     workerEncodedDataLength: {
       value: null,
-      reason: "Playwright browser-context worker request events do not expose encoded transfer length",
+      reason:
+        "Playwright browser-context worker request events do not expose encoded transfer length",
     },
     pageTarget,
     browserContext,
@@ -115,13 +119,19 @@ export function observeContextNetwork(context, currentFixture) {
     },
     async waitForSettled(fixtureId, timeoutMs) {
       const deadline = Date.now() + timeoutMs;
-      while (entries.some((entry) => entry.fixtureId === fixtureId && entry.terminal === "pending")) {
-        if (Date.now() >= deadline) throw new BenchmarkContractError(`Browser-context requests for ${fixtureId} did not settle within ${timeoutMs} ms`);
+      while (
+        entries.some((entry) => entry.fixtureId === fixtureId && entry.terminal === "pending")
+      ) {
+        if (Date.now() >= deadline)
+          throw new BenchmarkContractError(
+            `Browser-context requests for ${fixtureId} did not settle within ${timeoutMs} ms`,
+          );
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
     },
     stop() {
-      for (const [event, listener] of Object.entries(listeners)) context.removeListener(event, listener);
+      for (const [event, listener] of Object.entries(listeners))
+        context.removeListener(event, listener);
     },
   };
 }
@@ -194,16 +204,21 @@ export async function observeNetwork(cdp, currentFixture) {
     },
     async waitForSettled(fixtureId, timeoutMs) {
       const deadline = Date.now() + timeoutMs;
-      while (entries.some((entry) => entry.fixtureId === fixtureId && entry.terminal === "pending")) {
+      while (
+        entries.some((entry) => entry.fixtureId === fixtureId && entry.terminal === "pending")
+      ) {
         if (Date.now() >= deadline)
-          throw new BenchmarkContractError(`Network requests for ${fixtureId} did not settle within ${timeoutMs} ms`);
+          throw new BenchmarkContractError(
+            `Network requests for ${fixtureId} did not settle within ${timeoutMs} ms`,
+          );
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
     },
     async stop() {
       if (stopped) return;
       stopped = true;
-      for (const [event, listener] of Object.entries(listeners)) cdp.removeListener(event, listener);
+      for (const [event, listener] of Object.entries(listeners))
+        cdp.removeListener(event, listener);
       await cdp.send("Network.disable").catch(() => undefined);
     },
   };

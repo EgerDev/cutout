@@ -128,11 +128,7 @@ test("downscaled 192px probe keeps scale-invariant padding and magnification >= 
 });
 
 test("pixelBounds clamps negative crop coordinates to avoid IndexSizeError", () => {
-  const bounds = pixelBounds(
-    { x: -0.05, y: -0.1, width: 0.5, height: 0.5 },
-    100,
-    100,
-  );
+  const bounds = pixelBounds({ x: -0.05, y: -0.1, width: 0.5, height: 0.5 }, 100, 100);
   assert.ok(bounds.x >= 0, `bounds.x must be >= 0, got ${bounds.x}`);
   assert.ok(bounds.y >= 0, `bounds.y must be >= 0, got ${bounds.y}`);
   assert.ok(bounds.width > 0);
@@ -145,11 +141,7 @@ test("pixelBounds handles NaN crop coordinates and zero image dimensions safely"
   const zeroBounds = pixelBounds({ x: 0.5, y: 0.5, width: 0.5, height: 0.5 }, 0, 0);
   assert.deepEqual(zeroBounds, { x: 0, y: 0, width: 0, height: 0 });
 
-  const nanBounds = pixelBounds(
-    { x: NaN, y: NaN, width: NaN, height: NaN },
-    100,
-    100,
-  );
+  const nanBounds = pixelBounds({ x: NaN, y: NaN, width: NaN, height: NaN }, 100, 100);
   assert.equal(nanBounds.x, 0);
   assert.equal(nanBounds.y, 0);
   assert.ok(nanBounds.width > 0);
@@ -157,5 +149,3 @@ test("pixelBounds handles NaN crop coordinates and zero image dimensions safely"
   assert.ok(Number.isFinite(nanBounds.width));
   assert.ok(Number.isFinite(nanBounds.height));
 });
-
-

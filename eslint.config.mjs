@@ -61,7 +61,8 @@ export default tseslint.config(
           paths: [
             {
               name: "@huggingface/transformers",
-              message: "Use transformers() from src/lib/transformers.ts, which verifies model pins.",
+              message:
+                "Use transformers() from src/lib/transformers.ts, which verifies model pins.",
             },
           ],
         },

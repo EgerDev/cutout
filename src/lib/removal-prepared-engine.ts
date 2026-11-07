@@ -37,7 +37,8 @@ export class RemovalModelOutputError extends Error {
     options?: { readonly cause?: unknown; readonly failureKind?: OutputFailureKind },
   ) {
     super(message, options);
-    this.failureKind = options?.failureKind ?? (request.provider === "webgpu" ? "gpu-mask" : "model-output");
+    this.failureKind =
+      options?.failureKind ?? (request.provider === "webgpu" ? "gpu-mask" : "model-output");
   }
 }
 
@@ -88,17 +89,28 @@ export function prepareRemovalEngine(options: PrepareEngineOptions): PreparedRem
       return { pixel_values: tensor };
     },
     async model(inputs) {
-      const output: unknown = await boundary(() => modelValue({ [spec.inputName]: inputs.input_image }));
+      const output: unknown = await boundary(() =>
+        modelValue({ [spec.inputName]: inputs.input_image }),
+      );
       const candidate = unknownField(output, spec.outputName);
       const tensor = parseRemovalTensor(candidate, spec.outputDims);
       if (!tensor) {
         // D1 keeps missing output non-persistent. A returned malformed tensor is the
         // distinct GPU-mask defect, confirmed by WASM before recording (C16).
-        return rejectReturnedTensor(request, candidate, `Model returned malformed ${spec.outputName}`, candidate == null ? "model-output" : undefined);
+        return rejectReturnedTensor(
+          request,
+          candidate,
+          `Model returned malformed ${spec.outputName}`,
+          candidate == null ? "model-output" : undefined,
+        );
       }
       for (let index = 0; index < tensor.data.length; index += 1) {
         if (!Number.isFinite(tensor.data[index])) {
-          return rejectReturnedTensor(request, tensor, `Model returned nonfinite ${spec.outputName}`);
+          return rejectReturnedTensor(
+            request,
+            tensor,
+            `Model returned nonfinite ${spec.outputName}`,
+          );
         }
       }
       return { output_image: tensor };
@@ -111,10 +123,14 @@ export function prepareRemovalEngine(options: PrepareEngineOptions): PreparedRem
           try {
             await disposeRemovalResource(resource);
             remaining.delete(resource);
-          } catch (error) { failures.push(error); }
+          } catch (error) {
+            failures.push(error);
+          }
         }
         if (failures.length > 0) throw removalResourceFailure(failures);
-      })().finally(() => { disposing = undefined; });
+      })().finally(() => {
+        disposing = undefined;
+      });
       await disposing;
     },
   };

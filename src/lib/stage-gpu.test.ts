@@ -415,7 +415,8 @@ test("a failed resize upload cannot leave a destroyed texture eligible for reuse
         const A2 = source(32, 24);
         const B = source(80, 48);
         const D = source(16, 12);
-        const frame = (bitmap: { width: number; height: number }) => slotFrame(slot, bitmap, stable);
+        const frame = (bitmap: { width: number; height: number }) =>
+          slotFrame(slot, bitmap, stable);
         const label = `${slot} ${mode}`;
         const viewsBefore = gpu.viewsOfDestroyed.length;
         const submitsBefore = gpu.submitsOfDestroyed.length;
@@ -490,7 +491,6 @@ test("a failed resize upload cannot leave a destroyed texture eligible for reuse
     }
   });
 });
-
 
 test("manual compare atlas failure is transactional at every allocation and submission window", async (t) => {
   const doc = Object.getOwnPropertyDescriptor(globalThis, "document");

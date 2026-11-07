@@ -29,8 +29,12 @@ async function loadFake(config = {}, ctx = "page") {
 
 /** Mirrors removal-model.ts defaultFactories, over the fake instead of Transformers.js. */
 async function poolFor(tf) {
-  const { createRemovalEnginePool, REMOVAL_MODELS } = await import(new URL("src/lib/removal-model.ts", ROOT_URL).href);
-  const { removalProgressEvent } = await import(new URL("src/lib/removal-model-specs.ts", ROOT_URL).href);
+  const { createRemovalEnginePool, REMOVAL_MODELS } = await import(
+    new URL("src/lib/removal-model.ts", ROOT_URL).href
+  );
+  const { removalProgressEvent } = await import(
+    new URL("src/lib/removal-model-specs.ts", ROOT_URL).href
+  );
   const pool = createRemovalEnginePool({
     loadProcessor: (model, progress) =>
       tf.AutoProcessor.from_pretrained(REMOVAL_MODELS[model].modelId, {
@@ -93,20 +97,30 @@ test("BiRefNet on WASM passes the real adapter's tensor and name checks, with co
   const { tf, log } = await loadFake();
   const pool = await poolFor(tf);
   const progress = [];
-  await pool.use(request("birefnet", "wasm"), { onProgress: (event) => progress.push(event) }, async (engine) => {
-    assert.equal(engine.provider, "wasm");
-    const processed = await engine.processor(rawImage(tf));
-    assert.deepEqual(processed.pixel_values.dims, [1, 3, 512, 512]);
-    const output = await engine.model({ input_image: processed.pixel_values });
-    assert.deepEqual(output.output_image.dims, [1, 1, 512, 512]);
-    assert.equal(output.output_image.data.length, 512 * 512);
-    assert.equal(output.output_image.data[0], 20, "default BiRefNet output is a raw logit");
-    processed.pixel_values.dispose();
-    output.output_image.dispose();
-  });
+  await pool.use(
+    request("birefnet", "wasm"),
+    { onProgress: (event) => progress.push(event) },
+    async (engine) => {
+      assert.equal(engine.provider, "wasm");
+      const processed = await engine.processor(rawImage(tf));
+      assert.deepEqual(processed.pixel_values.dims, [1, 3, 512, 512]);
+      const output = await engine.model({ input_image: processed.pixel_values });
+      assert.deepEqual(output.output_image.dims, [1, 1, 512, 512]);
+      assert.equal(output.output_image.data.length, 512 * 512);
+      assert.equal(output.output_image.data[0], 20, "default BiRefNet output is a raw logit");
+      processed.pixel_values.dispose();
+      output.output_image.dispose();
+    },
+  );
   const pulls = types(log, "from_pretrained");
   assert.deepEqual(
-    pulls.map((event) => [event.kind, event.model, event.device ?? null, event.dtype ?? null, event.file]),
+    pulls.map((event) => [
+      event.kind,
+      event.model,
+      event.device ?? null,
+      event.dtype ?? null,
+      event.file,
+    ]),
     [
       ["processor", "birefnet", null, null, "preprocessor_config.json"],
       ["model", "birefnet", "wasm", "fp32", "onnx/model.onnx"],
@@ -122,9 +136,15 @@ test("BiRefNet on WASM passes the real adapter's tensor and name checks, with co
     ],
   );
   assert.equal(types(log, "run")[0].width, 120, "the processor run records the RawImage size");
-  assert.ok(progress.some((event) => event.status === "progress" && event.file === "onnx/model.onnx"));
-  const disposed = (target) => log.filter((event) => event.type === "dispose" && event.target === target).length;
-  assert.deepEqual([disposed("pixel_values"), disposed("output_image"), disposed("sigmoid-result")], [1, 1, 0]);
+  assert.ok(
+    progress.some((event) => event.status === "progress" && event.file === "onnx/model.onnx"),
+  );
+  const disposed = (target) =>
+    log.filter((event) => event.type === "dispose" && event.target === target).length;
+  assert.deepEqual(
+    [disposed("pixel_values"), disposed("output_image"), disposed("sigmoid-result")],
+    [1, 1, 0],
+  );
   assert.equal(types(log, "sigmoid").length, 0);
   assert.equal(disposed("model"), 0, "the cached engine is still live");
   await pool.releaseIdle(request("birefnet", "wasm"));
@@ -157,7 +177,10 @@ test("BiRefNet on WebGPU requests the fp16 file; ISNet uses input/output names a
 test("masks are authored in model space from source coordinates and bands", async () => {
   const { tf } = await loadFake({
     page: {
-      mask: (c, h) => (c.n === 1 ? h.rect(c, { x0: 40, y0: 30, x1: 52, y1: 50, inside: 20, outside: -20 }) : h.bandsX([-2, 0, 2])),
+      mask: (c, h) =>
+        c.n === 1
+          ? h.rect(c, { x0: 40, y0: 30, x1: 52, y1: 50, inside: 20, outside: -20 })
+          : h.bandsX([-2, 0, 2]),
     },
   });
   const pool = await poolFor(tf);
@@ -194,7 +217,9 @@ test("sigmoid is counted and returns a disposable tensor; double dispose is flag
     output.output_image.dispose();
   });
   assert.equal(types(log, "sigmoid").length, 1);
-  const results = log.filter((event) => event.type === "dispose" && event.target === "sigmoid-result");
+  const results = log.filter(
+    (event) => event.type === "dispose" && event.target === "sigmoid-result",
+  );
   assert.deepEqual(
     results.map((event) => event.repeat),
     [false, true],
@@ -209,13 +234,19 @@ test("a non-finite output is rejected by the adapter and the returned tensor is 
       const processed = await engine.processor(rawImage(tf));
       await engine.model({ input_image: processed.pixel_values });
     }),
-    (error) => error.name === "RemovalModelOutputError" && /nonfinite output_image/.test(error.message),
+    (error) =>
+      error.name === "RemovalModelOutputError" && /nonfinite output_image/.test(error.message),
   );
-  assert.equal(log.filter((event) => event.type === "dispose" && event.target === "output_image").length, 1);
+  assert.equal(
+    log.filter((event) => event.type === "dispose" && event.target === "output_image").length,
+    1,
+  );
 });
 
 test("a mask that throws fails that run only, and run counts continue", async () => {
-  const { tf, log } = await loadFake({ page: { mask: (c, h) => (c.n > 1 ? h.fail("crop off") : 20) } });
+  const { tf, log } = await loadFake({
+    page: { mask: (c, h) => (c.n > 1 ? h.fail("crop off") : 20) },
+  });
   const pool = await poolFor(tf);
   await pool.use(request("birefnet", "wasm"), {}, async (engine) => {
     const processed = await engine.processor(rawImage(tf));
@@ -231,7 +262,14 @@ test("a mask that throws fails that run only, and run counts continue", async ()
 test("run hooks see per model+device call counts", async () => {
   const seen = [];
   globalThis.__seen = seen;
-  const { tf } = await loadFake({ page: { run: async (c) => (c.phase === "model" ? void globalThis.__seen.push([c.device, c.n, c.deviceCall]) : undefined) } });
+  const { tf } = await loadFake({
+    page: {
+      run: async (c) =>
+        c.phase === "model"
+          ? void globalThis.__seen.push([c.device, c.n, c.deviceCall])
+          : undefined,
+    },
+  });
   const pool = await poolFor(tf);
   for (const provider of ["wasm", "webgpu", "wasm"]) {
     await pool.use(request("birefnet", provider), {}, async (engine) => {
@@ -240,7 +278,11 @@ test("run hooks see per model+device call counts", async () => {
     });
   }
   delete globalThis.__seen;
-  assert.deepEqual(seen, [["wasm", 1, 1], ["webgpu", 2, 1], ["wasm", 3, 2]]);
+  assert.deepEqual(seen, [
+    ["wasm", 1, 1],
+    ["webgpu", 2, 1],
+    ["wasm", 3, 2],
+  ]);
 });
 
 test("a model that returns nothing is reported as malformed by the adapter", async () => {
@@ -251,7 +293,8 @@ test("a model that returns nothing is reported as malformed by the adapter", asy
       const processed = await engine.processor(rawImage(tf));
       await engine.model({ input_image: processed.pixel_values });
     }),
-    (error) => error.name === "RemovalModelOutputError" && /malformed output_image/.test(error.message),
+    (error) =>
+      error.name === "RemovalModelOutputError" && /malformed output_image/.test(error.message),
   );
 });
 
@@ -260,23 +303,35 @@ test("a load hook can fail a from_pretrained by kind and device, with attempt co
     page: {
       load: async (c) => {
         if (c.kind === "model" && c.device === "webgpu") throw new Error("WebGPU device lost");
-        if (c.kind === "model" && c.device === "wasm" && c.attempt === 1) throw new Error("Failed to fetch");
+        if (c.kind === "model" && c.device === "wasm" && c.attempt === 1)
+          throw new Error("Failed to fetch");
       },
     },
   });
   const pool = await poolFor(tf);
-  await assert.rejects(pool.use(request("birefnet", "webgpu"), {}, () => undefined), (error) => {
-    return error.name === "RemovalModelLoadError" && /device lost/.test(error.message);
-  });
-  await assert.rejects(pool.use(request("birefnet", "wasm"), {}, () => undefined), /Failed to fetch/);
+  await assert.rejects(
+    pool.use(request("birefnet", "webgpu"), {}, () => undefined),
+    (error) => {
+      return error.name === "RemovalModelLoadError" && /device lost/.test(error.message);
+    },
+  );
+  await assert.rejects(
+    pool.use(request("birefnet", "wasm"), {}, () => undefined),
+    /Failed to fetch/,
+  );
   await pool.use(request("birefnet", "wasm"), {}, () => undefined);
   const errors = types(log, "load-error").map((event) => [event.kind, event.device, event.message]);
   assert.deepEqual(errors, [
     ["model", "webgpu", "WebGPU device lost"],
     ["model", "wasm", "Failed to fetch"],
   ]);
-  const wasm = types(log, "from_pretrained").filter((event) => event.kind === "model" && event.device === "wasm");
-  assert.deepEqual(wasm.map((event) => event.attempt), [1, 2]);
+  const wasm = types(log, "from_pretrained").filter(
+    (event) => event.kind === "model" && event.device === "wasm",
+  );
+  assert.deepEqual(
+    wasm.map((event) => event.attempt),
+    [1, 2],
+  );
   assert.equal(types(log, "model-ready").length, 1, "only the successful model is ready");
   // The failed webgpu load still produced a processor; the adapter disposed it.
   assert.ok(log.some((event) => event.type === "dispose" && event.target === "processor"));
@@ -316,7 +371,11 @@ test("the run hook holds a processor call open and fires its page hook once", as
     assert.deepEqual(calls, [1], "one-shot: the second processor call does not re-fire the hook");
   });
   delete globalThis.__pageHook;
-  assert.deepEqual(globalThis.__imageSeen, [120, 80, 4, 120], "the processor call exposes the RawImage as call.image");
+  assert.deepEqual(
+    globalThis.__imageSeen,
+    [120, 80, 4, 120],
+    "the processor call exposes the RawImage as call.image",
+  );
   delete globalThis.__imageSeen;
   assert.equal(types(log, "run").length, 2);
 });
@@ -325,7 +384,8 @@ test("a run hook result replaces the processor or model result verbatim, and can
   const { tf } = await loadFake({
     page: {
       run: async (c) => {
-        if (c.phase === "processor" && c.n === 2) return { pixel_values: { data: new Float32Array(4), dims: [1, 3, 2, 2], dispose() {} } };
+        if (c.phase === "processor" && c.n === 2)
+          return { pixel_values: { data: new Float32Array(4), dims: [1, 3, 2, 2], dispose() {} } };
         if (c.phase === "model" && c.n === 2) {
           c.progress({ status: "progress", file: "onnx/model.onnx", progress: 77 });
           return {};
@@ -336,14 +396,26 @@ test("a run hook result replaces the processor or model result verbatim, and can
   });
   const pool = await poolFor(tf);
   const progress = [];
-  await pool.use(request("birefnet", "wasm"), { onProgress: (event) => progress.push(event) }, async (engine) => {
-    const ok = await engine.processor(rawImage(tf));
-    assert.deepEqual(ok.pixel_values.dims, [1, 3, 512, 512]);
-    await assert.rejects(engine.processor(rawImage(tf)), (error) => error.name === "RemovalModelOutputError");
-    await engine.model({ input_image: ok.pixel_values });
-    await assert.rejects(engine.model({ input_image: ok.pixel_values }), (error) => /malformed output_image/.test(error.message));
-  });
-  assert.ok(progress.some((event) => event.progress === 77), "progress re-emitted through the load's callback");
+  await pool.use(
+    request("birefnet", "wasm"),
+    { onProgress: (event) => progress.push(event) },
+    async (engine) => {
+      const ok = await engine.processor(rawImage(tf));
+      assert.deepEqual(ok.pixel_values.dims, [1, 3, 512, 512]);
+      await assert.rejects(
+        engine.processor(rawImage(tf)),
+        (error) => error.name === "RemovalModelOutputError",
+      );
+      await engine.model({ input_image: ok.pixel_values });
+      await assert.rejects(engine.model({ input_image: ok.pixel_values }), (error) =>
+        /malformed output_image/.test(error.message),
+      );
+    },
+  );
+  assert.ok(
+    progress.some((event) => event.progress === 77),
+    "progress re-emitted through the load's callback",
+  );
 });
 
 test("in a worker the worker config applies and events are posted on the log channel", async () => {
@@ -351,17 +423,26 @@ test("in a worker the worker config applies and events are posted on the log cha
   const listener = new BroadcastChannel("cutout-fake-tf");
   listener.onmessage = (message) => posted.push(message.data);
   try {
-    const { tf, log } = await loadFake({ page: { mask: () => 1 }, worker: { mask: () => 7 } }, "worker");
+    const { tf, log } = await loadFake(
+      { page: { mask: () => 1 }, worker: { mask: () => 7 } },
+      "worker",
+    );
     assert.equal(types(log, "module-loaded")[0].ctx, "worker");
     const pool = await poolFor(tf);
     await pool.use(request("birefnet", "wasm"), {}, async (engine) => {
       const processed = await engine.processor(rawImage(tf));
-      assert.equal((await engine.model({ input_image: processed.pixel_values })).output_image.data[0], 7);
+      assert.equal(
+        (await engine.model({ input_image: processed.pixel_values })).output_image.data[0],
+        7,
+      );
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.ok(log.length > 0 && log.every((event) => event.ctx === "worker"));
     assert.equal(posted.length, log.length, "every worker event is posted for the page collector");
-    assert.deepEqual(posted.map((event) => event.seq), log.map((event) => event.seq));
+    assert.deepEqual(
+      posted.map((event) => event.seq),
+      log.map((event) => event.seq),
+    );
   } finally {
     listener.close();
     delete globalThis.WorkerGlobalScope;
@@ -377,7 +458,10 @@ test("in a page nothing is posted on the channel (the page appends directly)", a
     const pool = await poolFor(tf);
     await pool.use(request("birefnet", "wasm"), {}, async (engine) => {
       const processed = await engine.processor(rawImage(tf));
-      assert.equal((await engine.model({ input_image: processed.pixel_values })).output_image.data[0], 3);
+      assert.equal(
+        (await engine.model({ input_image: processed.pixel_values })).output_image.data[0],
+        3,
+      );
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.deepEqual(posted, []);
@@ -416,16 +500,27 @@ test("workerPrelude defines own navigator properties, logs a prelude event and w
     createImageBitmap: async () => "original",
   });
   vm.runInContext(
-    fake.workerPrelude({ deviceMemory: 6, adapter: false, createImageBitmap: "(original) => async () => 'wrapped:' + (await original())" }),
+    fake.workerPrelude({
+      deviceMemory: 6,
+      adapter: false,
+      createImageBitmap: "(original) => async () => 'wrapped:' + (await original())",
+    }),
     context,
   );
   assert.equal(sandbox.navigator.deviceMemory, 6);
   assert.equal(await sandbox.navigator.gpu.requestAdapter(), null);
   assert.equal(await sandbox.createImageBitmap(), "wrapped:original");
   assert.equal(posted.length, 1);
-  assert.deepEqual([posted[0].ctx, posted[0].type, posted[0].deviceMemory, posted[0].adapter], ["worker", "prelude", 6, false]);
+  assert.deepEqual(
+    [posted[0].ctx, posted[0].type, posted[0].deviceMemory, posted[0].adapter],
+    ["worker", "prelude", 6, false],
+  );
   // An adapter and a missing deviceMemory (own property, value undefined) are both expressible.
-  const second = sandboxContext({ navigator: {}, BroadcastChannel: Channel, WorkerGlobalScope: class {} });
+  const second = sandboxContext({
+    navigator: {},
+    BroadcastChannel: Channel,
+    WorkerGlobalScope: class {},
+  });
   vm.runInContext(fake.workerPrelude({ deviceMemory: undefined, adapter: true }), second.context);
   assert.equal(Object.hasOwn(second.sandbox.navigator, "deviceMemory"), true);
   assert.equal(second.sandbox.navigator.deviceMemory, undefined);
@@ -454,7 +549,15 @@ test("adapter modes: fake (with shader-f16), no-f16, null (string or falsy) and 
     vm.runInContext(fake.pageEnvInit({ adapter }), context);
     const gpu = sandbox.navigator.gpu;
     const found = gpu && (await gpu.requestAdapter());
-    modes.push(gpu === undefined ? "absent" : !found ? "null" : found.features.has("shader-f16") ? "fake" : "no-f16");
+    modes.push(
+      gpu === undefined
+        ? "absent"
+        : !found
+          ? "null"
+          : found.features.has("shader-f16")
+            ? "fake"
+            : "no-f16",
+    );
   }
   assert.deepEqual(modes, ["fake", "fake", "no-f16", "null", "null", "null", "absent", "null"]);
 });
@@ -482,7 +585,9 @@ test("eventLogInit creates the collector, merges worker events and logs Worker c
   vm.runInContext(fake.eventLogInit(), context);
   assert.equal(sandbox.__fakeTf.length, 0, "the collector exists before any fake loads");
   assert.notEqual(sandbox.Worker, NativeWorker);
-  const worker = new sandbox.Worker("/src/lib/removal-worker.ts?worker_file&type=module", { type: "module" });
+  const worker = new sandbox.Worker("/src/lib/removal-worker.ts?worker_file&type=module", {
+    type: "module",
+  });
   assert.ok(worker instanceof NativeWorker);
   worker.terminate();
   assert.equal(worker.terminated, true, "the native terminate still runs");
@@ -512,14 +617,25 @@ test("sortLog, select and liveModels read a cross-context log", async () => {
     { ctx: "worker", t: 8, type: "model-ready" },
   ];
   const sorted = sortLog(log);
-  assert.deepEqual(sorted.map((event) => event.t), [1, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(
+    sorted.map((event) => event.t),
+    [1, 3, 4, 5, 6, 7, 8],
+  );
   assert.equal(select(sorted, { type: "model-ready", ctx: "worker" }).length, 2);
   assert.equal(select(sorted, { t: (t) => t > 4 }).length, 4);
   const live = liveModels(sorted);
   // page: 1, 0 (the repeated dispose is ignored), 1; worker: 1 at t=5, reset by terminate at t=7, 1 at t=8.
-  assert.deepEqual([live.maxPage, live.maxWorker, live.final.page, live.final.worker], [1, 1, 1, 1]);
+  assert.deepEqual(
+    [live.maxPage, live.maxWorker, live.final.page, live.final.worker],
+    [1, 1, 1, 1],
+  );
   assert.equal(live.maxTotal, 2, "page 1 + worker 1 overlap at t=6");
-  const overlap = liveModels(sortLog([{ ctx: "page", t: 1, type: "model-ready" }, { ctx: "page", t: 2, type: "model-ready" }]));
+  const overlap = liveModels(
+    sortLog([
+      { ctx: "page", t: 1, type: "model-ready" },
+      { ctx: "page", t: 2, type: "model-ready" },
+    ]),
+  );
   assert.equal(overlap.maxPage, 2);
 });
 
@@ -533,18 +649,34 @@ test("installFake registers the transformers route, init scripts, and the worker
   };
   await installFake(target, { deviceMemory: 8, adapter: false });
   assert.equal(scripts.length, 3, "event log, page environment, fixtures");
-  assert.deepEqual(routes.map(([pattern]) => pattern), [TRANSFORMERS_ROUTE]);
+  assert.deepEqual(
+    routes.map(([pattern]) => pattern),
+    [TRANSFORMERS_ROUTE],
+  );
   let fulfilled;
   await routes[0][1]({ fulfill: async (options) => (fulfilled = options) });
   assert.equal(fulfilled.contentType, "text/javascript");
   assert.match(fulfilled.body, /module-loaded/);
 
-  const withWorker = { addInitScript: async () => {}, route: async (pattern, handler) => routes.push([pattern, handler]) };
+  const withWorker = {
+    addInitScript: async () => {},
+    route: async (pattern, handler) => routes.push([pattern, handler]),
+  };
   routes.length = 0;
-  await installFake(withWorker, { deviceMemory: 4, adapter: true, workerEnv: { deviceMemory: 4, adapter: true } });
-  assert.deepEqual(routes.map(([pattern]) => pattern), [TRANSFORMERS_ROUTE, WORKER_ROUTE]);
+  await installFake(withWorker, {
+    deviceMemory: 4,
+    adapter: true,
+    workerEnv: { deviceMemory: 4, adapter: true },
+  });
+  assert.deepEqual(
+    routes.map(([pattern]) => pattern),
+    [TRANSFORMERS_ROUTE, WORKER_ROUTE],
+  );
   const response = { text: async () => "WORKER_SOURCE();" };
-  await routes[1][1]({ fetch: async () => response, fulfill: async (options) => (fulfilled = options) });
+  await routes[1][1]({
+    fetch: async () => response,
+    fulfill: async (options) => (fulfilled = options),
+  });
   assert.equal(fulfilled.response, response);
   assert.ok(fulfilled.body.endsWith("WORKER_SOURCE();"));
   assert.ok(fulfilled.body.startsWith("(()"), "the prelude is prepended");
@@ -554,7 +686,12 @@ test("installFake registers the transformers route, init scripts, and the worker
 test("runInterceptionSmoke falls back from page.route to context.route and reports both attempts", async () => {
   const { runInterceptionSmoke } = await fakeModule();
   const worker = (intercepted) => [
-    ...(intercepted ? [{ ctx: "worker", t: 2, type: "module-loaded" }, { ctx: "worker", t: 1, type: "prelude", deviceMemory: 6 }] : []),
+    ...(intercepted
+      ? [
+          { ctx: "worker", t: 2, type: "module-loaded" },
+          { ctx: "worker", t: 1, type: "prelude", deviceMemory: 6 },
+        ]
+      : []),
   ];
   const makeBrowser = (interceptsWhen) => {
     const attempts = [];
@@ -587,9 +724,14 @@ test("runInterceptionSmoke falls back from page.route to context.route and repor
   assert.deepEqual(viaContext.attempts, ["page", "context"]);
   assert.equal(result.attempts.length, 2);
   const viaPage = makeBrowser("page");
-  assert.equal((await runInterceptionSmoke(viaPage, "http://app/", { deviceMemory: 6 })).intercepted, "page");
+  assert.equal(
+    (await runInterceptionSmoke(viaPage, "http://app/", { deviceMemory: 6 })).intercepted,
+    "page",
+  );
   assert.deepEqual(viaPage.attempts, ["page"]);
-  const neither = await runInterceptionSmoke(makeBrowser("none"), "http://app/", { deviceMemory: 6 });
+  const neither = await runInterceptionSmoke(makeBrowser("none"), "http://app/", {
+    deviceMemory: 6,
+  });
   assert.equal(neither.intercepted, null);
   assert.equal(neither.attempts.length, 2);
 });
@@ -600,14 +742,21 @@ const refinement = readFileSync(`${ROOT}/scripts/browser-engine-refinement.mjs`,
 const adaptive = readFileSync(`${ROOT}/scripts/browser-adaptive-removal.mjs`, "utf8");
 
 test("both browser scripts parse", () => {
-  for (const file of ["browser-engine-refinement.mjs", "browser-adaptive-removal.mjs", "fake-transformers.mjs"])
+  for (const file of [
+    "browser-engine-refinement.mjs",
+    "browser-adaptive-removal.mjs",
+    "fake-transformers.mjs",
+  ])
     execFileSync(process.execPath, ["--check", `${ROOT}/scripts/${file}`]);
 });
 
 test("neither browser script routes or mentions bg0 any more", () => {
   for (const source of [refinement, adaptive]) {
     assert.doesNotMatch(source, /bg0/i);
-    assert.doesNotMatch(source, /prepareEngine|removeBackground\(\)|export async function removeBackground/);
+    assert.doesNotMatch(
+      source,
+      /prepareEngine|removeBackground\(\)|export async function removeBackground/,
+    );
   }
 });
 
@@ -629,7 +778,10 @@ test("browser-engine-refinement retargets through the fake boundary with the des
   ])
     assert.ok(refinement.includes(title), `missing row: ${title}`);
   // The three passthrough rows assert zero from_pretrained.
-  const passthrough = refinement.slice(refinement.indexOf("small cutout"), refinement.indexOf("a successful compatibility result"));
+  const passthrough = refinement.slice(
+    refinement.indexOf("small cutout"),
+    refinement.indexOf("a successful compatibility result"),
+  );
   assert.match(passthrough, /sparse high-resolution cutout/);
   assert.match(passthrough, /translucent overlay/);
   assert.match(passthrough, /select\(log, \{ type: "from_pretrained" \}\)\.length[\s\S]*0/);
@@ -642,13 +794,15 @@ test("browser-adaptive-removal routes the fake boundary before navigation, with 
   assert.match(adaptive, /from "\.\/fake-transformers\.mjs"/);
   assert.match(adaptive, /installFake/);
   assert.match(adaptive, /adapter: false/);
-  const graphics = adaptive.slice(adaptive.indexOf("uniform noisy fields"), adaptive.indexOf("dark continuous grayscale shading"));
+  const graphics = adaptive.slice(
+    adaptive.indexOf("uniform noisy fields"),
+    adaptive.indexOf("dark continuous grayscale shading"),
+  );
   assert.match(graphics, /from_pretrained/);
   const shading = adaptive.slice(adaptive.indexOf("dark continuous grayscale shading"));
   assert.match(shading, /method: "model"/);
   assert.match(shading, /calls: 1/);
 });
-
 
 test("C30 TESTS-6: the worker prelude can express an absent GPU API", async () => {
   const fake = await fakeModule();

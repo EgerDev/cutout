@@ -140,36 +140,62 @@ test("save, resume and delete touch storage only as far as the user asked", asyn
 });
 
 test("failed autosave shows plain copy, marks the header unsaved and retains the old saved copy", async () => {
-  const context = await browser.newContext({viewport:{width:1280,height:800}});
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   try {
     const page = await openWorkspace(context);
-    await page.waitForFunction(()=>Boolean(window.__cutoutTest?.useWorkspace));
+    await page.waitForFunction(() => Boolean(window.__cutoutTest?.useWorkspace));
     await page.evaluate(async () => {
-      const canvas = document.createElement('canvas'); canvas.width=canvas.height=32;
-      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,32,32);ctx.fillStyle='black';ctx.fillRect(8,8,16,16);
-      const blob=await new Promise(resolve=>canvas.toBlob(resolve));
-      const file=new File([blob],'a.png',{type:'image/png'});
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 32;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, 32, 32);
+      ctx.fillStyle = "black";
+      ctx.fillRect(8, 8, 16, 16);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve));
+      const file = new File([blob], "a.png", { type: "image/png" });
       window.__cutoutTest.useWorkspace.getState().receiveFiles([file]);
     });
-    await page.waitForFunction(()=>window.__cutoutTest.useWorkspace.getState().items.some(item=>item.status==='done'));
-    const dialog = await openDialog(page,'Save workspace');
-    await dialog.getByRole('button',{name:'Enable local autosave'}).click();
-    await dialog.getByText('Saved on this device.',{exact:true}).waitFor();
-    await page.evaluate(()=>{
-      const store=window.__cutoutTest.useWorkspace, state=store.getState();
-      state.changeEdit({recolors:Array.from({length:25},()=>({from:'#112233',to:null}))});
+    await page.waitForFunction(() =>
+      window.__cutoutTest.useWorkspace.getState().items.some((item) => item.status === "done"),
+    );
+    const dialog = await openDialog(page, "Save workspace");
+    await dialog.getByRole("button", { name: "Enable local autosave" }).click();
+    await dialog.getByText("Saved on this device.", { exact: true }).waitFor();
+    await page.evaluate(() => {
+      const store = window.__cutoutTest.useWorkspace,
+        state = store.getState();
+      state.changeEdit({
+        recolors: Array.from({ length: 25 }, () => ({ from: "#112233", to: null })),
+      });
     });
     await dialog.getByText(/Not saved/).waitFor();
-    const text=await dialog.innerText();
-    assert.ok(!/too_big|maximum|"path"|Zod/.test(text),text);
-    assert.equal(await page.locator('.header-label-full').filter({hasText:/^Save workspace$/}).count(),1);
-    assert.equal(await dialog.getByRole('button',{name:'Delete saved workspace'}).count(),1,'last successful save remains available');
-    assert.equal(await page.evaluate(()=>{
-      const s=window.__cutoutTest.useWorkspace.getState();return s.settings[s.activeId].recolors.length;
-    }),25,'failed saves preserve edits');
-  } finally { await context.close(); }
+    const text = await dialog.innerText();
+    assert.ok(!/too_big|maximum|"path"|Zod/.test(text), text);
+    assert.equal(
+      await page
+        .locator(".header-label-full")
+        .filter({ hasText: /^Save workspace$/ })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await dialog.getByRole("button", { name: "Delete saved workspace" }).count(),
+      1,
+      "last successful save remains available",
+    );
+    assert.equal(
+      await page.evaluate(() => {
+        const s = window.__cutoutTest.useWorkspace.getState();
+        return s.settings[s.activeId].recolors.length;
+      }),
+      25,
+      "failed saves preserve edits",
+    );
+  } finally {
+    await context.close();
+  }
 });
-
 
 async function poll(page, fn, timeout = 20000) {
   const until = Date.now() + timeout;
@@ -217,9 +243,9 @@ async function addGraphic(page) {
     ctx.fillStyle = "black";
     ctx.fillRect(8, 8, 16, 16);
     const blob = await new Promise((resolve) => canvas.toBlob(resolve));
-    window.__cutoutTest.useWorkspace.getState().receiveFiles([
-      new File([blob], "graphic.png", { type: "image/png" }),
-    ]);
+    window.__cutoutTest.useWorkspace
+      .getState()
+      .receiveFiles([new File([blob], "graphic.png", { type: "image/png" })]);
   });
   await poll(page, () => {
     const state = window.__cutoutTest.useWorkspace.getState();
@@ -261,28 +287,37 @@ async function retryContext(engine) {
   }
 }
 
-for (const engine of ['chromium','webkit']) {
+for (const engine of ["chromium", "webkit"]) {
   test(`blocked storage deletion settles in ${engine}`, async () => {
-    const ownBrowser = engine === 'webkit' ? await webkit.launch() : null;
-    const context = await (ownBrowser ?? browser).newContext({viewport:{width:1280,height:800}});
+    const ownBrowser = engine === "webkit" ? await webkit.launch() : null;
+    const context = await (ownBrowser ?? browser).newContext({
+      viewport: { width: 1280, height: 800 },
+    });
     try {
       const page = await openWorkspace(context);
-      const dialog = await openDialog(page,'Save workspace');
-      await dialog.getByText('Local autosave is off.',{exact:true}).waitFor();
+      const dialog = await openDialog(page, "Save workspace");
+      await dialog.getByText("Local autosave is off.", { exact: true }).waitFor();
       await page.evaluate(async () => {
-        window.foreignDb = await new Promise((resolve,reject) => {
-          const request=indexedDB.open('cutout-workspace',1);
-          request.onupgradeneeded=()=>request.result.createObjectStore('sessions');
-          request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+        window.foreignDb = await new Promise((resolve, reject) => {
+          const request = indexedDB.open("cutout-workspace", 1);
+          request.onupgradeneeded = () => request.result.createObjectStore("sessions");
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
         });
-        localStorage.setItem('cutout.saved','1');
+        localStorage.setItem("cutout.saved", "1");
       });
-      await dialog.getByRole('button',{name:'Clear local workspace data'}).click();
-      await dialog.getByText(/Could not delete the saved workspace/).waitFor({timeout:2000});
-      assert.equal(await dialog.getByRole('button',{name:'Clear local workspace data'}).isEnabled(),true);
-      assert.equal(await page.evaluate(()=>localStorage.getItem('cutout.saved')),'1');
-      await page.evaluate(()=>window.foreignDb.close());
-    } finally { await context.close(); await ownBrowser?.close(); }
+      await dialog.getByRole("button", { name: "Clear local workspace data" }).click();
+      await dialog.getByText(/Could not delete the saved workspace/).waitFor({ timeout: 2000 });
+      assert.equal(
+        await dialog.getByRole("button", { name: "Clear local workspace data" }).isEnabled(),
+        true,
+      );
+      assert.equal(await page.evaluate(() => localStorage.getItem("cutout.saved")), "1");
+      await page.evaluate(() => window.foreignDb.close());
+    } finally {
+      await context.close();
+      await ownBrowser?.close();
+    }
   });
 
   test(`blocked storage deletion retry settles in ${engine}`, async () => {
@@ -306,18 +341,26 @@ for (const engine of ['chromium','webkit']) {
         true,
         "Retry must settle promptly while a foreign holder still blocks the earlier native delete request",
       );
-      assert.match(await dialog.getByRole("status").innerText(), /Could not delete the saved workspace/);
+      assert.match(
+        await dialog.getByRole("status").innerText(),
+        /Could not delete the saved workspace/,
+      );
       assert.equal(await page.evaluate(() => localStorage.getItem("cutout.saved")), "1");
       const duringHold = JSON.parse(await page.evaluate(() => JSON.stringify(window.nativeEvents)));
       assert.equal(duringHold.filter((event) => event.startsWith("request")).length, 1);
       assert.ok(duringHold.includes("blocked1"));
-      assert.equal(await dialog.getByRole("button", { name: "Enable local autosave" }).isEnabled(), true);
+      assert.equal(
+        await dialog.getByRole("button", { name: "Enable local autosave" }).isEnabled(),
+        true,
+      );
 
       await page.evaluate(() => window.foreignDb.close());
       await poll(page, () => window.nativeEvents.includes("success1"), 5000);
 
       await clear.click();
-      await dialog.getByText("Saved workspace deleted. Autosave is off.", { exact: true }).waitFor({ timeout: 5000 });
+      await dialog
+        .getByText("Saved workspace deleted. Autosave is off.", { exact: true })
+        .waitFor({ timeout: 5000 });
       assert.equal(await page.evaluate(() => localStorage.getItem("cutout.saved")), null);
 
       await dialog.getByRole("button", { name: "Enable local autosave" }).click();
@@ -344,7 +387,9 @@ for (const engine of ['chromium','webkit']) {
 
       page.once("dialog", (confirmation) => confirmation.accept());
       await dialog.getByRole("button", { name: "Delete saved workspace" }).click();
-      await dialog.getByText("Saved workspace deleted. Autosave is off.", { exact: true }).waitFor();
+      await dialog
+        .getByText("Saved workspace deleted. Autosave is off.", { exact: true })
+        .waitFor();
       assert.equal(await page.evaluate(() => localStorage.getItem("cutout.saved")), null);
     } finally {
       await launched.close();

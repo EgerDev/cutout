@@ -5,7 +5,12 @@ import test from "node:test";
 import type { LaunchPlan } from "../../lib/url-api.ts";
 import type { WorkspaceState, QueueItem, IngestReceipt } from "../../lib/workspace-types.ts";
 import { runtime } from "../../lib/workspace-runtime.ts";
-import { backgroundPatch, defaults, presetPatch, type EditSettings } from "../../lib/editor/model.ts";
+import {
+  backgroundPatch,
+  defaults,
+  presetPatch,
+  type EditSettings,
+} from "../../lib/editor/model.ts";
 
 const listeners = new Set<(next: WorkspaceState, old: WorkspaceState) => void>();
 let state: WorkspaceState;

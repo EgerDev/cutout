@@ -1,5 +1,9 @@
 import { isRemovalModelIntegrityError } from "./removal-model-integrity.ts";
-import { RemovalContextLostError, RemovalModelCacheError, classifyRemovalFailure } from "./removal-provider.ts";
+import {
+  RemovalContextLostError,
+  RemovalModelCacheError,
+  classifyRemovalFailure,
+} from "./removal-provider.ts";
 import type { RemovalFailureKind } from "./removal-provider.ts";
 import { prepareRemovalEngine } from "./removal-prepared-engine.ts";
 import {
@@ -23,10 +27,19 @@ import type {
 } from "./removal-model-specs.ts";
 export { REMOVAL_MODELS } from "./removal-model-specs.ts";
 export { RemovalModelOutputError } from "./removal-prepared-engine.ts";
-export type { PreparedRemovalEngine, RemovalLoadFactories, RemovalLoadProgress, RemovalLoadRequest, RemovalModelIdentity, RemovalTensor } from "./removal-model-specs.ts";
+export type {
+  PreparedRemovalEngine,
+  RemovalLoadFactories,
+  RemovalLoadProgress,
+  RemovalLoadRequest,
+  RemovalModelIdentity,
+  RemovalTensor,
+} from "./removal-model-specs.ts";
 
 export class RemovalModelLoadError extends Error {
-  readonly name = "RemovalModelLoadError"; declare code?: string; readonly failureKind: RemovalFailureKind;
+  readonly name = "RemovalModelLoadError";
+  declare code?: string;
+  readonly failureKind: RemovalFailureKind;
   readonly dtype: RemovalLoadRequest["dtype"];
   constructor(request: RemovalLoadRequest, cause: unknown) {
     const detail = cause instanceof Error ? `: ${cause.message}` : "";
@@ -34,15 +47,22 @@ export class RemovalModelLoadError extends Error {
     this.dtype = request.dtype;
     const classified = classifyRemovalFailure(cause);
     if (classified === "abort") this.code = "model-load-failed";
-    this.failureKind = classified === "unknown" || classified === "abort" ? "provider-init" : classified;
+    this.failureKind =
+      classified === "unknown" || classified === "abort" ? "provider-init" : classified;
   }
 }
 
-type ProgressState = { readonly listeners: Set<(event: RemovalLoadProgress) => void>; last?: RemovalLoadProgress };
+type ProgressState = {
+  readonly listeners: Set<(event: RemovalLoadProgress) => void>;
+  last?: RemovalLoadProgress;
+};
 type CacheEntry = {
   readonly promise: Promise<PreparedRemovalEngine>;
   readonly progress: ProgressState;
-  users: number; releaseAfterUse: boolean; pending: boolean; abandon(error?: unknown): void;
+  users: number;
+  releaseAfterUse: boolean;
+  pending: boolean;
+  abandon(error?: unknown): void;
 };
 export function createRemovalEnginePool(factories: RemovalLoadFactories = defaultFactories) {
   const cache = new Map<string, CacheEntry>();
@@ -50,7 +70,9 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
   let contextFailure: Error | undefined;
   let contextQuarantined = false;
   let rejectContext!: (error: Error) => void;
-  const contextLost = new Promise<never>((_, reject) => { rejectContext = reject; });
+  const contextLost = new Promise<never>((_, reject) => {
+    rejectContext = reject;
+  });
   void contextLost.catch(() => {});
   let observedDevice = false;
   let deviceProbe: Promise<void> | undefined;
@@ -58,7 +80,10 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
     contextFailure ??= error;
     rejectContext(contextFailure);
     for (const [key, entry] of cache) {
-      if (entry.pending) { cache.delete(key); entry.abandon(contextFailure); }
+      if (entry.pending) {
+        cache.delete(key);
+        entry.abandon(contextFailure);
+      }
     }
     return contextFailure;
   };
@@ -67,8 +92,11 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
       // Poisoning is known now. Block admission before touching asynchronous storage,
       // but publish the fatal reply only after cleanup so a fresh worker cannot race it.
       contextQuarantined = true;
-      void boundedEviction(() => factories.evictModelFile?.(request.model, request.provider, request.dtype))
-        .then((removed) => { failContext(new RemovalModelCacheError(removed, cause)); });
+      void boundedEviction(() =>
+        factories.evictModelFile?.(request.model, request.provider, request.dtype),
+      ).then((removed) => {
+        failContext(new RemovalModelCacheError(removed, cause));
+      });
     }
     return contextLost;
   };
@@ -80,25 +108,44 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
     deviceProbe = new Promise<RemovalGpuDevice | undefined>((resolve) => {
       const deadline = setTimeout(() => resolve(undefined), 100);
       deadline.unref?.();
-      void Promise.resolve().then(() => factories.gpuDevice?.()).then(
-        (device) => { clearTimeout(deadline); resolve(device); },
-        () => { clearTimeout(deadline); resolve(undefined); },
-      );
-    }).then((device) => {
-      if (!device) return;
-      observedDevice = true;
-      void device.lost.then(() => { if (!contextQuarantined) failContext(); }, () => {});
-    }).finally(() => { deviceProbe = undefined; });
+      void Promise.resolve()
+        .then(() => factories.gpuDevice?.())
+        .then(
+          (device) => {
+            clearTimeout(deadline);
+            resolve(device);
+          },
+          () => {
+            clearTimeout(deadline);
+            resolve(undefined);
+          },
+        );
+    })
+      .then((device) => {
+        if (!device) return;
+        observedDevice = true;
+        void device.lost.then(
+          () => {
+            if (!contextQuarantined) failContext();
+          },
+          () => {},
+        );
+      })
+      .finally(() => {
+        deviceProbe = undefined;
+      });
     return deviceProbe;
   }
-  const keyOf = (request: RemovalLoadRequest) => `${request.context}:${request.model}:${request.provider}:${removalModelRoute(request)?.dtype}`;
+  const keyOf = (request: RemovalLoadRequest) =>
+    `${request.context}:${request.model}:${request.provider}:${removalModelRoute(request)?.dtype}`;
   // Diagnostics only: the latest failures, not every one a long session produced.
   const captureCleanupFailure = (error: unknown) => {
     if (cleanupFailures.push(error) > 16) cleanupFailures.shift();
   };
   const disposeEngine = async (engine: PreparedRemovalEngine): Promise<void> => {
-    try { await engine.dispose(); }
-    catch (error) {
+    try {
+      await engine.dispose();
+    } catch (error) {
       // Retry teardown once, retaining its first failure for diagnostics. Successful
       // siblings are already released; prepared engines retry only failed resources.
       captureCleanupFailure(error);
@@ -129,7 +176,7 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
     const progress: ProgressState = { listeners: new Set() };
     let timer: ReturnType<typeof setTimeout> | undefined;
     let loadVersion = 0;
-    const checkDevice = () => request.provider === "webgpu" ? observeDevice() : Promise.resolve();
+    const checkDevice = () => (request.provider === "webgpu" ? observeDevice() : Promise.resolve());
     let resolveLoad!: (engine: PreparedRemovalEngine) => void;
     let rejectLoad!: (error: unknown) => void;
     const entry: CacheEntry = {
@@ -156,31 +203,51 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
         if (contextQuarantined || !entry.pending || version !== loadVersion) return;
         entry.pending = false;
         if (cache.get(key) === entry) cache.delete(key);
-        rejectLoad(Object.assign(new RemovalModelLoadError(request, new Error("Model download stopped making progress")), {
-          code: "model-load-timeout", failureKind: "network",
-        }));
+        rejectLoad(
+          Object.assign(
+            new RemovalModelLoadError(request, new Error("Model download stopped making progress")),
+            {
+              code: "model-load-timeout",
+              failureKind: "network",
+            },
+          ),
+        );
       }, 60_000);
       timer.unref?.();
     }
     cache.set(key, entry);
     arm();
-    void initialize(request, factories, (event) => {
-      if (contextQuarantined || cache.get(key) !== entry) return;
-      if (entry.pending) { arm(); void checkDevice(); }
-      publish(progress, event);
-    }, quarantineContext, () => contextFailure, checkDevice, contextLost).then((engine) => {
-      if (!entry.pending) {
-        void disposeEngine(engine).catch(captureCleanupFailure);
-        return;
-      }
-      entry.pending = false;
-      clearTimeout(timer);
-      resolveLoad(engine);
-    }, (error: unknown) => {
-      entry.pending = false;
-      clearTimeout(timer);
-      rejectLoad(error);
-    });
+    void initialize(
+      request,
+      factories,
+      (event) => {
+        if (contextQuarantined || cache.get(key) !== entry) return;
+        if (entry.pending) {
+          arm();
+          void checkDevice();
+        }
+        publish(progress, event);
+      },
+      quarantineContext,
+      () => contextFailure,
+      checkDevice,
+      contextLost,
+    ).then(
+      (engine) => {
+        if (!entry.pending) {
+          void disposeEngine(engine).catch(captureCleanupFailure);
+          return;
+        }
+        entry.pending = false;
+        clearTimeout(timer);
+        resolveLoad(engine);
+      },
+      (error: unknown) => {
+        entry.pending = false;
+        clearTimeout(timer);
+        rejectLoad(error);
+      },
+    );
     void checkDevice();
     void entry.promise.catch(() => {
       if (cache.get(key) === entry) cache.delete(key);
@@ -191,7 +258,10 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
   return {
     async use<Result>(
       request: RemovalLoadRequest,
-      options: { readonly signal?: AbortSignal; readonly onProgress?: (event: RemovalLoadProgress) => void },
+      options: {
+        readonly signal?: AbortSignal;
+        readonly onProgress?: (event: RemovalLoadProgress) => void;
+      },
       run: (engine: PreparedRemovalEngine) => Result | Promise<Result>,
     ): Promise<Result> {
       if (contextFailure) throw contextFailure;
@@ -210,7 +280,8 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
       } finally {
         unsubscribe();
         entry.users -= 1;
-        if (entry.users === 0 && (entry.pending || entry.releaseAfterUse)) void retire(key, entry).catch(captureCleanupFailure);
+        if (entry.users === 0 && (entry.pending || entry.releaseAfterUse))
+          void retire(key, entry).catch(captureCleanupFailure);
       }
     },
     async releaseIdle(request: RemovalLoadRequest): Promise<void> {
@@ -224,10 +295,12 @@ export function createRemovalEnginePool(factories: RemovalLoadFactories = defaul
       await retire(key, entry);
     },
     async releaseAllIdle(): Promise<void> {
-      await Promise.all(Array.from(cache, async ([key, entry]) => {
-        if (entry.users > 0) entry.releaseAfterUse = true;
-        else await retire(key, entry);
-      }));
+      await Promise.all(
+        Array.from(cache, async ([key, entry]) => {
+          if (entry.users > 0) entry.releaseAfterUse = true;
+          else await retire(key, entry);
+        }),
+      );
     },
     cleanupErrors(): readonly unknown[] {
       return cleanupFailures.slice();
@@ -246,19 +319,30 @@ async function initialize(
 ): Promise<PreparedRemovalEngine> {
   const spec = REMOVAL_MODELS[request.model];
   const route = removalModelRoute(request);
-  if (!route) throw new RemovalModelLoadError(request, new Error(`${request.model} has no ${request.provider} adapter`));
+  if (!route)
+    throw new RemovalModelLoadError(
+      request,
+      new Error(`${request.model} has no ${request.provider} adapter`),
+    );
   const loadProcessor = () => factories.loadProcessor(request.model, progress).finally(checkDevice);
-  const loadModel = () => factories.loadModel(request.model, request.provider, progress, route.dtype).catch(async (cause: unknown) => {
-    if (!isRemovalSessionFailure(cause)) throw cause;
-    return quarantineContext(request, cause);
-  }).finally(checkDevice);
+  const loadModel = () =>
+    factories
+      .loadModel(request.model, request.provider, progress, route.dtype)
+      .catch(async (cause: unknown) => {
+        if (!isRemovalSessionFailure(cause)) throw cause;
+        return quarantineContext(request, cause);
+      })
+      .finally(checkDevice);
   let [processorResult, modelResult] = await Promise.allSettled([loadProcessor(), loadModel()]);
   await checkDevice();
   if (contextFailure()) throw contextFailure();
   // A malformed JSON or failed SHA-256 must not survive the next load. Delete this model's
   // cached files and retry only the failed half once, even when storage is unavailable.
-  const integrityFailure = (result: PromiseSettledResult<unknown>) => result.status === "rejected" && isRemovalModelIntegrityError(result.reason);
-  const jsonFailure = (result: PromiseSettledResult<unknown>) => result.status === "rejected" && (isHubJsonFailure(result.reason) || isRemovalModelIntegrityError(result.reason));
+  const integrityFailure = (result: PromiseSettledResult<unknown>) =>
+    result.status === "rejected" && isRemovalModelIntegrityError(result.reason);
+  const jsonFailure = (result: PromiseSettledResult<unknown>) =>
+    result.status === "rejected" &&
+    (isHubJsonFailure(result.reason) || isRemovalModelIntegrityError(result.reason));
   if (jsonFailure(processorResult) || jsonFailure(modelResult)) {
     await boundedEviction(() => factories.evictModelCache?.(request.model));
     [processorResult, modelResult] = await Promise.allSettled([
@@ -273,24 +357,53 @@ async function initialize(
       // the next try fetches, and say so. Without a cache the bytes came from the network: a load error.
       const removed = await boundedEviction(() => factories.evictModelCache?.(request.model));
       if (integrityFailure(stillBad)) {
-        const cleanup = await disposeRemovalResources([processorResult, modelResult].flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
-        if (cleanup.length) Object.assign(stillBad.reason, { cause: new AggregateError(cleanup, "Removal cleanup also failed") });
+        const cleanup = await disposeRemovalResources(
+          [processorResult, modelResult].flatMap((result) =>
+            result.status === "fulfilled" ? [result.value] : [],
+          ),
+        );
+        if (cleanup.length)
+          Object.assign(stillBad.reason, {
+            cause: new AggregateError(cleanup, "Removal cleanup also failed"),
+          });
         throw stillBad.reason;
       }
       if (removed) {
-        const cleanup = await disposeRemovalResources([processorResult, modelResult].flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
-        throw new RemovalModelCacheError(true, cleanup.length > 0 ? removalCleanupFailure(stillBad.reason, cleanup) : stillBad.reason);
+        const cleanup = await disposeRemovalResources(
+          [processorResult, modelResult].flatMap((result) =>
+            result.status === "fulfilled" ? [result.value] : [],
+          ),
+        );
+        throw new RemovalModelCacheError(
+          true,
+          cleanup.length > 0 ? removalCleanupFailure(stillBad.reason, cleanup) : stillBad.reason,
+        );
       }
     }
   }
   if (processorResult.status === "rejected" || modelResult.status === "rejected") {
     // The model fetch controls provider recovery; retain its sibling's failure for diagnostics.
-    const cause = processorResult.status === "rejected" && modelResult.status === "rejected"
-      ? new AggregateError([processorResult.reason, modelResult.reason], modelResult.reason instanceof Error ? modelResult.reason.message : "Removal model load failed", { cause: modelResult.reason })
-      : processorResult.status === "rejected" ? processorResult.reason : modelResult.status === "rejected" ? modelResult.reason : undefined;
-    const returned = [...(processorResult.status === "fulfilled" ? [processorResult.value] : []), ...(modelResult.status === "fulfilled" ? [modelResult.value] : [])];
+    const cause =
+      processorResult.status === "rejected" && modelResult.status === "rejected"
+        ? new AggregateError(
+            [processorResult.reason, modelResult.reason],
+            modelResult.reason instanceof Error
+              ? modelResult.reason.message
+              : "Removal model load failed",
+            { cause: modelResult.reason },
+          )
+        : processorResult.status === "rejected"
+          ? processorResult.reason
+          : modelResult.status === "rejected"
+            ? modelResult.reason
+            : undefined;
+    const returned = [
+      ...(processorResult.status === "fulfilled" ? [processorResult.value] : []),
+      ...(modelResult.status === "fulfilled" ? [modelResult.value] : []),
+    ];
     const cleanup = await disposeRemovalResources(returned);
-    if (cleanup.length > 0) throw new RemovalModelLoadError(request, removalCleanupFailure(cause, cleanup));
+    if (cleanup.length > 0)
+      throw new RemovalModelLoadError(request, removalCleanupFailure(cause, cleanup));
     throw new RemovalModelLoadError(request, cause);
   }
   try {
@@ -305,7 +418,8 @@ async function initialize(
     });
   } catch (error) {
     const cleanup = await disposeRemovalResources([processorResult.value, modelResult.value]);
-    if (cleanup.length > 0) throw new RemovalModelLoadError(request, removalCleanupFailure(error, cleanup));
+    if (cleanup.length > 0)
+      throw new RemovalModelLoadError(request, removalCleanupFailure(error, cleanup));
     throw new RemovalModelLoadError(request, error);
   }
 }
@@ -316,10 +430,18 @@ function boundedEviction(evict: () => Promise<boolean> | boolean | undefined): P
   return new Promise<boolean>((resolve) => {
     const deadline = setTimeout(() => resolve(false), 5_000);
     deadline.unref?.();
-    void Promise.resolve().then(() => evict() ?? false).then(
-      (removed) => { clearTimeout(deadline); resolve(removed); },
-      () => { clearTimeout(deadline); resolve(false); },
-    );
+    void Promise.resolve()
+      .then(() => evict() ?? false)
+      .then(
+        (removed) => {
+          clearTimeout(deadline);
+          resolve(removed);
+        },
+        () => {
+          clearTimeout(deadline);
+          resolve(false);
+        },
+      );
   });
 }
 
@@ -335,7 +457,10 @@ async function readyTransformers() {
 const defaultFactories: RemovalLoadFactories = {
   async evictModelFile(model, provider, dtype) {
     const { transformers } = await import("./transformers.ts");
-    return evictRemovalModelFile({ model, provider, context: "page", ...(dtype ? { dtype } : {}) }, transformers().env);
+    return evictRemovalModelFile(
+      { model, provider, context: "page", ...(dtype ? { dtype } : {}) },
+      transformers().env,
+    );
   },
   async evictModelCache(model) {
     const { transformers } = await import("./transformers.ts");
@@ -375,7 +500,10 @@ function publish(state: ProgressState, event: RemovalLoadProgress): void {
   for (const listener of state.listeners) notify(listener, event);
 }
 
-function subscribe(state: ProgressState, listener?: (event: RemovalLoadProgress) => void): () => void {
+function subscribe(
+  state: ProgressState,
+  listener?: (event: RemovalLoadProgress) => void,
+): () => void {
   if (!listener) return () => undefined;
   state.listeners.add(listener);
   if (state.last) notify(listener, state.last);

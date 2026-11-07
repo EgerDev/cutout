@@ -1,6 +1,9 @@
 import { requireCutout } from "./require-server.mjs";
 import { appCandidates } from "./app-url.mjs";
-const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(/\/$/, "");
+const verifiedAppUrl = (await requireCutout(appCandidates("http://127.0.0.1:8080/"))).replace(
+  /\/$/,
+  "",
+);
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { launchChrome } from "./chrome.mjs";

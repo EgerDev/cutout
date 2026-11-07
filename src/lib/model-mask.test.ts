@@ -31,10 +31,16 @@ test("the Uint8ClampedArray store, not matteByte, clamps both transfers to [0,0,
 
 test("matteByte reference points 0.08/0.5/0.92", () => {
   const pts = [0.08, 0.5, 0.92];
-  assert.deepEqual(pts.map((v) => mask_.matteByte(v, "quality")), [20, 128, 235]);
+  assert.deepEqual(
+    pts.map((v) => mask_.matteByte(v, "quality")),
+    [20, 128, 235],
+  );
   // Design r9 section 6 lists fast as [0,128,255]. With smoothstep moved verbatim, smoothstep(0.08,0.92,0.5)
   // is 0.4999999999999999 in IEEE doubles, so the exact byte is 127. Pinned as computed (design value is +-1).
-  assert.deepEqual(pts.map((v) => mask_.matteByte(v, "fast")), [0, 127, 255]);
+  assert.deepEqual(
+    pts.map((v) => mask_.matteByte(v, "fast")),
+    [0, 127, 255],
+  );
 });
 
 test("matteByte keeps NaN and Infinity visible (no sanitisation)", () => {

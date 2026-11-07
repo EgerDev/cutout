@@ -931,7 +931,8 @@ canvas.stage-photo {
   height: 100dvh;
   min-height: 100dvh;
   max-height: 100dvh;
-  overflow: hidden;
+  /* Sliding sheets must not let native focus scroll this fixed viewport. */
+  overflow: clip;
   padding-top: max(3.75rem, calc(env(safe-area-inset-top) + 2.75rem));
   padding-right: env(safe-area-inset-right);
   padding-left: env(safe-area-inset-left);

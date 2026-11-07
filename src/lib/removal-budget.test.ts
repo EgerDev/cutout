@@ -25,12 +25,20 @@ test("quick mode never refines and maximum raises the crop cap", () => {
   assert.equal(refinementBudget("wasm", 8, 13_000, 12_000_000, "maximum"), 2);
 });
 
-
 test("fp32 WebGPU keeps the former WASM crop budget while fp16 is unchanged", () => {
   const modes = ["quick", "auto", "maximum"] as const;
-  assert.deepEqual(modes.map((mode) => refinementBudget("webgpu", 8, 1_000, 1_000_000, mode, "fp32")), [0, 1, 2]);
-  assert.deepEqual(modes.map((mode) => refinementBudget("webgpu", 8, 1_000, 1_000_000, mode, "fp16")), [0, 2, 4]);
-  assert.deepEqual(modes.map((mode) => refinementBudget("wasm", 8, 1_000, 1_000_000, mode, "fp32")), [0, 1, 2]);
+  assert.deepEqual(
+    modes.map((mode) => refinementBudget("webgpu", 8, 1_000, 1_000_000, mode, "fp32")),
+    [0, 1, 2],
+  );
+  assert.deepEqual(
+    modes.map((mode) => refinementBudget("webgpu", 8, 1_000, 1_000_000, mode, "fp16")),
+    [0, 2, 4],
+  );
+  assert.deepEqual(
+    modes.map((mode) => refinementBudget("wasm", 8, 1_000, 1_000_000, mode, "fp32")),
+    [0, 1, 2],
+  );
 });
 
 test("fp32 WebGPU preserves WASM size gates at 16 MP and 24 MP", () => {

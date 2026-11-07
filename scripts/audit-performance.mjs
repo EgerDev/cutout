@@ -21,7 +21,7 @@ async function debugPort() {
 }
 
 const url = process.env.APP_URL || "http://127.0.0.1:8081/";
-const directory = process.env.AUDIT_DIR || join(tmpdir(), "cutout-performance");
+const directory = process.env.AUDIT_DIR || (await mkdtemp(join(tmpdir(), "cutout-performance-")));
 const profiles = (process.env.AUDIT_PROFILES || "cold,warm")
   .split(",")
   .map((value) => value.trim());
@@ -31,6 +31,7 @@ const runCount = Number(process.env.AUDIT_RUNS || 3);
 if (!Number.isInteger(runCount) || runCount < 1)
   throw new Error("AUDIT_RUNS must be a positive integer");
 await mkdir(directory, { recursive: true });
+console.log(`Performance audit reports: ${directory}`);
 const results = [];
 for (const formFactor of ["mobile", "desktop"]) {
   for (const cacheProfile of profiles) {

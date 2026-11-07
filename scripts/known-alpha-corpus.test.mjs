@@ -22,7 +22,9 @@ test("the manifest labels edge-case fixtures by their generated categories", asy
   // Without the shared category table, known-41+ inherit the original ten labels
   // round-robin and category-grouped metrics silently misattribute them.
   const root = await mkdtemp(join(tmpdir(), "cutout-corpus-"));
-  t.after(() => import("node:fs/promises").then((f) => f.rm(root, { recursive: true, force: true })));
+  t.after(() =>
+    import("node:fs/promises").then((f) => f.rm(root, { recursive: true, force: true })),
+  );
   await mkdir(join(root, "aim500/input"), { recursive: true });
   await mkdir(join(root, "aim500/alpha"), { recursive: true });
   await writeFile(
@@ -32,10 +34,23 @@ test("the manifest labels edge-case fixtures by their generated categories", asy
   await mkdir(join(root, "known-alpha/input"), { recursive: true });
   await mkdir(join(root, "known-alpha/alpha"), { recursive: true });
   await mkdir(join(root, "current"), { recursive: true });
-  const png = await sharp({ create: { width: 4, height: 4, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } } })
+  const png = await sharp({
+    create: { width: 4, height: 4, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } },
+  })
     .png()
     .toBuffer();
-  const ids = ["known-00", "known-41", "known-42", "known-43", "known-44", "known-45", "known-46", "known-47", "known-48", "known-49"];
+  const ids = [
+    "known-00",
+    "known-41",
+    "known-42",
+    "known-43",
+    "known-44",
+    "known-45",
+    "known-46",
+    "known-47",
+    "known-48",
+    "known-49",
+  ];
   for (const id of ids) {
     await writeFile(join(root, "known-alpha/input", `${id}.png`), png);
     await writeFile(join(root, "known-alpha/alpha", `${id}.png`), png);

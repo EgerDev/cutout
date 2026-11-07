@@ -120,7 +120,9 @@ test("a real HEIC is saved at full size with no 'larger' notice", async () => {
     // Once removal is finished nothing else touches the notice area.
     await page.waitForFunction(() => {
       const items = window.__cutoutTest.useWorkspace.getState().items;
-      return items.length > 0 && items.every((item) => item.status === "done" || item.status === "error");
+      return (
+        items.length > 0 && items.every((item) => item.status === "done" || item.status === "error")
+      );
     });
     const download = page.waitForEvent("download");
     await page.evaluate(() => window.__cutoutTest.useWorkspace.getState().downloadOriginal());

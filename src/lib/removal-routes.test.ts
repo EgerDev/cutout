@@ -30,8 +30,14 @@ const contexts = [
 
 for (const [context, memory, compatibleGpu, fp16, gpuFailed, primary] of contexts) {
   test(`C20 routing: ${context}`, () => {
-    assert.deepEqual(selectRemovalRoute({
-      ...(memory === undefined ? {} : { deviceMemory: memory }), compatibleGpu, fp16, gpuFailed,
-    }), { primary });
+    assert.deepEqual(
+      selectRemovalRoute({
+        ...(memory === undefined ? {} : { deviceMemory: memory }),
+        compatibleGpu,
+        fp16,
+        gpuFailed,
+      }),
+      { primary },
+    );
   });
 }

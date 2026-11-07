@@ -3,7 +3,10 @@ import { createDropSession } from "@/lib/drop-session";
 import { filesFromDrop, isCutoutExportDrag, isFileTransfer } from "@/lib/files";
 import { useWorkspace } from "@/lib/workspace-store";
 
-export function useWorkspaceDrop(dropRef: RefObject<HTMLDivElement | null>, receive: (files: File[]) => void) {
+export function useWorkspaceDrop(
+  dropRef: RefObject<HTMLDivElement | null>,
+  receive: (files: File[]) => void,
+) {
   const dropSession = useRef(createDropSession());
   useEffect(() => {
     let rafId: number | null = null;
@@ -36,9 +39,11 @@ export function useWorkspaceDrop(dropRef: RefObject<HTMLDivElement | null>, rece
       document.querySelector(
         '[role="dialog"][data-state="open"], [role="menu"][data-state="open"], dialog[open]',
       ) !== null;
-    const relatedInside = (related: unknown) => related instanceof Node && document.documentElement.contains(related);
+    const relatedInside = (related: unknown) =>
+      related instanceof Node && document.documentElement.contains(related);
     const armDrop = (event: DragEvent) => {
-      if (!event.dataTransfer || isCutoutExportDrag() || !isFileTransfer(event.dataTransfer)) return false;
+      if (!event.dataTransfer || isCutoutExportDrag() || !isFileTransfer(event.dataTransfer))
+        return false;
       event.preventDefault();
       if (modalOpen()) {
         event.dataTransfer.dropEffect = "none";
@@ -94,7 +99,8 @@ export function useWorkspaceDrop(dropRef: RefObject<HTMLDivElement | null>, rece
       if (ended) endDrop();
     };
     const onDrop = (event: DragEvent) => {
-      if (!event.dataTransfer || isCutoutExportDrag() || !isFileTransfer(event.dataTransfer)) return;
+      if (!event.dataTransfer || isCutoutExportDrag() || !isFileTransfer(event.dataTransfer))
+        return;
       event.preventDefault();
       endDrop();
       if (modalOpen()) return;

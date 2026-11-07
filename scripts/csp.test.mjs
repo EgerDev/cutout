@@ -35,6 +35,27 @@ test("a page without inline scripts has no hashes", () => {
   assert.deepEqual(inlineScriptHashes('<script src="/a.js"></script><p>hi</p>'), []);
 });
 
+test("hashes scripts closed by browser-accepted whitespace, attributes, or a trailing slash", () => {
+  for (const end of [
+    "</script >",
+    "</SCRIPT\t\r\n\f>",
+    '</script ignored="value">',
+    "</script/>",
+  ]) {
+    assert.deepEqual(inlineScriptHashes(`<script>${barrier}${end}<script>${reveal}</script>`), [
+      sha(barrier),
+      sha(reveal),
+    ]);
+  }
+});
+
+test("script-like names inside a script do not terminate its body", () => {
+  for (const text of ["</scriptx>", "</script-x>", "</script\u00a0>"]) {
+    const body = `window.text = ${JSON.stringify(text)};`;
+    assert.deepEqual(inlineScriptHashes(`<script>${body}</script>`), [sha(body)]);
+  }
+});
+
 test("the page policy allows what Cutout needs and nothing it does not", () => {
   const policy = policyFor([sha(barrier)]);
   const directives = Object.fromEntries(

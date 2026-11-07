@@ -49,21 +49,32 @@ test(
     await page.unroute(MODEL_HOSTS, block);
     await alert.getByRole("button", { name: "Retry", exact: true }).click();
     await page.waitForFunction(
-      (id) => window.__cutoutTest.useWorkspace.getState().items.find((item) => item.id === id)?.status === "done",
+      (id) =>
+        window.__cutoutTest.useWorkspace.getState().items.find((item) => item.id === id)?.status ===
+        "done",
       target.id,
       { timeout: 180_000 },
     );
-    assert.deepEqual(await page.evaluate(() => {
-      const state = window.__cutoutTest.useWorkspace.getState();
-      const item = state.items[0];
-      return {
-        ids: state.items.map((entry) => entry.id),
-        activeId: state.activeId,
-        sourcePreserved: item.source === window.failedModelItem.source,
-        hasResult: item.resultBlob?.size > 0 && item.width > 0 && item.height > 0,
-        errorMessage: state.errorMessage,
-      };
-    }), { ids: [target.id], activeId: target.id, sourcePreserved: true, hasResult: true, errorMessage: null });
+    assert.deepEqual(
+      await page.evaluate(() => {
+        const state = window.__cutoutTest.useWorkspace.getState();
+        const item = state.items[0];
+        return {
+          ids: state.items.map((entry) => entry.id),
+          activeId: state.activeId,
+          sourcePreserved: item.source === window.failedModelItem.source,
+          hasResult: item.resultBlob?.size > 0 && item.width > 0 && item.height > 0,
+          errorMessage: state.errorMessage,
+        };
+      }),
+      {
+        ids: [target.id],
+        activeId: target.id,
+        sourcePreserved: true,
+        hasResult: true,
+        errorMessage: null,
+      },
+    );
     await page.getByRole("toolbar", { name: "Image actions", exact: true }).waitFor();
   },
 );

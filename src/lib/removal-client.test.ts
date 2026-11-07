@@ -31,7 +31,8 @@ class StubWorker {
     StubWorker.all.push(this);
   }
   postMessage(message: Sent) {
-    if (StubWorker.cloneFailure && message.type !== "abort") throw new DOMException("cannot clone payload", "DataCloneError");
+    if (StubWorker.cloneFailure && message.type !== "abort")
+      throw new DOMException("cannot clone payload", "DataCloneError");
     this.posts.push(message);
   }
   terminate() {
@@ -113,55 +114,58 @@ const wasmNoGpu = { provider: "wasm", workerHadGpu: false, blob: blob(), width: 
 // ---------------------------------------------------------------------------------------
 
 for (const features of [["shader-f16"], []]) {
-test(`Q5: a worker found slow drains before retirement (page features: ${features})`, async () => {
-  define("navigator", { gpu: { requestAdapter: async () => ({ features: new Set(features) }) } });
-  const client = await freshClient();
-  const abortA = new AbortController();
-  const jobA = run(client, { signal: abortA.signal });
-  const worker = latest();
-  const idA = lastRunId();
-  abortA.abort();
-  await assert.rejects(jobA, { name: "AbortError" });
+  test(`Q5: a worker found slow drains before retirement (page features: ${features})`, async () => {
+    define("navigator", { gpu: { requestAdapter: async () => ({ features: new Set(features) }) } });
+    const client = await freshClient();
+    const abortA = new AbortController();
+    const jobA = run(client, { signal: abortA.signal });
+    const worker = latest();
+    const idA = lastRunId();
+    abortA.abort();
+    await assert.rejects(jobA, { name: "AbortError" });
 
-  const job1 = run(client);
-  worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
-  await job1;
-  assert.equal(worker.terminated, 0, "A is still running in the worker: no terminate yet");
+    const job1 = run(client);
+    worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
+    await job1;
+    assert.equal(worker.terminated, 0, "A is still running in the worker: no terminate yet");
 
-  // Not yet slow: a new job queues behind A on the same worker.
-  const job2 = run(client);
-  assert.equal(StubWorker.all.length, 1, "no replacement worker");
-  assert.equal(worker.runs().length, 3);
-  const id2 = lastRunId();
+    // Not yet slow: a new job queues behind A on the same worker.
+    const job2 = run(client);
+    assert.equal(StubWorker.all.length, 1, "no replacement worker");
+    assert.equal(worker.runs().length, 3);
+    const id2 = lastRunId();
 
-  worker.reply({ type: "done", id: idA, result: { provider: "wasm", workerHadGpu: true } });
-  assert.equal(worker.terminated, 0, "job 2 is still pending");
-  worker.reply({ type: "done", id: id2, result: { provider: "webgpu", workerHadGpu: true } });
-  assert.equal(worker.terminated, 1, "terminate is synchronous once the worker is idle");
-  await job2;
+    worker.reply({ type: "done", id: idA, result: { provider: "wasm", workerHadGpu: true } });
+    assert.equal(worker.terminated, 0, "job 2 is still pending");
+    worker.reply({ type: "done", id: id2, result: { provider: "webgpu", workerHadGpu: true } });
+    assert.equal(worker.terminated, 1, "terminate is synchronous once the worker is idle");
+    await job2;
 
-  const postsBefore = worker.posts.length;
-  await assert.rejects(run(client), SENTINEL, "job 3 runs on the page");
-  assert.equal(worker.posts.length, postsBefore, "job 3 posts nothing to the worker");
-  assert.equal(StubWorker.all.length, 1);
-  assert.equal(worker.terminated, 1);
-});
+    const postsBefore = worker.posts.length;
+    await assert.rejects(run(client), SENTINEL, "job 3 runs on the page");
+    assert.equal(worker.posts.length, postsBefore, "job 3 posts nothing to the worker");
+    assert.equal(StubWorker.all.length, 1);
+    assert.equal(worker.terminated, 1);
+  });
 
-test("Q5: an idle worker found slow is retired at once (unchanged)", async () => {
-  define("navigator", { gpu: { requestAdapter: async () => ({ features: new Set(features) }) } });
-  const client = await freshClient();
-  const job1 = run(client);
-  const worker = latest();
-  worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
-  await job1;
-  assert.equal(worker.terminated, 1);
-  await assert.rejects(run(client), SENTINEL);
-  assert.equal(StubWorker.all.length, 1);
-});
+  test("Q5: an idle worker found slow is retired at once (unchanged)", async () => {
+    define("navigator", { gpu: { requestAdapter: async () => ({ features: new Set(features) }) } });
+    const client = await freshClient();
+    const job1 = run(client);
+    const worker = latest();
+    worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
+    await job1;
+    assert.equal(worker.terminated, 1);
+    await assert.rejects(run(client), SENTINEL);
+    assert.equal(StubWorker.all.length, 1);
+  });
 }
 
 test("no-f16 GPU compatibility fallback retains the capable worker", async () => {
-  define("navigator", { userAgent: "removal-client-test", gpu: { requestAdapter: async () => ({ features: new Set() }) } });
+  define("navigator", {
+    userAgent: "removal-client-test",
+    gpu: { requestAdapter: async () => ({ features: new Set() }) },
+  });
   const client = await freshClient();
   const job1 = run(client);
   const worker = latest();
@@ -173,20 +177,29 @@ test("no-f16 GPU compatibility fallback retains the capable worker", async () =>
   assert.equal(worker.runs().length, 2, "the same worker takes the next job");
 });
 
-for (const gpu of [undefined, { requestAdapter: async () => null }, { requestAdapter: async () => { throw new Error("adapter unavailable"); } }]) {
-test("a successful WASM-only worker stays when the page has no compatible adapter", async () => {
-  define("navigator", { gpu });
-  const client = await freshClient();
-  const first = run(client), worker = latest();
-  worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
-  await first;
-  assert.equal(worker.terminated, 0);
-  const second = run(client);
-  worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
-  await second;
-  assert.equal(StubWorker.all.length, 1);
-  assert.equal(worker.runs().length, 2);
-});
+for (const gpu of [
+  undefined,
+  { requestAdapter: async () => null },
+  {
+    requestAdapter: async () => {
+      throw new Error("adapter unavailable");
+    },
+  },
+]) {
+  test("a successful WASM-only worker stays when the page has no compatible adapter", async () => {
+    define("navigator", { gpu });
+    const client = await freshClient();
+    const first = run(client),
+      worker = latest();
+    worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
+    await first;
+    assert.equal(worker.terminated, 0);
+    const second = run(client);
+    worker.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
+    await second;
+    assert.equal(StubWorker.all.length, 1);
+    assert.equal(worker.runs().length, 2);
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -222,10 +235,13 @@ test("Q7: a worker result with webgpuBroken records the failure on the page thro
 // ---------------------------------------------------------------------------------------
 
 test("Q12: ENGINE_ERROR_NAMES is the five engine-minted names", () => {
-  assert.deepEqual(
-    [...ENGINE_ERROR_NAMES].sort(),
-    ["MaskError", "RemovalInferenceError", "RemovalInputError", "RemovalModelLoadError", "RemovalModelOutputError"],
-  );
+  assert.deepEqual([...ENGINE_ERROR_NAMES].sort(), [
+    "MaskError",
+    "RemovalInferenceError",
+    "RemovalInputError",
+    "RemovalModelLoadError",
+    "RemovalModelOutputError",
+  ]);
 });
 
 for (const name of ENGINE_ERROR_NAMES) {
@@ -233,7 +249,14 @@ for (const name of ENGINE_ERROR_NAMES) {
     const client = await freshClient();
     const job = run(client);
     const worker = latest();
-    worker.reply({ type: "error", id: lastRunId(), aborted: false, name, message: "engine said no", detail: "d" });
+    worker.reply({
+      type: "error",
+      id: lastRunId(),
+      aborted: false,
+      name,
+      message: "engine said no",
+      detail: "d",
+    });
     await assert.rejects(job, (error: Error) => {
       assert.equal(error.name, name);
       assert.notEqual(error, SENTINEL);
@@ -280,18 +303,35 @@ test("Q12: a worker DOMException decode failure (numeric legacy code 11) the pag
 });
 
 test("C07: a worker decode failure the page cannot decode either is the file's: rethrown, worker kept, no page rerun", async () => {
-  const undecodable = new DOMException("The source image could not be decoded.", "InvalidStateError");
+  const undecodable = new DOMException(
+    "The source image could not be decoded.",
+    "InvalidStateError",
+  );
   define("createImageBitmap", async () => {
     throw undecodable;
   });
   const client = await freshClient();
   for (const [label, job] of [
     ["run", () => run(client)],
-    ["refine", () => client.refineCropsAuto(blob(), blob(), [{ x: 0, y: 0, width: 1, height: 1 }], { onProgress: stopAtPageEngine })],
+    [
+      "refine",
+      () =>
+        client.refineCropsAuto(blob(), blob(), [{ x: 0, y: 0, width: 1, height: 1 }], {
+          onProgress: stopAtPageEngine,
+        }),
+    ],
   ] as const) {
     const pending = job();
     const worker = latest();
-    worker.reply({ type: "error", id: worker.posts.at(-1)!.id, aborted: false, name: "InvalidStateError", message: undecodable.message, detail: "d", code: 11 });
+    worker.reply({
+      type: "error",
+      id: worker.posts.at(-1)!.id,
+      aborted: false,
+      name: "InvalidStateError",
+      message: undecodable.message,
+      detail: "d",
+      code: 11,
+    });
     await assert.rejects(pending, (error: Error) => {
       assert.notEqual(error, SENTINEL, `${label}: no page rerun`);
       assert.equal(error.name, "InvalidStateError", label);
@@ -309,7 +349,10 @@ test("warmupRemoval deadline rejects with TimeoutError and aborts the worker job
   const warm = client.warmupRemoval(undefined, { timeoutMs: 20 });
   const worker = latest();
   t.mock.timers.tick(20);
-  await assert.rejects(warm, (error: unknown) => error instanceof DOMException && error.name === "TimeoutError");
+  await assert.rejects(
+    warm,
+    (error: unknown) => error instanceof DOMException && error.name === "TimeoutError",
+  );
   assert.ok(worker.posts.some((message) => message.type === "abort"));
 });
 
@@ -319,7 +362,11 @@ test("C09: warmupRemoval hands the worker's download progress back as a fraction
   const warm = client.warmupRemoval((fraction) => seen.push(fraction));
   const worker = latest();
   const id = worker.posts.at(-1)!.id;
-  worker.reply({ type: "progress", id, progress: { stage: "loading", progress: 0.5, message: "" } });
+  worker.reply({
+    type: "progress",
+    id,
+    progress: { stage: "loading", progress: 0.5, message: "" },
+  });
   worker.reply({ type: "done", id, result: null });
   await warm;
   assert.deepEqual(seen, [0.5]);
@@ -338,7 +385,10 @@ test("C09: a worker warmup's load failure rejects with it: no page warmup, worke
     detail: "d",
     code: "model-load-failed",
   });
-  await assert.rejects(warm, { name: "RemovalModelLoadError", message: "Could not load birefnet on wasm: Failed to fetch" });
+  await assert.rejects(warm, {
+    name: "RemovalModelLoadError",
+    message: "Could not load birefnet on wasm: Failed to fetch",
+  });
   assert.equal(worker.terminated, 0);
 });
 
@@ -365,9 +415,17 @@ test("C3: a worker result's provenance is stripped from the result and exposed",
   assert.deepEqual(client.lastRemovalProvenance(), provenance);
 
   const next = run(client);
-  latest().reply({ type: "done", id: lastRunId(), result: { provider: "webgpu", workerHadGpu: true } });
+  latest().reply({
+    type: "done",
+    id: lastRunId(),
+    result: { provider: "webgpu", workerHadGpu: true },
+  });
   await next;
-  assert.equal(client.lastRemovalProvenance(), undefined, "a job without a record does not keep the last one");
+  assert.equal(
+    client.lastRemovalProvenance(),
+    undefined,
+    "a job without a record does not keep the last one",
+  );
 });
 
 test("C3: a worker error's fault provenance is stripped and exposed, the error unchanged", async () => {
@@ -404,9 +462,17 @@ test("C3: a page job does not claim runtime records written outside its engine i
     }),
     SENTINEL,
   );
-  assert.equal(client.lastRemovalProvenance(), undefined, "a shared runtime write is not an invocation handoff");
+  assert.equal(
+    client.lastRemovalProvenance(),
+    undefined,
+    "a shared runtime write is not an invocation handoff",
+  );
   await assert.rejects(run(client), SENTINEL);
-  assert.equal(client.lastRemovalProvenance(), undefined, "an older runtime record is not this job's");
+  assert.equal(
+    client.lastRemovalProvenance(),
+    undefined,
+    "an older runtime record is not this job's",
+  );
 });
 
 // ---------------------------------------------------------------------------------------
@@ -414,9 +480,14 @@ test("C3: a page job does not claim runtime records written outside its engine i
 // ---------------------------------------------------------------------------------------
 
 let fetchCalls = 0;
-type WorkerHarness = { send(data: Record<string, unknown>): void; done(id?: number): Promise<Record<string, unknown>> };
+type WorkerHarness = {
+  send(data: Record<string, unknown>): void;
+  done(id?: number): Promise<Record<string, unknown>>;
+};
 
-async function loadWorker(onPosted: (message: Record<string, unknown>) => void = () => {}): Promise<WorkerHarness> {
+async function loadWorker(
+  onPosted: (message: Record<string, unknown>) => void = () => {},
+): Promise<WorkerHarness> {
   const posted: Array<Record<string, unknown>> = [];
   let handler: ((event: { data: unknown }) => void) | undefined;
   define("self", globalThis);
@@ -440,7 +511,9 @@ async function loadWorker(onPosted: (message: Record<string, unknown>) => void =
     send: (data) => handler!({ data }),
     async done(id?: number) {
       for (let i = 0; i < 400; i++) {
-        const end = posted.find((m) => (m.type === "done" || m.type === "error") && (id === undefined || m.id === id));
+        const end = posted.find(
+          (m) => (m.type === "done" || m.type === "error") && (id === undefined || m.id === id),
+        );
         if (end) return end;
         await new Promise((resolve) => setImmediate(resolve));
       }
@@ -484,37 +557,68 @@ test("C3 (worker): provenance recorded during the job rides the reply; an older 
   assert.equal(fetchCalls, 0, "no model request in a unit test");
 });
 
-
 test("S3-A-ENGINE-01: a lost worker context is replaced and the job redriven once, session-only", async () => {
   const client = await freshClient();
   const job = run(client);
   const first = latest();
-  first.reply({ type: "error", id: lastRunId(), name: "RemovalContextLostError", code: "removal-context-lost", failureKind: "gpu-device", message: "Reload", detail: "device lost", aborted: false });
+  first.reply({
+    type: "error",
+    id: lastRunId(),
+    name: "RemovalContextLostError",
+    code: "removal-context-lost",
+    failureKind: "gpu-device",
+    message: "Reload",
+    detail: "device lost",
+    aborted: false,
+  });
   for (let i = 0; i < 10; i++) await Promise.resolve();
   assert.equal(first.terminated, 1);
   assert.equal(StubWorker.all.length, 2);
   assert.equal(latest().runs()[0]!.noWebgpu, true);
-  assert.equal(readGpuFailure(null), false, "the device loss is not persisted or recorded on the page");
+  assert.equal(
+    readGpuFailure(null),
+    false,
+    "the device loss is not persisted or recorded on the page",
+  );
   latest().reply({ type: "done", id: lastRunId(), result: { ...wasmNoGpu, workerHadGpu: true } });
   assert.equal((await job).provider, "wasm");
 
   const again = run(client);
   const rejected = assert.rejects(again, { code: "removal-context-lost" });
-  latest().reply({ type: "error", id: lastRunId(), name: "RemovalContextLostError", code: "removal-context-lost", message: "Reload", detail: "lost", aborted: false });
+  latest().reply({
+    type: "error",
+    id: lastRunId(),
+    name: "RemovalContextLostError",
+    code: "removal-context-lost",
+    message: "Reload",
+    detail: "lost",
+    aborted: false,
+  });
   for (let i = 0; i < 10; i++) await Promise.resolve();
-  latest().reply({ type: "error", id: lastRunId(), name: "RemovalContextLostError", code: "removal-context-lost", message: "Reload", detail: "lost", aborted: false });
+  latest().reply({
+    type: "error",
+    id: lastRunId(),
+    name: "RemovalContextLostError",
+    code: "removal-context-lost",
+    message: "Reload",
+    detail: "lost",
+    aborted: false,
+  });
   await rejected;
   assert.equal(StubWorker.all.length, 3, "one retry per job");
   assert.equal(latest().terminated, 1, "even the failed retry context is retired");
 });
-
 
 test("C06: inactivity replaces a stalled worker and retries once; progress resets the clock", async (t) => {
   const client = await freshClient();
   const job = client.removeBackgroundAuto(blob());
   const first = latest();
   t.mock.timers.tick(119_000);
-  first.reply({ type: "progress", id: lastRunId(), progress: { stage: "loading", progress: 0.5, message: "" } });
+  first.reply({
+    type: "progress",
+    id: lastRunId(),
+    progress: { stage: "loading", progress: 0.5, message: "" },
+  });
   t.mock.timers.tick(119_000);
   assert.equal(first.terminated, 0, "silence, not total duration");
   t.mock.timers.tick(1_000);
@@ -537,7 +641,8 @@ test("C06: a cancelled but still running job cannot pin a stalled worker forever
   const controller = new AbortController();
   const job = assert.rejects(run(client, { signal: controller.signal }), { name: "AbortError" });
   const stalled = latest();
-  controller.abort(); await job;
+  controller.abort();
+  await job;
   t.mock.timers.tick(120_000);
   assert.equal(stalled.terminated, 1);
   const next = run(client);
@@ -550,7 +655,15 @@ test("S3-B-EVIDENCE-01: a damaged-model worker is retired and retried fresh with
   const client = await freshClient();
   const job = run(client);
   const old = latest();
-  old.reply({ type: "error", id: lastRunId(), name: "RemovalModelCacheError", code: "removal-model-damaged", message: "Model file damaged, removed; try again.", detail: "protobuf parsing failed", aborted: false });
+  old.reply({
+    type: "error",
+    id: lastRunId(),
+    name: "RemovalModelCacheError",
+    code: "removal-model-damaged",
+    message: "Model file damaged, removed; try again.",
+    detail: "protobuf parsing failed",
+    aborted: false,
+  });
   for (let i = 0; i < 10; i++) await Promise.resolve();
   assert.equal(old.terminated, 1);
   assert.equal(StubWorker.all.length, 2);
@@ -566,8 +679,17 @@ test("context retirement also handles a fatal reply after its caller has cancell
     const job = assert.rejects(run(client, { signal: controller.signal }), { name: "AbortError" });
     const old = latest();
     const id = lastRunId();
-    controller.abort(); await job;
-    old.reply({ type: "error", id, code, name: "Error", message: "fresh context required", detail: "fault", aborted: false });
+    controller.abort();
+    await job;
+    old.reply({
+      type: "error",
+      id,
+      code,
+      name: "Error",
+      message: "fresh context required",
+      detail: "fault",
+      aborted: false,
+    });
     assert.equal(old.terminated, 1);
     const next = run(client);
     assert.notEqual(latest(), old);
@@ -576,34 +698,40 @@ test("context retirement also handles a fatal reply after its caller has cancell
   }
 });
 
-
-for (const cancelled of [false, true]) test(`RR1 C06: queued ${cancelled ? "cancelled" : "live"} B cannot expire progressing A`, async (t) => {
-  const client = await freshClient();
-  const a = client.removeBackgroundAuto(blob());
-  void a.catch(() => {});
-  const worker = latest();
-  const idA = lastRunId();
-  const controller = new AbortController();
-  const b = client.removeBackgroundAuto(blob(), { signal: controller.signal });
-  void b.catch(() => {});
-  const idB = lastRunId();
-  if (cancelled) { controller.abort(); await assert.rejects(b, { name: "AbortError" }); }
-  for (let i = 0; i < 5; i++) {
-    t.mock.timers.tick(40_000);
-    worker.reply({ type: "progress", id: idA, progress: { stage: "loading", progress: i / 5, message: "" } });
-    await Promise.resolve();
-    assert.equal(worker.terminated, 0, "queue residence is not worker inactivity");
-  }
-  worker.reply({ type: "done", id: idA, result: { provider: "webgpu" } });
-  await a;
-  // B gets a full inactivity interval after A drains, even when its abort is queued.
-  t.mock.timers.tick(119_000);
-  assert.equal(worker.terminated, 0);
-  worker.reply({ type: "done", id: idB, result: { provider: "webgpu" } });
-  if (!cancelled) await b;
-  assert.equal(StubWorker.all.length, 1);
-});
-
+for (const cancelled of [false, true])
+  test(`RR1 C06: queued ${cancelled ? "cancelled" : "live"} B cannot expire progressing A`, async (t) => {
+    const client = await freshClient();
+    const a = client.removeBackgroundAuto(blob());
+    void a.catch(() => {});
+    const worker = latest();
+    const idA = lastRunId();
+    const controller = new AbortController();
+    const b = client.removeBackgroundAuto(blob(), { signal: controller.signal });
+    void b.catch(() => {});
+    const idB = lastRunId();
+    if (cancelled) {
+      controller.abort();
+      await assert.rejects(b, { name: "AbortError" });
+    }
+    for (let i = 0; i < 5; i++) {
+      t.mock.timers.tick(40_000);
+      worker.reply({
+        type: "progress",
+        id: idA,
+        progress: { stage: "loading", progress: i / 5, message: "" },
+      });
+      await Promise.resolve();
+      assert.equal(worker.terminated, 0, "queue residence is not worker inactivity");
+    }
+    worker.reply({ type: "done", id: idA, result: { provider: "webgpu" } });
+    await a;
+    // B gets a full inactivity interval after A drains, even when its abort is queued.
+    t.mock.timers.tick(119_000);
+    assert.equal(worker.terminated, 0);
+    worker.reply({ type: "done", id: idB, result: { provider: "webgpu" } });
+    if (!cancelled) await b;
+    assert.equal(StubWorker.all.length, 1);
+  });
 
 test("C27: success, error and worker death detach each caller's abort listener", async () => {
   for (const end of ["done", "error", "death"] as const) {
@@ -617,7 +745,16 @@ test("C27: success, error and worker death detach each caller's abort listener",
       w.fail();
       for (let i = 0; i < 10; i++) await Promise.resolve();
       latest().fail();
-    } else w.reply({ type: end, id: lastRunId(), result: { provider: "webgpu" }, name: "MaskError", message: "invalid alpha", detail: "d", aborted: false });
+    } else
+      w.reply({
+        type: end,
+        id: lastRunId(),
+        result: { provider: "webgpu" },
+        name: "MaskError",
+        message: "invalid alpha",
+        detail: "d",
+        aborted: false,
+      });
     await outcome;
     assert.equal(getEventListeners(controller.signal, "abort").length, 0, end);
     const posts = w.posts.length;
@@ -625,7 +762,6 @@ test("C27: success, error and worker death detach each caller's abort listener",
     assert.equal(w.posts.length, posts, "no stale abort post after settlement");
   }
 });
-
 
 test("C30 TESTS-5: a clone failure drains bookkeeping and retires infrastructure once", async (t) => {
   const client = await freshClient();
@@ -640,41 +776,68 @@ test("C30 TESTS-5: a clone failure drains bookkeeping and retires infrastructure
 
 test("C30 TESTS-7: refine message, progress and result cross the client boundary", async () => {
   const client = await freshClient();
-  const source = blob(), base = blob(), boxes = [{ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }];
+  const source = blob(),
+    base = blob(),
+    boxes = [{ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }];
   const seen: number[] = [];
-  const refined = client.refineCropsAuto(source, base, boxes, { onProgress: (p) => seen.push(p.progress) });
-  const w = latest(), request = w.posts.at(-1)!;
-  assert.deepEqual([request.type, request.source, request.base, request.boxes], ["refine", source, base, boxes]);
-  w.reply({ type: "progress", id: request.id, progress: { stage: "finishing", progress: 0.98, message: "" } });
+  const refined = client.refineCropsAuto(source, base, boxes, {
+    onProgress: (p) => seen.push(p.progress),
+  });
+  const w = latest(),
+    request = w.posts.at(-1)!;
+  assert.deepEqual(
+    [request.type, request.source, request.base, request.boxes],
+    ["refine", source, base, boxes],
+  );
+  w.reply({
+    type: "progress",
+    id: request.id,
+    progress: { stage: "finishing", progress: 0.98, message: "" },
+  });
   w.reply({ type: "done", id: request.id, result: { blob: base, provenance } });
   assert.equal(await refined, base);
   assert.deepEqual(seen, [0.98]);
   assert.equal(client.lastRemovalProvenance(), provenance);
 });
 
-for (const hidden of [false, true]) test(`C30 TESTS-7: ${hidden ? "hidden" : "visible"} idle release waits for drain and respawns`, async (t) => {
-  let visibility!: () => void;
-  const doc = { hidden: false, addEventListener(type: string, fn: () => void) { if (type === "visibilitychange") visibility = fn; } };
-  define("document", doc);
-  const client = await freshClient();
-  const job = run(client), w = latest();
-  doc.hidden = hidden; visibility();
-  t.mock.timers.tick(60_000);
-  assert.equal(w.terminated, 0, "active work pins its worker");
-  w.reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } }); await job;
-  const delay = hidden ? 5_000 : 60_000;
-  t.mock.timers.tick(delay - 1); assert.equal(w.terminated, 0);
-  t.mock.timers.tick(1); assert.equal(w.terminated, 1);
-  const next = run(client);
-  assert.equal(StubWorker.all.length, 2);
-  latest().reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } }); await next;
-});
+for (const hidden of [false, true])
+  test(`C30 TESTS-7: ${hidden ? "hidden" : "visible"} idle release waits for drain and respawns`, async (t) => {
+    let visibility!: () => void;
+    const doc = {
+      hidden: false,
+      addEventListener(type: string, fn: () => void) {
+        if (type === "visibilitychange") visibility = fn;
+      },
+    };
+    define("document", doc);
+    const client = await freshClient();
+    const job = run(client),
+      w = latest();
+    doc.hidden = hidden;
+    visibility();
+    t.mock.timers.tick(60_000);
+    assert.equal(w.terminated, 0, "active work pins its worker");
+    w.reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } });
+    await job;
+    const delay = hidden ? 5_000 : 60_000;
+    t.mock.timers.tick(delay - 1);
+    assert.equal(w.terminated, 0);
+    t.mock.timers.tick(1);
+    assert.equal(w.terminated, 1);
+    const next = run(client);
+    assert.equal(StubWorker.all.length, 2);
+    latest().reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } });
+    await next;
+  });
 
 test("C30 TESTS-5: worker queue catches an uncloneable error reply and services the next request", async () => {
   let throwErrorReply = true;
   const worker = await loadWorker((message) => {
     if (message.type === "progress") throw SENTINEL;
-    if (message.type === "error" && throwErrorReply) { throwErrorReply = false; throw new DOMException("reply cannot clone", "DataCloneError"); }
+    if (message.type === "error" && throwErrorReply) {
+      throwErrorReply = false;
+      throw new DOMException("reply cannot clone", "DataCloneError");
+    }
   });
   worker.send({ type: "run", id: 61, file: blob(), mode: "auto" });
   const fallback = await worker.done();
@@ -687,32 +850,44 @@ test("C30 TESTS-5: worker queue catches an uncloneable error reply and services 
   assert.equal(fetchCalls, 0);
 });
 
-
 test("C30 TESTS-5: a slow worker dying before drain retains the page-routing decision", async () => {
   const client = await freshClient();
   const controller = new AbortController();
   const a = run(client, { signal: controller.signal });
-  const w = latest(); controller.abort(); await assert.rejects(a);
+  const w = latest();
+  controller.abort();
+  await assert.rejects(a);
   const b = run(client);
-  w.reply({ type: "done", id: lastRunId(), result: wasmNoGpu }); await b;
+  w.reply({ type: "done", id: lastRunId(), result: wasmNoGpu });
+  await b;
   assert.equal(w.terminated, 0, "cancelled A still pins drain");
-  w.fail(); assert.equal(w.terminated, 1);
+  w.fail();
+  assert.equal(w.terminated, 1);
   await assert.rejects(run(client), SENTINEL);
   assert.equal(StubWorker.all.length, 1, "the slow decision survives worker death");
 });
 
 test("C30 TESTS-7: idle pagehide releases the worker and a later call respawns", async () => {
   let hide!: () => void;
-  define("addEventListener", (type: string, listener: () => void) => { if (type === "pagehide") hide = listener; });
+  define("addEventListener", (type: string, listener: () => void) => {
+    if (type === "pagehide") hide = listener;
+  });
   const client = await freshClient();
-  const a = run(client), w = latest();
-  w.reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } }); await a;
-  hide(); assert.equal(w.terminated, 1);
-  const b = run(client); assert.equal(StubWorker.all.length, 2);
-  latest().reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } }); await b;
+  const a = run(client),
+    w = latest();
+  w.reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } });
+  await a;
+  hide();
+  assert.equal(w.terminated, 1);
+  const b = run(client);
+  assert.equal(StubWorker.all.length, 2);
+  latest().reply({ type: "done", id: lastRunId(), result: { provider: "webgpu" } });
+  await b;
 });
 
-const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+const flush = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
 
 test("E03-01: the first worker crash is replaced and its job redriven there; the second moves the session to the page", async () => {
   const client = await freshClient();
@@ -751,7 +926,15 @@ test("E05-03: a worker whose WebGPU would not start is replaced by a WASM-only w
   const client = await freshClient();
   const job = run(client);
   const old = latest();
-  const gpuInit = { type: "error", name: "RemovalWebgpuInitError", code: "removal-webgpu-init-failed", failureKind: "provider-init", message: "The local remover couldn’t use this device’s graphics. Try again.", detail: "no available backend found", aborted: false };
+  const gpuInit = {
+    type: "error",
+    name: "RemovalWebgpuInitError",
+    code: "removal-webgpu-init-failed",
+    failureKind: "provider-init",
+    message: "The local remover couldn’t use this device’s graphics. Try again.",
+    detail: "no available backend found",
+    aborted: false,
+  };
   old.reply({ ...gpuInit, id: lastRunId() });
   await flush();
   assert.equal(old.terminated, 1);

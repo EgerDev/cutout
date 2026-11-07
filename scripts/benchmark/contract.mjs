@@ -6,7 +6,12 @@ import { z } from "zod";
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
 const commitSha = z.string().regex(/^[0-9a-f]{40}$/);
-const fileSchema = z.object({ path: z.string().min(1), sha256, width: z.number().int().positive(), height: z.number().int().positive() });
+const fileSchema = z.object({
+  path: z.string().min(1),
+  sha256,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
 const fixtureSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   split: z.enum(["smoke", "tune", "heldout"]),
@@ -33,7 +38,12 @@ const versionSchema = z.object({ version: z.string().min(1), commit: commitSha }
 
 /** "photo-b candidate pair 0", "baseline (version check)": where in a lane a contract broke. */
 function runLabel({ fixtureId, variant, pair, phase }) {
-  return [fixtureId, variant, pair === undefined ? undefined : `pair ${pair}`, phase && `(${phase})`]
+  return [
+    fixtureId,
+    variant,
+    pair === undefined ? undefined : `pair ${pair}`,
+    phase && `(${phase})`,
+  ]
     .filter((part) => part !== undefined && part !== null && part !== "")
     .join(" ");
 }
@@ -68,7 +78,9 @@ export function inRun(error, run, row = undefined) {
 const runOf = (row) => ({ fixtureId: row.fixtureId, variant: row.variant, pair: row.pair });
 
 async function digest(path) {
-  return createHash("sha256").update(await readFile(path)).digest("hex");
+  return createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
 }
 
 function fixturePath(root, path) {
@@ -90,14 +102,17 @@ async function verifyFile(root, record, label) {
 export async function loadCorpus(manifestPath, split, heldoutReleased = false) {
   const parsed = corpusSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
   if (split === "heldout" && parsed.heldoutState !== "released" && !heldoutReleased)
-    throw new BenchmarkContractError("Held-out corpus is locked until an implementation lock is supplied");
+    throw new BenchmarkContractError(
+      "Held-out corpus is locked until an implementation lock is supplied",
+    );
   const root = dirname(resolve(manifestPath));
   const selected = parsed.fixtures.filter((fixture) => fixture.split === split);
   if (selected.length === 0) throw new BenchmarkContractError(`Corpus has no ${split} fixtures`);
   const ids = new Set();
   const fixtures = [];
   for (const fixture of selected) {
-    if (ids.has(fixture.id)) throw new BenchmarkContractError(`Duplicate fixture id: ${fixture.id}`);
+    if (ids.has(fixture.id))
+      throw new BenchmarkContractError(`Duplicate fixture id: ${fixture.id}`);
     ids.add(fixture.id);
     if (fixture.evaluation !== "visual-only" && !fixture.alpha)
       throw new BenchmarkContractError(`${fixture.id} has no alpha annotation`);
@@ -110,8 +125,13 @@ export async function loadCorpus(manifestPath, split, heldoutReleased = false) {
       : undefined;
     if (alphaPath) {
       const alphaMetadata = await sharp(alphaPath).metadata();
-      if (alphaMetadata.width !== fixture.alpha.width || alphaMetadata.height !== fixture.alpha.height) throw new BenchmarkContractError(`${fixture.id} alpha dimensions do not match manifest`);
-      if (alphaMetadata.width !== metadata.width || alphaMetadata.height !== metadata.height) throw new BenchmarkContractError(`${fixture.id} alpha dimensions do not match input`);
+      if (
+        alphaMetadata.width !== fixture.alpha.width ||
+        alphaMetadata.height !== fixture.alpha.height
+      )
+        throw new BenchmarkContractError(`${fixture.id} alpha dimensions do not match manifest`);
+      if (alphaMetadata.width !== metadata.width || alphaMetadata.height !== metadata.height)
+        throw new BenchmarkContractError(`${fixture.id} alpha dimensions do not match input`);
     }
     fixtures.push({ ...fixture, inputPath, alphaPath });
   }
@@ -129,7 +149,8 @@ export async function verifyBuild(url, expectedCommit, timeoutMs, signal) {
   } catch (error) {
     throw new BenchmarkContractError(`Could not read version.json from ${url}: ${String(error)}`);
   }
-  if (!response.ok) throw new BenchmarkContractError(`version.json returned HTTP ${response.status}`);
+  if (!response.ok)
+    throw new BenchmarkContractError(`version.json returned HTTP ${response.status}`);
   const version = versionSchema.parse(await response.json());
   if (version.commit !== expectedCommit)
     throw new BenchmarkContractError(
@@ -140,50 +161,73 @@ export async function verifyBuild(url, expectedCommit, timeoutMs, signal) {
 
 export function assertProvider(requested, actual, run = undefined, row = undefined) {
   if (requested !== actual)
-    throw new BenchmarkContractError(`Run requested ${requested} but production reported ${actual}`, run, row);
+    throw new BenchmarkContractError(
+      `Run requested ${requested} but production reported ${actual}`,
+      run,
+      row,
+    );
 }
 
 // A quality policy is separately pinned by the operator, then re-bound to the actual corpus
 // and lane by both capture and scoring. A row (or a copied JSON policy) cannot authorize itself.
 const qualityPolicies = new WeakSet();
 const legacyBaselineCommit = "5522eee10d0b974531b8f9c07dd4798625dfeea0";
-const qualityPolicySchema = z.object({
-  schemaVersion: z.literal(1),
-  purpose: z.literal("known-alpha-quality-capture"),
-  corpusManifestSha256: sha256,
-  baselineCommit: commitSha,
-  candidateCommit: commitSha,
-  split: z.enum(["smoke", "tune", "heldout"]),
-  mode: z.enum(["quick", "auto", "maximum"]),
-  requestedProvider: z.literal("webgpu"),
-  expectations: z.array(z.object({
-    fixtureId: z.string().min(1),
-    method: z.literal("model"),
-    actualProvider: z.literal("wasm"),
-    route: z.literal("primary-processing-then-compatibility"),
-    // Only this original wrapper can hide compatibility progress behind its monotonic guard.
-    // Selection/lane/source authorization still comes from the external policy SHA pin.
-    baselineObservability: z.object({
-      commit: z.literal(legacyBaselineCommit),
-      route: z.literal("primary-switch-result-v1"),
-    }).strict().optional(),
-  }).strict()).min(1),
-}).strict();
+const qualityPolicySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    purpose: z.literal("known-alpha-quality-capture"),
+    corpusManifestSha256: sha256,
+    baselineCommit: commitSha,
+    candidateCommit: commitSha,
+    split: z.enum(["smoke", "tune", "heldout"]),
+    mode: z.enum(["quick", "auto", "maximum"]),
+    requestedProvider: z.literal("webgpu"),
+    expectations: z
+      .array(
+        z
+          .object({
+            fixtureId: z.string().min(1),
+            method: z.literal("model"),
+            actualProvider: z.literal("wasm"),
+            route: z.literal("primary-processing-then-compatibility"),
+            // Only this original wrapper can hide compatibility progress behind its monotonic guard.
+            // Selection/lane/source authorization still comes from the external policy SHA pin.
+            baselineObservability: z
+              .object({
+                commit: z.literal(legacyBaselineCommit),
+                route: z.literal("primary-switch-result-v1"),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
 
 export function qualityCapturePolicy(record, binding) {
-  const bad = (message) => { throw new BenchmarkContractError(`Invalid quality policy: ${message}`); };
-  if (!record || typeof record.json !== "string" || !sha256.safeParse(binding.expectedSha256).success ||
-      record.sha256 !== binding.expectedSha256 ||
-      createHash("sha256").update(record.json).digest("hex") !== binding.expectedSha256)
+  const bad = (message) => {
+    throw new BenchmarkContractError(`Invalid quality policy: ${message}`);
+  };
+  if (
+    !record ||
+    typeof record.json !== "string" ||
+    !sha256.safeParse(binding.expectedSha256).success ||
+    record.sha256 !== binding.expectedSha256 ||
+    createHash("sha256").update(record.json).digest("hex") !== binding.expectedSha256
+  )
     bad("missing or mismatched policy SHA-256");
   const policy = qualityPolicySchema.parse(JSON.parse(record.json));
   for (const key of ["split", "mode", "requestedProvider", "baselineCommit", "candidateCommit"])
     if (policy[key] !== binding[key]) bad(`${key} does not match lane`);
-  if (policy.corpusManifestSha256 !== binding.manifestSha256) bad("corpus manifest does not match lane");
+  if (policy.corpusManifestSha256 !== binding.manifestSha256)
+    bad("corpus manifest does not match lane");
   const seen = new Set();
   for (const entry of policy.expectations) {
     const fixture = binding.fixtures.find((fixture) => fixture.id === entry.fixtureId);
-    if (!fixture || fixture.evaluation !== "known-alpha") bad(`${entry.fixtureId} is not a selected known-alpha fixture`);
+    if (!fixture || fixture.evaluation !== "known-alpha")
+      bad(`${entry.fixtureId} is not a selected known-alpha fixture`);
     if (seen.has(entry.fixtureId)) bad(`duplicate expectation ${entry.fixtureId}`);
     if (entry.baselineObservability && policy.baselineCommit !== legacyBaselineCommit)
       bad("baseline observability declaration does not match the original source commit");
@@ -192,33 +236,58 @@ export function qualityCapturePolicy(record, binding) {
   // Copy the only corpus fields needed below; callers cannot change authorization later.
   const context = Object.freeze({
     sha256: record.sha256,
-    policy: Object.freeze({ ...policy, expectations: Object.freeze(policy.expectations.map((entry) => Object.freeze({
-      ...entry, ...(entry.baselineObservability ? { baselineObservability: Object.freeze(entry.baselineObservability) } : {}),
-    }))) }),
-    fixtures: Object.freeze(binding.fixtures.map(({ id, evaluation, input }) => Object.freeze({ id, evaluation, fileName: input.path.split("/").at(-1) }))),
+    policy: Object.freeze({
+      ...policy,
+      expectations: Object.freeze(
+        policy.expectations.map((entry) =>
+          Object.freeze({
+            ...entry,
+            ...(entry.baselineObservability
+              ? { baselineObservability: Object.freeze(entry.baselineObservability) }
+              : {}),
+          }),
+        ),
+      ),
+    }),
+    fixtures: Object.freeze(
+      binding.fixtures.map(({ id, evaluation, input }) =>
+        Object.freeze({ id, evaluation, fileName: input.path.split("/").at(-1) }),
+      ),
+    ),
   });
   qualityPolicies.add(context);
   return context;
 }
 
 function checkQualityRow(row, run, context) {
-  const bad = (message) => { throw new BenchmarkContractError(message, run, row); };
+  const bad = (message) => {
+    throw new BenchmarkContractError(message, run, row);
+  };
   if (!qualityPolicies.has(context)) bad("unverified quality capture context");
   const { policy } = context;
   // Live measured runs and warmups must be as source-bound as stored/scored rows.
   // In particular, a candidate row cannot claim baseline observability through run metadata.
-  if ((row.variant !== "baseline" && row.variant !== "candidate") ||
-      (run?.variant !== undefined && run.variant !== row.variant))
+  if (
+    (row.variant !== "baseline" && row.variant !== "candidate") ||
+    (run?.variant !== undefined && run.variant !== row.variant)
+  )
     bad("quality-only row/run variant does not match");
   if (run?.fixtureId !== undefined && run.fixtureId !== row.fixtureId)
     bad("quality-only row/run fixture identity does not match");
-  if (row.commit !== policy[`${row.variant}Commit`] || (run?.commit !== undefined && run.commit !== row.commit))
+  if (
+    row.commit !== policy[`${row.variant}Commit`] ||
+    (run?.commit !== undefined && run.commit !== row.commit)
+  )
     bad("quality-only row source commit does not match policy");
   const fixture = context.fixtures.find((fixture) => fixture.id === row.fixtureId);
   if (row.capturePurpose !== "quality-only" || row.qualityPolicySha256 !== context.sha256)
     bad("quality-only row is missing its policy identity");
-  if (!fixture || fixture.evaluation !== row.evaluation || row.removalMode !== policy.mode ||
-      row.requestedProvider !== policy.requestedProvider)
+  if (
+    !fixture ||
+    fixture.evaluation !== row.evaluation ||
+    row.removalMode !== policy.mode ||
+    row.requestedProvider !== policy.requestedProvider
+  )
     bad("quality-only row does not match its corpus/lane identity");
   const expectation = policy.expectations.find((entry) => entry.fixtureId === row.fixtureId);
   if (!expectation) {
@@ -230,20 +299,45 @@ function checkQualityRow(row, run, context) {
   const evidence = row.routeEvidence;
   const job = evidence?.jobs?.[0];
   const progress = job?.progress;
-  const switches = Array.isArray(progress) ? progress.flatMap((event, index) =>
-    event?.stage === "loading" && event.message === "Switching to compatibility mode" ? [index] : []) : [];
+  const switches = Array.isArray(progress)
+    ? progress.flatMap((event, index) =>
+        event?.stage === "loading" && event.message === "Switching to compatibility mode"
+          ? [index]
+          : [],
+      )
+    : [];
   const cutting = (event) => event?.stage === "cutting" && event.message === "Finding subject";
-  const compatibilityObserved = switches.length === 1 && progress.slice(switches[0] + 1).some(cutting);
-  const legacy = row.variant === "baseline" && row.commit === legacyBaselineCommit && expectation.baselineObservability;
-  if ((legacy || evidence?.compatibilityProcessing !== undefined) &&
-      evidence?.compatibilityProcessing !== (compatibilityObserved ? "observed" : "not-observed"))
+  const compatibilityObserved =
+    switches.length === 1 && progress.slice(switches[0] + 1).some(cutting);
+  const legacy =
+    row.variant === "baseline" &&
+    row.commit === legacyBaselineCommit &&
+    expectation.baselineObservability;
+  if (
+    (legacy || evidence?.compatibilityProcessing !== undefined) &&
+    evidence?.compatibilityProcessing !== (compatibilityObserved ? "observed" : "not-observed")
+  )
     bad("compatibility processing visibility does not match worker observations");
-  if (evidence?.source !== "worker-messages-v1" || evidence.primaryExecutedProvider !== null || evidence.gpu?.available !== true || !Array.isArray(evidence.jobs) || evidence.jobs.length !== 1 ||
-      !Number.isInteger(job?.jobId) || typeof job.workerUrl !== "string" || !job.workerUrl ||
-      job.fileName !== fixture.fileName || job.mode !== policy.mode || job.noWebgpu !== false ||
-      job.outcome?.type !== "done" || job.outcome.method !== row.method || job.outcome.provider !== row.actualProvider ||
-      job.outcome.workerHadGpu !== true || switches.length !== 1 ||
-      !progress.slice(0, switches[0]).some(cutting) || (!legacy && !compatibilityObserved))
+  if (
+    evidence?.source !== "worker-messages-v1" ||
+    evidence.primaryExecutedProvider !== null ||
+    evidence.gpu?.available !== true ||
+    !Array.isArray(evidence.jobs) ||
+    evidence.jobs.length !== 1 ||
+    !Number.isInteger(job?.jobId) ||
+    typeof job.workerUrl !== "string" ||
+    !job.workerUrl ||
+    job.fileName !== fixture.fileName ||
+    job.mode !== policy.mode ||
+    job.noWebgpu !== false ||
+    job.outcome?.type !== "done" ||
+    job.outcome.method !== row.method ||
+    job.outcome.provider !== row.actualProvider ||
+    job.outcome.workerHadGpu !== true ||
+    switches.length !== 1 ||
+    !progress.slice(0, switches[0]).some(cutting) ||
+    (!legacy && !compatibilityObserved)
+  )
     bad("missing or mismatched primary/compat route evidence (worker messages)");
 }
 
@@ -262,7 +356,11 @@ export function checkRunRow(row, run = runOf(row), qualityCapture = undefined) {
     throw new BenchmarkContractError("no actualProvider recorded", run, row);
   if (qualityCapture !== undefined) return checkQualityRow(row, run, qualityCapture);
   if (row.capturePurpose !== undefined || row.qualityPolicySha256 !== undefined)
-    throw new BenchmarkContractError("quality-only capture cannot be used as performance evidence", run, row);
+    throw new BenchmarkContractError(
+      "quality-only capture cannot be used as performance evidence",
+      run,
+      row,
+    );
   if (row.method === "model") assertProvider(row.requestedProvider, row.actualProvider, run, row);
 }
 
@@ -273,7 +371,8 @@ export function checkRunRow(row, run = runOf(row), qualityCapture = undefined) {
  */
 export function outputIdentity(rows) {
   const reference = new Map();
-  for (const row of rows) if (row.pair === 0) reference.set(`${row.fixtureId}:${row.variant}`, row.outputSha256);
+  for (const row of rows)
+    if (row.pair === 0) reference.set(`${row.fixtureId}:${row.variant}`, row.outputSha256);
   const nondeterministic = [];
   for (const row of rows) {
     const expected = reference.get(`${row.fixtureId}:${row.variant}`);
@@ -297,7 +396,12 @@ export function nondeterministicOutputError(entry, row) {
   );
 }
 
-export function validateCompletedRuns(rows, fixtureIds, pairs, { allowNondeterministicOutputs = false, qualityCapture } = {}) {
+export function validateCompletedRuns(
+  rows,
+  fixtureIds,
+  pairs,
+  { allowNondeterministicOutputs = false, qualityCapture } = {},
+) {
   if (qualityCapture !== undefined && allowNondeterministicOutputs)
     throw new BenchmarkContractError("quality-only capture requires strict output identity");
   const index = new Map();
@@ -305,19 +409,31 @@ export function validateCompletedRuns(rows, fixtureIds, pairs, { allowNondetermi
     const broken = (message) => new BenchmarkContractError(message, runOf(row), row);
     if (!Number.isInteger(row.pair) || !Number.isInteger(row.order))
       throw broken("run pair/order must be integers");
-    if (row.pair < 0 || row.pair >= pairs) throw broken(`run pair ${row.pair} is outside 0..${pairs - 1}`);
+    if (row.pair < 0 || row.pair >= pairs)
+      throw broken(`run pair ${row.pair} is outside 0..${pairs - 1}`);
     if (row.order !== 0 && row.order !== 1) throw broken(`run order ${row.order} must be 0 or 1`);
-    if (!fixtureIds.includes(row.fixtureId)) throw broken(`unexpected fixture ${String(row.fixtureId)}`);
+    if (!fixtureIds.includes(row.fixtureId))
+      throw broken(`unexpected fixture ${String(row.fixtureId)}`);
     if (row.variant !== "baseline" && row.variant !== "candidate")
       throw broken(`invalid variant ${String(row.variant)}`);
-    if (row.status !== "completed") throw broken(`run status ${String(row.status)} is not completed`);
+    if (row.status !== "completed")
+      throw broken(`run status ${String(row.status)} is not completed`);
     checkRunRow(row, runOf(row), qualityCapture);
-    if (qualityCapture && row.commit !== qualityCapture.policy[`${row.variant}Commit`]) throw broken("quality-only row source commit does not match policy");
+    if (qualityCapture && row.commit !== qualityCapture.policy[`${row.variant}Commit`])
+      throw broken("quality-only row source commit does not match policy");
     if (!Number.isFinite(row.completeMs) || row.completeMs <= 0) throw broken("invalid completeMs");
     if (typeof row.outputSha256 !== "string" || !/^[0-9a-f]{64}$/.test(row.outputSha256))
       throw broken("no outputSha256 recorded");
-    const expectedOrder = row.pair % 2 === 0 ? (row.variant === "baseline" ? 0 : 1) : row.variant === "candidate" ? 0 : 1;
-    if (row.order !== expectedOrder) throw broken(`pair ${row.pair} does not alternate baseline/candidate order`);
+    const expectedOrder =
+      row.pair % 2 === 0
+        ? row.variant === "baseline"
+          ? 0
+          : 1
+        : row.variant === "candidate"
+          ? 0
+          : 1;
+    if (row.order !== expectedOrder)
+      throw broken(`pair ${row.pair} does not alternate baseline/candidate order`);
     const key = `${row.pair}:${row.fixtureId}:${row.variant}`;
     if (index.has(key)) throw broken("duplicate run");
     index.set(key, row);
@@ -330,16 +446,27 @@ export function validateCompletedRuns(rows, fixtureIds, pairs, { allowNondetermi
     }
   }
   if (qualityCapture) {
-    for (let pair = 0; pair < pairs; pair += 1) for (const fixtureId of fixtureIds) {
-      const baseline = index.get(`${pair}:${fixtureId}:baseline`);
-      const candidate = index.get(`${pair}:${fixtureId}:candidate`);
-      if (baseline.method !== candidate.method || baseline.actualProvider !== candidate.actualProvider)
-        throw new BenchmarkContractError("quality-only baseline/candidate method/provider differ", runOf(candidate), candidate);
-    }
+    for (let pair = 0; pair < pairs; pair += 1)
+      for (const fixtureId of fixtureIds) {
+        const baseline = index.get(`${pair}:${fixtureId}:baseline`);
+        const candidate = index.get(`${pair}:${fixtureId}:candidate`);
+        if (
+          baseline.method !== candidate.method ||
+          baseline.actualProvider !== candidate.actualProvider
+        )
+          throw new BenchmarkContractError(
+            "quality-only baseline/candidate method/provider differ",
+            runOf(candidate),
+            candidate,
+          );
+      }
   }
   const [changed] = outputIdentity(rows).nondeterministic;
   if (changed && !allowNondeterministicOutputs)
-    throw nondeterministicOutputError(changed, index.get(`${changed.pair}:${changed.fixtureId}:${changed.variant}`));
+    throw nondeterministicOutputError(
+      changed,
+      index.get(`${changed.pair}:${changed.fixtureId}:${changed.variant}`),
+    );
   return index;
 }
 
@@ -403,7 +530,10 @@ function summarize(values, iterations, seed) {
   const rng = random(seed);
   const boot = { ratioOfMedians: [], differenceOfMediansMs: [], ratio: [], difference: [] };
   for (let iteration = 0; blocks.length > 1 && iteration < iterations; iteration += 1) {
-    const sample = Array.from({ length: blocks.length }, () => blocks[Math.floor(rng() * blocks.length)]);
+    const sample = Array.from(
+      { length: blocks.length },
+      () => blocks[Math.floor(rng() * blocks.length)],
+    );
     boot.ratio.push(median(sample.map((value) => value.ratio)));
     boot.difference.push(median(sample.map((value) => value.difference)));
     const pooled = medians(sample.flatMap((block) => block.values));
@@ -413,12 +543,14 @@ function summarize(values, iterations, seed) {
   const intervalsUnavailable = {};
   const confidence = (field, bootstrap, blockInput, label) => {
     let reason = null;
-    if (blocks.length < 2) reason = `${blocks.length} paired block(s); an interval needs at least 2`;
+    if (blocks.length < 2)
+      reason = `${blocks.length} paired block(s); an interval needs at least 2`;
     else if (new Set(blocks.map(blockInput)).size < 2)
       reason = `every block has the same ${label}, so resampling blocks cannot vary it`;
     const bounds = interval(bootstrap);
     if (reason === null && bounds.low === bounds.high)
-      reason = "the 2.5% and 97.5% bootstrap bounds coincide, so the interval would have zero width";
+      reason =
+        "the 2.5% and 97.5% bootstrap bounds coincide, so the interval would have zero width";
     if (reason === null) return bounds;
     intervalsUnavailable[field] = reason;
     return null;
@@ -491,7 +623,8 @@ export function pairedLatency(rows, iterations = 10_000, seed = 730_241) {
     }
     excluded.push(observation);
     for (const row of observation.rows) {
-      const reason = row.method === "model" ? "paired with a non-model run" : `non-model method: ${row.method}`;
+      const reason =
+        row.method === "model" ? "paired with a non-model run" : `non-model method: ${row.method}`;
       byReason[reason] = (byReason[reason] ?? 0) + 1;
     }
   }
@@ -536,23 +669,31 @@ export function pairedLatency(rows, iterations = 10_000, seed = 730_241) {
       pairedMedianDifferenceMs: median(fixture.map((value) => value.difference)),
     };
   });
-  const byCategory = [...new Set(values.map((value) => value.category))].sort().map((category, index) => ({
-    category,
-    ...summarize(
-      values.filter((value) => value.category === category),
-      iterations,
-      seed + index + 1,
-    ),
-  }));
-  const worstCohort = [...byCategory].sort((left, right) => right.ratioOfMedians - left.ratioOfMedians)[0] ?? null;
+  const byCategory = [...new Set(values.map((value) => value.category))]
+    .sort()
+    .map((category, index) => ({
+      category,
+      ...summarize(
+        values.filter((value) => value.category === category),
+        iterations,
+        seed + index + 1,
+      ),
+    }));
+  const worstCohort =
+    [...byCategory].sort((left, right) => right.ratioOfMedians - left.ratioOfMedians)[0] ?? null;
   return {
     definitions: {
       rows: "model runs only: an observation (pair, fixture) counts when both variants ran the model on the requested provider; the rest are counted in exclusions",
-      ratioOfMedians: "median candidate completeMs / median baseline completeMs: the registered gate quantity (< 1 is faster)",
-      differenceOfMediansMs: "median baseline completeMs - median candidate completeMs (> 0 is faster)",
-      pairedMedianRatio: "median over AB/BA blocks of each block's median candidate/baseline ratio (descriptive; can disagree with the gate in sign)",
-      pairedMedianDifferenceMs: "median over AB/BA blocks of each block's median baseline - candidate difference (descriptive)",
-      intervals: "95% percentile bootstrap resampling whole AB/BA blocks; null (reason in intervalsUnavailable) when fewer than 2 blocks, every block gives the same input, or the bounds coincide",
+      ratioOfMedians:
+        "median candidate completeMs / median baseline completeMs: the registered gate quantity (< 1 is faster)",
+      differenceOfMediansMs:
+        "median baseline completeMs - median candidate completeMs (> 0 is faster)",
+      pairedMedianRatio:
+        "median over AB/BA blocks of each block's median candidate/baseline ratio (descriptive; can disagree with the gate in sign)",
+      pairedMedianDifferenceMs:
+        "median over AB/BA blocks of each block's median baseline - candidate difference (descriptive)",
+      intervals:
+        "95% percentile bootstrap resampling whole AB/BA blocks; null (reason in intervalsUnavailable) when fewer than 2 blocks, every block gives the same input, or the bounds coincide",
     },
     ...summarize(values, iterations, seed),
     bootstrap: { iterations, seed, unit: "paired AB/BA block" },

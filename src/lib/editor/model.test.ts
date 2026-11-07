@@ -146,10 +146,12 @@ test("transparent backgrounds switch JPEG to PNG and preserve other formats", ()
   for (const exportFormat of ["jpeg", "png", "webp"] as const) {
     const settings = { ...defaults, exportFormat };
     assert.deepEqual(backgroundPatch(settings, { type: "transparent" }), {
-      background: { type: "transparent" }, exportFormat: exportFormat === "jpeg" ? "png" : exportFormat,
+      background: { type: "transparent" },
+      exportFormat: exportFormat === "jpeg" ? "png" : exportFormat,
     });
     assert.deepEqual(backgroundPatch(settings, { type: "color", color: "#ff0000" }), {
-      background: { type: "color", color: "#ff0000" }, exportFormat,
+      background: { type: "color", color: "#ff0000" },
+      exportFormat,
     });
   }
 });

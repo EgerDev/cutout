@@ -30,7 +30,12 @@ function passDevice(mapFails: boolean) {
     },
     createBindGroup: () => ({}),
     createCommandEncoder: () => ({
-      beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }),
+      beginComputePass: () => ({
+        setPipeline() {},
+        setBindGroup() {},
+        dispatchWorkgroups() {},
+        end() {},
+      }),
       copyBufferToBuffer() {},
       finish: () => ({}),
     }),
@@ -51,7 +56,8 @@ test("unblendMatteGpu destroys every full-resolution buffer after the pass, whet
       value: { gpu: { requestAdapter: async () => ({ requestDevice: async () => device }) } },
     });
     const { unblendMatteGpu } = await import(`./gpu-matte.ts?pass=${mapFails ? "fails" : "ok"}`);
-    const image = () => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }) as ImageData;
+    const image = () =>
+      ({ width, height, data: new Uint8ClampedArray(width * height * 4) }) as ImageData;
     const scene = { isGraphic: false, exactTol2: 1, maskWorked: true };
     const grid = { cells: new Float32Array(3), gridW: 1, gridH: 1, cell: 600 };
     assert.equal(await unblendMatteGpu(image(), image(), scene, grid), !mapFails);
@@ -59,7 +65,11 @@ test("unblendMatteGpu destroys every full-resolution buffer after the pass, whet
     const [uniform, ...pass] = buffers;
     assert.equal(uniform?.size, 32);
     assert.equal(pass.length, 5);
-    assert.deepEqual(pass.map((made) => made.destroyed), [1, 1, 1, 1, 1], `mapFails=${mapFails}`);
+    assert.deepEqual(
+      pass.map((made) => made.destroyed),
+      [1, 1, 1, 1, 1],
+      `mapFails=${mapFails}`,
+    );
     assert.equal(uniform?.destroyed, 0);
     // A failed pass retires the device once its last pass is done; a good one keeps it.
     assert.equal(destroyed(), mapFails ? 1 : 0);

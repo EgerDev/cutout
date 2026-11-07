@@ -198,9 +198,8 @@ async function runLaunch(plan: LaunchPlan, signal = new AbortController().signal
         useWorkspace.getState().setPreset(plan.preset!),
       );
     if (plan.background)
-      apply(
-        backgroundPatch(settings ?? defaults, plan.background),
-        () => useWorkspace.getState().setBackground(plan.background!),
+      apply(backgroundPatch(settings ?? defaults, plan.background), () =>
+        useWorkspace.getState().setBackground(plan.background!),
       );
     if (plan.format)
       apply({ exportFormat: plan.format }, () =>
@@ -222,9 +221,7 @@ async function runLaunch(plan: LaunchPlan, signal = new AbortController().signal
           : failure
             ? "Couldn’t load the linked image. Check the link and your connection."
             : "Couldn’t load the linked image.";
-      useWorkspace
-        .getState()
-        .reportError(`${message} Choose a file from your device to continue.`);
+      useWorkspace.getState().reportError(`${message} Choose a file from your device to continue.`);
     }
   } finally {
     release();

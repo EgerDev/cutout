@@ -64,8 +64,11 @@ test("PNG signature refusal follows native rejection and leaves the valid ImageD
   for (const bytes of [new Uint8Array(), Buffer.from("broken"), corrupted]) {
     await assert.rejects(
       bitmapFromBlob(new Blob([bytes], { type: "image/png" })),
-      (error) => error instanceof Error && error.constructor === Error &&
-        !("code" in error) && error.message === "This image could not be decoded.",
+      (error) =>
+        error instanceof Error &&
+        error.constructor === Error &&
+        !("code" in error) &&
+        error.message === "This image could not be decoded.",
     );
   }
   assert.equal(constructions, 1, "a mismatched PNG signature must not construct ImageDecoder");
@@ -335,44 +338,114 @@ test("TIFF truncated metadata and failed reads do not escape preflight as parser
 // E01-O-01: browsers decode a JPEG with its EXIF orientation applied, so the size the engine budgets
 // with must be the decoded one. Measured in the stored frame, an over-budget portrait (orientation 6/8)
 // was resized into a landscape frame: rotated and squashed.
-function orientedJpeg(width: number, height: number, orientation: number | null, order: "II" | "MM" = "II") {
+function orientedJpeg(
+  width: number,
+  height: number,
+  orientation: number | null,
+  order: "II" | "MM" = "II",
+) {
   const le = order === "II";
-  const u16 = (value: number) => Buffer.from(le ? [value & 0xff, value >> 8] : [value >> 8, value & 0xff]);
-  const u32 = (value: number) => { const b = Buffer.alloc(4); if (le) b.writeUInt32LE(value); else b.writeUInt32BE(value); return b; };
-  const entry = (tag: number, type: number, value: number) => Buffer.concat([u16(tag), u16(type), u32(1), u16(value), u16(0)]);
+  const u16 = (value: number) =>
+    Buffer.from(le ? [value & 0xff, value >> 8] : [value >> 8, value & 0xff]);
+  const u32 = (value: number) => {
+    const b = Buffer.alloc(4);
+    if (le) b.writeUInt32LE(value);
+    else b.writeUInt32BE(value);
+    return b;
+  };
+  const entry = (tag: number, type: number, value: number) =>
+    Buffer.concat([u16(tag), u16(type), u32(1), u16(value), u16(0)]);
   // IFD0 holds an unrelated tag first (ImageWidth), as cameras write it.
-  const entries = [entry(0x0100, 3, width & 0xffff), ...(orientation === null ? [] : [entry(0x0112, 3, orientation)])];
-  const tiff = Buffer.concat([Buffer.from(order), u16(42), u32(8), u16(entries.length), ...entries, u32(0)]);
+  const entries = [
+    entry(0x0100, 3, width & 0xffff),
+    ...(orientation === null ? [] : [entry(0x0112, 3, orientation)]),
+  ];
+  const tiff = Buffer.concat([
+    Buffer.from(order),
+    u16(42),
+    u32(8),
+    u16(entries.length),
+    ...entries,
+    u32(0),
+  ]);
   const app1 = Buffer.concat([Buffer.from("Exif\0\0", "latin1"), tiff]);
   const be16 = (value: number) => Buffer.from([value >> 8, value & 0xff]);
-  return new Blob([Buffer.concat([
-    Buffer.from([0xff, 0xd8, 0xff, 0xe1]), be16(app1.length + 2), app1,
-    Buffer.from([0xff, 0xe0]), be16(16), Buffer.from("JFIF\0", "latin1"), Buffer.alloc(9),
-    Buffer.from([0xff, 0xc0]), be16(17), Buffer.from([8]), be16(height), be16(width), Buffer.from([3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]),
-    Buffer.from([0xff, 0xd9]),
-  ])], { type: "image/jpeg" });
+  return new Blob(
+    [
+      Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe1]),
+        be16(app1.length + 2),
+        app1,
+        Buffer.from([0xff, 0xe0]),
+        be16(16),
+        Buffer.from("JFIF\0", "latin1"),
+        Buffer.alloc(9),
+        Buffer.from([0xff, 0xc0]),
+        be16(17),
+        Buffer.from([8]),
+        be16(height),
+        be16(width),
+        Buffer.from([3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]),
+        Buffer.from([0xff, 0xd9]),
+      ]),
+    ],
+    { type: "image/jpeg" },
+  );
 }
 
 test("E01-O-01: a JPEG's declared size follows its EXIF orientation (1, 6, 8; both byte orders)", async () => {
   for (const order of ["II", "MM"] as const) {
-    assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, null, order)), { width: 6000, height: 4500 });
-    for (const orientation of [1, 2, 3, 4]) assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, orientation, order)), { width: 6000, height: 4500 }, `${order} ${orientation}`);
-    for (const orientation of [5, 6, 7, 8]) assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, orientation, order)), { width: 4500, height: 6000 }, `${order} ${orientation}`);
+    assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, null, order)), {
+      width: 6000,
+      height: 4500,
+    });
+    for (const orientation of [1, 2, 3, 4])
+      assert.deepEqual(
+        await imageSizeOf(orientedJpeg(6000, 4500, orientation, order)),
+        { width: 6000, height: 4500 },
+        `${order} ${orientation}`,
+      );
+    for (const orientation of [5, 6, 7, 8])
+      assert.deepEqual(
+        await imageSizeOf(orientedJpeg(6000, 4500, orientation, order)),
+        { width: 4500, height: 6000 },
+        `${order} ${orientation}`,
+      );
     // Out-of-range values are not a rotation.
-    assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, 9, order)), { width: 6000, height: 4500 });
+    assert.deepEqual(await imageSizeOf(orientedJpeg(6000, 4500, 9, order)), {
+      width: 6000,
+      height: 4500,
+    });
   }
 });
 
 test("E01-O-01: an over-budget rotated JPEG is resized to a portrait frame; within budget it is not resized", async () => {
   const { exceedsProcessingBudget, processingScale } = await import("./files.ts");
-  const pixel8 = { userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36", maxTouchPoints: 5, pointerCoarse: true, compactViewport: false, framed: false };
-  const mac = { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36", maxTouchPoints: 0, pointerCoarse: false, compactViewport: false, framed: false };
+  const pixel8 = {
+    userAgent:
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36",
+    maxTouchPoints: 5,
+    pointerCoarse: true,
+    compactViewport: false,
+    framed: false,
+  };
+  const mac = {
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    maxTouchPoints: 0,
+    pointerCoarse: false,
+    compactViewport: false,
+    framed: false,
+  };
   // engine.ts prepareForInference: the target frame it resizes the decoded (oriented) pixels into.
   const target = async (blob: Blob, memory: number, env: typeof mac) => {
     const dims = (await imageSizeOf(blob))!;
     if (!exceedsProcessingBudget(dims.width, dims.height, memory, env)) return null;
     const scale = processingScale(dims.width, dims.height, memory, env);
-    return [Math.max(1, Math.round(dims.width * scale)), Math.max(1, Math.round(dims.height * scale))];
+    return [
+      Math.max(1, Math.round(dims.width * scale)),
+      Math.max(1, Math.round(dims.height * scale)),
+    ];
   };
   // A 27 MP phone portrait (stored 6000 x 4500) over the 24 MP phone budget.
   assert.deepEqual(await target(orientedJpeg(6000, 4500, 1), 8, pixel8), [5657, 4243]);
@@ -382,6 +455,11 @@ test("E01-O-01: an over-budget rotated JPEG is resized to a portrait frame; with
   assert.deepEqual(await target(orientedJpeg(16400, 300, 6), 8, mac), [300, 16384]);
   assert.deepEqual(await target(orientedJpeg(16400, 300, 1), 8, mac), [16384, 300]);
   // Within budget nothing is resized, whatever the orientation: the decoder rotates the original.
-  for (const orientation of [1, 6, 8]) assert.equal(await target(orientedJpeg(4000, 3000, orientation), 8, pixel8), null, String(orientation));
+  for (const orientation of [1, 6, 8])
+    assert.equal(
+      await target(orientedJpeg(4000, 3000, orientation), 8, pixel8),
+      null,
+      String(orientation),
+    );
   assert.equal(await target(orientedJpeg(16000, 300, 6), 8, mac), null);
 });

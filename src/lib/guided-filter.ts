@@ -110,9 +110,10 @@ export function fastGuidedFilter(
 
   // Adaptive subsampling ratio based on resolution and filter radius
   const rawSubsample = options.subsample;
-  let s = typeof rawSubsample === "number" && Number.isFinite(rawSubsample) && rawSubsample > 0
-    ? Math.round(rawSubsample)
-    : 4;
+  let s =
+    typeof rawSubsample === "number" && Number.isFinite(rawSubsample) && rawSubsample > 0
+      ? Math.round(rawSubsample)
+      : 4;
   s = Math.min(s, Math.max(1, radius));
   if (width < 32 || height < 32) s = 1;
   else if (width < 64 || height < 64) s = Math.min(2, s);

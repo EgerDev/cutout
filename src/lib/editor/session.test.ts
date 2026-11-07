@@ -193,7 +193,10 @@ test("deleteSavedWorkspace removes the owned and legacy failure records and the 
   ]);
   const { storage } = fakePage(t, entries);
   // A gpu-mask record an earlier version persisted (E10-S-01: no longer written, still read and cleared).
-  entries.set(REMOVAL_FAILURE_KEY, JSON.stringify({ version: 1, fingerprint: REMOVAL_RUNTIME_FINGERPRINT, kind: "gpu-mask" }));
+  entries.set(
+    REMOVAL_FAILURE_KEY,
+    JSON.stringify({ version: 1, fingerprint: REMOVAL_RUNTIME_FINGERPRINT, kind: "gpu-mask" }),
+  );
   assert.equal(readGpuFailure(storage), true);
 
   await deleteSavedWorkspace();
@@ -207,7 +210,11 @@ test("deleteSavedWorkspace removes the owned and legacy failure records and the 
 // removal-provider (S1 commit 1); until then the precondition below fails.
 test("deleteSavedWorkspace resets the page's in-process GPU failure flag", async (t) => {
   const { storage, flagOnly } = fakePage(t, new Map());
-  assert.equal(rememberGpuFailure("gpu-mask", storage), false, "a gpu-mask failure is not persisted (E10-S-01)");
+  assert.equal(
+    rememberGpuFailure("gpu-mask", storage),
+    false,
+    "a gpu-mask failure is not persisted (E10-S-01)",
+  );
   assert.equal(readGpuFailure(flagOnly), true, "precondition: the in-process flag is set");
 
   await deleteSavedWorkspace();
@@ -215,10 +222,7 @@ test("deleteSavedWorkspace resets the page's in-process GPU failure flag", async
   assert.equal(readGpuFailure(flagOnly), false, "the in-process flag was reset");
 });
 
-function heldDelete(
-  t: { after(fn: () => void): void },
-  entries: Map<string, string>,
-) {
+function heldDelete(t: { after(fn: () => void): void }, entries: Map<string, string>) {
   fakePage(t, entries);
   const request: {
     onblocked?: () => void;
@@ -256,10 +260,7 @@ function heldDelete(
   };
 }
 
-async function settles(
-  operation: Promise<unknown>,
-  ms = 50,
-): Promise<string> {
+async function settles(operation: Promise<unknown>, ms = 50): Promise<string> {
   return Promise.race([
     operation.then(
       () => "resolved",

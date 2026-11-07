@@ -53,11 +53,15 @@ function throwingStore(make: () => Error): RemovalFailureStore {
   };
 }
 
-const denied = (): RemovalFailureStore => throwingStore(() => new DOMException("denied", "SecurityError"));
+const denied = (): RemovalFailureStore =>
+  throwingStore(() => new DOMException("denied", "SecurityError"));
 const broken = (): RemovalFailureStore => throwingStore(() => new TypeError("storage exploded"));
 
 function loadError(failureKind: string, name = "RemovalModelLoadError"): unknown {
-  return Object.assign(new Error(`Could not load birefnet on webgpu: ${failureKind}`), { name, failureKind });
+  return Object.assign(new Error(`Could not load birefnet on webgpu: ${failureKind}`), {
+    name,
+    failureKind,
+  });
 }
 
 function currentUserAgent(): string {
@@ -79,8 +83,16 @@ test("selects ISNet on a low-memory CPU and keeps the default WebGPU attempt on 
 test("PIN (Q10): the runtime folds a missing adapter into gpuFailed and gets BiRefNet/WASM, no WebGPU", () => {
   // Given/When: automaticRoute() passes gpuFailed = !compatibleGpu || recorded failure || memo.
   const noAdapter = selectRemovalRoute({ deviceMemory: 8, compatibleGpu: false, gpuFailed: true });
-  const lowMemoryNoAdapter = selectRemovalRoute({ deviceMemory: 4, compatibleGpu: false, gpuFailed: true });
-  const adapterButFailed = selectRemovalRoute({ deviceMemory: 8, compatibleGpu: true, gpuFailed: true });
+  const lowMemoryNoAdapter = selectRemovalRoute({
+    deviceMemory: 4,
+    compatibleGpu: false,
+    gpuFailed: true,
+  });
+  const adapterButFailed = selectRemovalRoute({
+    deviceMemory: 8,
+    compatibleGpu: true,
+    gpuFailed: true,
+  });
 
   // Then: the unchanged selector yields the original's no-adapter route; low memory still wins to ISNet.
   assert.deepEqual(noAdapter, { primary: { model: "birefnet", provider: "wasm" } });
@@ -101,7 +113,10 @@ test("classifies abort, delivery, cache, and genuine GPU failures separately", (
   ] as const;
 
   // When/Then: each failure keeps the actionable class needed by fallback policy.
-  assert.deepEqual(cases.map(([error]) => classifyRemovalFailure(error)), cases.map(([, kind]) => kind));
+  assert.deepEqual(
+    cases.map(([error]) => classifyRemovalFailure(error)),
+    cases.map(([, kind]) => kind),
+  );
   assert.equal(classifyRemovalFailure(new Error("wrapped", { cause: hubError(503) })), "network");
 });
 
@@ -122,15 +137,19 @@ const HUB_TEXT: Record<number, string> = {
   504: "Gateway timeout error occurred while trying to load file",
 };
 function hubError(status: number): Error {
-  return Error(`${HUB_TEXT[status] ?? `Error (${status}) occurred while trying to load file`}: "${HF_FP16}".`);
+  return Error(
+    `${HUB_TEXT[status] ?? `Error (${status}) occurred while trying to load file`}: "${HF_FP16}".`,
+  );
 }
 
 test("C02: real transformers hub texts and WebKit's 'Load failed' are fetch-class, absorbed, memo network", async () => {
   const request = { model: "birefnet", provider: "webgpu", context: "worker" } as const;
   const rows: Array<[string, Error, string]> = [
-    ...[400, 401, 403, 404, 408, 429, 500, 502, 504].map(
-      (status): [string, Error, string] => [`hub ${status}`, hubError(status), "model-fetch"],
-    ),
+    ...[400, 401, 403, 404, 408, 429, 500, 502, 504].map((status): [string, Error, string] => [
+      `hub ${status}`,
+      hubError(status),
+      "model-fetch",
+    ]),
     ["hub 503", hubError(503), "network"],
     ["WebKit fetch", new TypeError("Load failed"), "network"],
     ["Chromium fetch", new TypeError("Failed to fetch"), "network"],
@@ -145,8 +164,15 @@ test("C02: real transformers hub texts and WebKit's 'Load failed' are fetch-clas
     assert.equal(provider.webgpuLoadMemo(), "network", `${label}: memo`);
   }
   // Still init-class: transformers' own fp16 gate and a session failure are not fetch failures.
-  assert.equal(classifyRemovalFailure(new Error("The device (webgpu) does not support fp16.")), "provider-init");
-  assert.equal(classifyRemovalFailure(new Error("Load failed")), "unknown", "only WebKit's fetch TypeError");
+  assert.equal(
+    classifyRemovalFailure(new Error("The device (webgpu) does not support fp16.")),
+    "provider-init",
+  );
+  assert.equal(
+    classifyRemovalFailure(new Error("Load failed")),
+    "unknown",
+    "only WebKit's fetch TypeError",
+  );
 });
 
 test("persists only genuine GPU failures and preserves their fingerprint", async () => {
@@ -174,7 +200,10 @@ test("cleans stale fingerprints and legacy records while denied storage stays sa
   // Given: a stale current record, two legacy records, and a denied-storage implementation.
   const { rememberGpuFailure, readGpuFailure, clearRemovalFailureRecords } = await load();
   const store = new MemoryStore();
-  store.setItem(REMOVAL_FAILURE_KEY, JSON.stringify({ version: 1, fingerprint: "stale", kind: "gpu-mask" }));
+  store.setItem(
+    REMOVAL_FAILURE_KEY,
+    JSON.stringify({ version: 1, fingerprint: "stale", kind: "gpu-mask" }),
+  );
   store.setItem("bg0:webgpu-failure:a", "old");
   store.setItem("bg0:webgpu-failure:b", "old");
 
@@ -264,7 +293,8 @@ test("Q7: with no store at all the failure lives in the process flag only", asyn
 
 test("Q7: a throwing localStorage getter never escapes remember, read, clear or availableStorage", async () => {
   // Given: (red on r2) a localStorage accessor that throws a non-denial error.
-  const { rememberGpuFailure, readGpuFailure, clearRemovalFailureRecords, availableStorage } = await load();
+  const { rememberGpuFailure, readGpuFailure, clearRemovalFailureRecords, availableStorage } =
+    await load();
   const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,
@@ -321,7 +351,10 @@ test("Q8: clear removes the legacy and the current record", async () => {
   store.setItem("bg0:webgpu-failure:other", "whatever");
   store.setItem("keep", "me");
   // The current record as an earlier version wrote it for a mask failure, and as gpu-device writes it now.
-  store.setItem(REMOVAL_FAILURE_KEY, JSON.stringify({ version: 1, fingerprint: REMOVAL_RUNTIME_FINGERPRINT, kind: "gpu-mask" }));
+  store.setItem(
+    REMOVAL_FAILURE_KEY,
+    JSON.stringify({ version: 1, fingerprint: REMOVAL_RUNTIME_FINGERPRINT, kind: "gpu-mask" }),
+  );
   assert.equal(readGpuFailure(store), true);
 
   clearRemovalFailureRecords(store);
@@ -472,17 +505,22 @@ test("Q4: a confirmed GPU failure and the load memo are independent, and one cle
 test("Q12: ENGINE_ERROR_NAMES is exactly the five engine-minted error names", async () => {
   const { ENGINE_ERROR_NAMES } = await load();
 
-  assert.deepEqual(
-    [...ENGINE_ERROR_NAMES].sort(),
-    ["MaskError", "RemovalInferenceError", "RemovalInputError", "RemovalModelLoadError", "RemovalModelOutputError"],
-  );
+  assert.deepEqual([...ENGINE_ERROR_NAMES].sort(), [
+    "MaskError",
+    "RemovalInferenceError",
+    "RemovalInputError",
+    "RemovalModelLoadError",
+    "RemovalModelOutputError",
+  ]);
   assert.equal(ENGINE_ERROR_NAMES.has("AbortError"), false);
   assert.equal(ENGINE_ERROR_NAMES.has("Error"), false);
 });
 
-
 test("C05 load: an AbortError-named loader failure with a live job is a coded failure", () => {
-  const error = new RemovalModelLoadError({ model: "birefnet", provider: "webgpu", context: "worker" }, new DOMException("The operation was aborted.", "AbortError"));
+  const error = new RemovalModelLoadError(
+    { model: "birefnet", provider: "webgpu", context: "worker" },
+    new DOMException("The operation was aborted.", "AbortError"),
+  );
   assert.equal(classifyRemovalFailure(error), "provider-init");
   assert.equal(error.code, "model-load-failed");
 });
@@ -507,7 +545,8 @@ test("E10-S-01: gpu-mask sets the session flag but writes no record; gpu-device 
 test("E10-S-01: a gpu-mask record an earlier version wrote is still read, expires on a new fingerprint, and Delete clears it", async () => {
   const { readGpuFailure, clearRemovalFailureRecords } = await load();
   const store = new MemoryStore();
-  const record = (fingerprint: string) => JSON.stringify({ version: 1, fingerprint, kind: "gpu-mask" });
+  const record = (fingerprint: string) =>
+    JSON.stringify({ version: 1, fingerprint, kind: "gpu-mask" });
   store.setItem(REMOVAL_FAILURE_KEY, record(REMOVAL_RUNTIME_FINGERPRINT));
   assert.equal(readGpuFailure(store), true);
   clearRemovalFailureRecords(store);
