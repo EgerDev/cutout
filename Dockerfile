@@ -2,7 +2,7 @@
 # Base images are pinned by digest (tag kept for readability); Dependabot bumps them.
 # The build stage runs on the builder's own platform: .output is plain JavaScript, so one
 # build serves amd64 and arm64 images without emulating the other architecture.
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+FROM --platform=$BUILDPLATFORM node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY scripts/patch-dependencies.mjs ./scripts/patch-dependencies.mjs
@@ -29,7 +29,7 @@ RUN if [ -z "$VITE_SITE_OPERATOR" ]; then unset VITE_SITE_OPERATOR; fi; \
     npm run build
 
 # .output is plain JavaScript (no native modules), so the runtime needs no glibc.
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runtime
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS runtime
 # Heap cap below the 256 MB container limit, so V8 collects garbage before the
 # kernel OOM-kills the process.
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 NODE_OPTIONS=--max-old-space-size=192
